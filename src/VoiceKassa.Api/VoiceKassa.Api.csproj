@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>VoiceKassa.Api</RootNamespace>
+    <UserSecretsId>voicekassa-api-secrets</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\VoiceKassa.Application\VoiceKassa.Application.csproj" />
+    <ProjectReference Include="..\VoiceKassa.DataLayer\VoiceKassa.DataLayer.csproj" />
+    <ProjectReference Include="..\VoiceKassa.DataLayer.Repository\VoiceKassa.DataLayer.Repository.csproj" />
+    <ProjectReference Include="..\VoiceKassa.AiServices\VoiceKassa.AiServices.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="6.6.2" />
+  </ItemGroup>
+
+</Project>

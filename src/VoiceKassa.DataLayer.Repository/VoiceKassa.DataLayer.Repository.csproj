@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>VoiceKassa.DataLayer.Repository</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\VoiceKassa.Domain\VoiceKassa.Domain.csproj" />
+    <ProjectReference Include="..\VoiceKassa.Application\VoiceKassa.Application.csproj" />
+    <ProjectReference Include="..\VoiceKassa.DataLayer\VoiceKassa.DataLayer.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="8.0.8" />
+  </ItemGroup>
+
+</Project>
