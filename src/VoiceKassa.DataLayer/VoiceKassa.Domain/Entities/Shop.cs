@@ -8,7 +8,7 @@ public class Shop
 {
     [Key]
     [Column("ID")]
-    public long Id { get; set; }
+    public Guid Id { get; set; } = Guid.NewGuid();
 
     [Column("NAME")]
     [MaxLength(200)]

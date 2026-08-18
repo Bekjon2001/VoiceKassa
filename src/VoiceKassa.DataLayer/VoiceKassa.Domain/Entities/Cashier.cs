@@ -8,10 +8,10 @@ public class Cashier
 {
     [Key]
     [Column("ID")]
-    public long Id { get; set; }
+    public Guid Id { get; set; } = Guid.NewGuid();
 
     [Column("SHOP_ID")]
-    public int ShopId { get; set; }
+    public Guid ShopId { get; set; }
 
     [Column("FULL_NAME")]
     [MaxLength(200)]
