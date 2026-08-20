@@ -4,8 +4,8 @@ using VoiceKassa.Application.Services;
 
 namespace VoiceKassa.Api.Controllers;
 
+[Route("[controller]/[action]")]
 [ApiController]
-[Route("api/query")]
 public class QueryController : ControllerBase
 {
     private readonly QueryService _queryService;

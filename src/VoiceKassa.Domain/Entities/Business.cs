@@ -13,7 +13,7 @@ namespace VoiceKassa.Domain.Entities;
 /// </summary>
 [Table("BUSINESSES", Schema = "voicekassa")]
 public class Business
-{
+{         
     [Key]
     [Column("ID")]
     [DatabaseGenerated(DatabaseGeneratedOption.Identity)]

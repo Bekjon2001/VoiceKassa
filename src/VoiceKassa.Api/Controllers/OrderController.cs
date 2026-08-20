@@ -4,8 +4,8 @@ using VoiceKassa.Application.Services;
 
 namespace VoiceKassa.Api.Controllers;
 
+[Route("[controller]/[action]")]
 [ApiController]
-[Route("api/orders")]
 public class OrderController : ControllerBase
 {
     private readonly OrderService _orderService;
