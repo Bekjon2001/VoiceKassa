@@ -1,0 +1,30 @@
+# Build outputs
+bin/
+obj/
+
+# Visual Studio
+.vs/
+*.user
+*.suo
+
+# Rider / VS Code
+.idea/
+.vscode/
+
+# User secrets (API kalitlar bu yerda saqlanmaydi - alohida joyda,
+# lekin ehtiyot shart bo'lsa deb qo'shildi)
+secrets.json
+appsettings.Development.json
+appsettings.*.local.json
+
+# NuGet
+*.nupkg
+**/packages/*
+!**/packages/build/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
