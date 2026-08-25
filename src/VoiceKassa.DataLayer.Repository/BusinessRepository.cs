@@ -12,6 +12,19 @@ public class BusinessRepository : IBusinessRepository
 
     public BusinessRepository(AppDbContext db) => _db = db;
 
+    public async Task<RestaurantOwner> CreateRestaurantOwnerAsync(RestaurantOwner owner, CancellationToken ct = default)
+    {
+        _db.RestaurantOwners.Add(owner);
+        await _db.SaveChangesAsync(ct);
+        return owner;
+    }
+
+    public Task<RestaurantOwner?> GetOwnerByLoginAsync(string login, CancellationToken ct = default) =>
+        _db.RestaurantOwners.FirstOrDefaultAsync(o => o.Login == login && o.IsActive, ct);
+
+    public Task<RestaurantOwner?> GetOwnerByTokenAsync(string token, CancellationToken ct = default) =>
+        _db.RestaurantOwners.FirstOrDefaultAsync(o => o.AccessToken == token && o.IsActive, ct);
+
     public async Task<Business> CreateBusinessAsync(Business business, CancellationToken ct = default)
     {
         _db.Businesses.Add(business);

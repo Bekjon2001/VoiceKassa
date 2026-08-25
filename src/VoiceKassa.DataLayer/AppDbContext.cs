@@ -15,6 +15,7 @@ public class AppDbContext : DbContext
     public DbSet<Order> Orders => Set<Order>();
     public DbSet<OrderItem> OrderItems => Set<OrderItem>();
     public DbSet<InventoryTransaction> InventoryTransactions => Set<InventoryTransaction>();
+    public DbSet<RestaurantOwner> RestaurantOwners => Set<RestaurantOwner>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -50,6 +51,13 @@ public class AppDbContext : DbContext
         modelBuilder.Entity<InventoryTransaction>(e =>
         {
             e.HasIndex(x => new { x.BusinessId, x.ProductId, x.CreatedAt });
+        });
+
+        modelBuilder.Entity<RestaurantOwner>(e =>
+        {
+            e.HasIndex(x => x.Login).IsUnique();
+            e.HasIndex(x => x.AccessToken).IsUnique();
+            e.HasIndex(x => x.BusinessId).IsUnique();
         });
     }
 }

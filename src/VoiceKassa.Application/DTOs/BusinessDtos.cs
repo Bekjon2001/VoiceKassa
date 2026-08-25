@@ -12,6 +12,36 @@ public class CreateBusinessRequest
     public string? PhoneNumber { get; set; }
 }
 
+public class CreateRestaurantWithOwnerRequest
+{
+    public string RestaurantName { get; set; } = string.Empty;
+    public string? Address { get; set; }
+    public string? RestaurantPhoneNumber { get; set; }
+    public string OwnerFullName { get; set; } = string.Empty;
+    public string OwnerPhoneNumber { get; set; } = string.Empty;
+    public decimal SubscriptionAmount { get; set; }
+    public DateTime PaymentPaidAt { get; set; }
+    public int SubscriptionMonths { get; set; }
+    public string Login { get; set; } = string.Empty;
+    public string Password { get; set; } = string.Empty;
+}
+
+public class OwnerLoginRequest
+{
+    public string Login { get; set; } = string.Empty;
+    public string Password { get; set; } = string.Empty;
+}
+
+public class OwnerLoginResponse
+{
+    public long BusinessId { get; set; }
+    public string RestaurantName { get; set; } = string.Empty;
+    public string OwnerFullName { get; set; } = string.Empty;
+    public string AccessToken { get; set; } = string.Empty;
+    public DateTime SubscriptionEndsAt { get; set; }
+    public DateTime PaymentPaidAt { get; set; }
+}
+
 public class BusinessResponse
 {
     public long Id { get; set; }

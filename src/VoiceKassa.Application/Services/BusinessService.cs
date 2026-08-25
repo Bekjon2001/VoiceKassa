@@ -2,6 +2,8 @@ using VoiceKassa.Application.DTOs;
 using VoiceKassa.Application.Interfaces;
 using VoiceKassa.Domain.Entities;
 using VoiceKassa.Domain.Enums;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace VoiceKassa.Application.Services;
 
@@ -15,6 +17,79 @@ public class BusinessService
     private readonly IBusinessRepository _repo;
 
     public BusinessService(IBusinessRepository repo) => _repo = repo;
+
+    public async Task<(bool Success, string? Error, OwnerLoginResponse? Owner)> CreateRestaurantWithOwnerAsync(
+        CreateRestaurantWithOwnerRequest request, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(request.RestaurantName) || string.IsNullOrWhiteSpace(request.OwnerFullName) ||
+            string.IsNullOrWhiteSpace(request.Login) || string.IsNullOrWhiteSpace(request.Password))
+            return (false, "Restoran, xo'jayin, login va parol majburiy.", null);
+        if (request.SubscriptionMonths < 1 || request.SubscriptionAmount < 0 || request.PaymentPaidAt == default)
+            return (false, "Obuna oy va to'lov qiymati noto'g'ri.", null);
+        if (await _repo.GetOwnerByLoginAsync(request.Login.Trim(), ct) is not null)
+            return (false, "Bu login allaqachon band.", null);
+
+        var business = await _repo.CreateBusinessAsync(new Business
+        {
+            Name = request.RestaurantName.Trim(), Type = BusinessType.Restaurant,
+            Address = request.Address, PhoneNumber = request.RestaurantPhoneNumber,
+        }, ct);
+        var owner = await _repo.CreateRestaurantOwnerAsync(new RestaurantOwner
+        {
+            BusinessId = business.Id, FullName = request.OwnerFullName.Trim(),
+            PhoneNumber = request.OwnerPhoneNumber.Trim(), Login = request.Login.Trim(),
+            PasswordHash = HashPassword(request.Password), SubscriptionAmount = request.SubscriptionAmount,
+            PaymentPaidAt = request.PaymentPaidAt.ToUniversalTime(),
+            SubscriptionMonths = request.SubscriptionMonths,
+            SubscriptionEndsAt = DateTime.UtcNow.AddMonths(request.SubscriptionMonths),
+            AccessToken = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)),
+        }, ct);
+        return (true, null, ToOwnerResponse(owner, business));
+    }
+
+    public async Task<(bool Success, string? Error, OwnerLoginResponse? Owner)> LoginOwnerAsync(
+        OwnerLoginRequest request, CancellationToken ct = default)
+    {
+        var owner = await _repo.GetOwnerByLoginAsync(request.Login.Trim(), ct);
+        if (owner is null || !VerifyPassword(request.Password, owner.PasswordHash))
+            return (false, "Login yoki parol noto'g'ri.", null);
+        if (owner.SubscriptionEndsAt <= DateTime.UtcNow)
+            return (false, "Obuna muddati tugagan.", null);
+        var business = await _repo.GetBusinessByIdAsync(owner.BusinessId, ct);
+        return business is null ? (false, "Restoran topilmadi.", null) : (true, null, ToOwnerResponse(owner, business));
+    }
+
+    public async Task<(bool Success, string? Error, RestaurantOwner? Owner)> AuthorizeOwnerAsync(
+        long businessId, string? token, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(token)) return (false, "Owner token kerak.", null);
+        var owner = await _repo.GetOwnerByTokenAsync(token, ct);
+        if (owner is null || owner.BusinessId != businessId) return (false, "Owner huquqi tasdiqlanmadi.", null);
+        if (owner.SubscriptionEndsAt <= DateTime.UtcNow) return (false, "Obuna muddati tugagan.", null);
+        return (true, null, owner);
+    }
+
+    private static string HashPassword(string password)
+    {
+        var salt = RandomNumberGenerator.GetBytes(16);
+        var hash = Rfc2898DeriveBytes.Pbkdf2(password, salt, 120_000, HashAlgorithmName.SHA256, 32);
+        return $"{Convert.ToBase64String(salt)}.{Convert.ToBase64String(hash)}";
+    }
+
+    private static bool VerifyPassword(string password, string stored)
+    {
+        var parts = stored.Split('.', 2);
+        if (parts.Length != 2) return false;
+        var hash = Rfc2898DeriveBytes.Pbkdf2(password, Convert.FromBase64String(parts[0]), 120_000, HashAlgorithmName.SHA256, 32);
+        return CryptographicOperations.FixedTimeEquals(hash, Convert.FromBase64String(parts[1]));
+    }
+
+    private static OwnerLoginResponse ToOwnerResponse(RestaurantOwner owner, Business business) => new()
+    {
+        BusinessId = business.Id, RestaurantName = business.Name, OwnerFullName = owner.FullName,
+        AccessToken = owner.AccessToken, SubscriptionEndsAt = owner.SubscriptionEndsAt,
+        PaymentPaidAt = owner.PaymentPaidAt,
+    };
 
     public async Task<BusinessResponse> CreateBusinessAsync(CreateBusinessRequest request, CancellationToken ct = default)
     {

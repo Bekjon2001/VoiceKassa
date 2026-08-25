@@ -16,6 +16,8 @@ public class ProductController : ControllerBase
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] CreateProductRequest request, CancellationToken ct)
     {
+        var access = await _businessService.AuthorizeOwnerAsync(request.BusinessId, Request.Headers["X-Owner-Token"].FirstOrDefault(), ct);
+        if (!access.Success) return Unauthorized(new { error = access.Error });
         var (success, error, product) = await _businessService.CreateProductAsync(request, ct);
         return success ? Ok(product) : BadRequest(new { error });
     }

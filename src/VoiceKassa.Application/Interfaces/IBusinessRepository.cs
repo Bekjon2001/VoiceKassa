@@ -10,6 +10,9 @@ namespace VoiceKassa.Application.Interfaces;
 /// </summary>
 public interface IBusinessRepository
 {
+    Task<RestaurantOwner> CreateRestaurantOwnerAsync(RestaurantOwner owner, CancellationToken ct = default);
+    Task<RestaurantOwner?> GetOwnerByLoginAsync(string login, CancellationToken ct = default);
+    Task<RestaurantOwner?> GetOwnerByTokenAsync(string token, CancellationToken ct = default);
     Task<Business> CreateBusinessAsync(Business business, CancellationToken ct = default);
     Task<Business?> GetBusinessByIdAsync(long businessId, CancellationToken ct = default);
     Task<List<Business>> GetAllBusinessesAsync(CancellationToken ct = default);

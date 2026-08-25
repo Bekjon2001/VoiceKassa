@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="uz">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VoiceKassa | Admin</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body class="admin-body">
+  <main class="admin-shell">
+    <header class="admin-header">
+      <div><span class="eyebrow">VOICEKASSA / ADMIN</span><h1>Admin markazi</h1><p>Restoran egalarini va ularning ish joyini boshqaring.</p></div>
+      <a class="back-link admin-back" href="index.html">Mijoz ko‘rinishi →</a>
+    </header>
+
+    <section class="admin-card super-card">
+      <div class="role-heading"><div><span class="step-label">SUPER ADMIN</span><h2>Yangi restoran yaratish</h2><p>Restoran va uning egasi uchun kirish ma’lumotlarini oching.</p></div><span class="role-badge">Faqat platforma egasi</span></div>
+      <form id="super-form" class="super-form">
+        <div><label for="new-restaurant-name">Restoran nomi</label><input id="new-restaurant-name" placeholder="Masalan: Bahor restorani" required /></div>
+        <div><label for="owner-name">Xo‘jayin F.I.SH</label><input id="owner-name" placeholder="Aliyev Alisher Aliyevich" required /></div>
+        <div><label for="owner-phone">Telefon raqami</label><input id="owner-phone" type="tel" placeholder="+998 90 123 45 67" required /></div>
+        <div><label for="subscription-amount">To‘lov summasi</label><input id="subscription-amount" type="number" min="0" placeholder="500000" required /></div>
+        <div><label for="payment-paid-at">To‘lov qilingan sana</label><input id="payment-paid-at" type="datetime-local" required /></div>
+        <div><label for="subscription-months">Obuna muddati (oy)</label><input id="subscription-months" type="number" min="1" value="1" required /></div>
+        <div><label for="owner-login">Login</label><input id="owner-login" placeholder="bahor_admin" required /></div>
+        <div><label for="owner-password">Parol</label><input id="owner-password" type="password" placeholder="••••••••" required /></div>
+        <button class="admin-button" type="submit">Restoran va akkaunt yaratish</button>
+        <p class="form-message" id="super-message"></p>
+      </form>
+    </section>
+
+    <section class="owner-login admin-card" id="owner-login-card">
+      <div class="role-heading"><div><span class="step-label">RESTORAN EGASI</span><h2>Boshqaruvga kirish</h2><p>Super Admin bergan login va parolni kiriting.</p></div></div>
+      <form id="owner-login-form" class="login-form"><input id="login-value" placeholder="Login" required /><input id="password-value" type="password" placeholder="Parol" required /><button class="admin-button" type="submit">Kirish</button><p class="form-message" id="login-message"></p></form>
+    </section>
+
+    <section class="owner-area" id="owner-area" hidden>
+      <div class="owner-bar"><div><span class="step-label">RESTORAN EGASI</span><h2 id="owner-restaurant-name">Restoran boshqaruvi</h2></div><button class="logout-button" id="logout-button" type="button">Chiqish</button></div>
+      <div class="admin-grid">
+      <article class="admin-card restaurant-card">
+        <span class="step-label">01 / RESTORAN</span>
+        <h2>Restoran ma’lumotlari</h2>
+        <form id="restaurant-form" class="admin-form">
+          <label for="restaurant-name">Restoran nomi</label>
+          <input id="restaurant-name" value="Milliy Taomlar Restorani" required />
+          <label for="restaurant-address">Manzil</label>
+          <input id="restaurant-address" value="Toshkent shahri" />
+          <label for="restaurant-image">Restoran rasmi</label>
+          <input id="restaurant-image" type="file" accept="image/*" />
+          <div class="image-preview restaurant-preview" id="restaurant-preview"><span>Rasm tanlang</span></div>
+          <button class="admin-button" type="submit">Ma’lumotni saqlash</button>
+          <p class="form-message" id="restaurant-message"></p>
+        </form>
+      </article>
+
+      <article class="admin-card">
+        <span class="step-label">02 / STOLLAR</span>
+        <h2>Stollarni kiriting</h2>
+        <form id="table-form" class="admin-form">
+          <label for="table-name">Stol nomi</label>
+          <input id="table-name" placeholder="Masalan: Stol 1" required />
+          <label for="table-capacity">Sig‘imi</label>
+          <input id="table-capacity" type="number" min="1" value="4" required />
+          <label for="table-image">Stol rasmi</label>
+          <input id="table-image" type="file" accept="image/*" />
+          <div class="image-preview small-preview" id="table-preview"><span>Stol rasmi</span></div>
+          <button class="admin-button" type="submit">+ Stol qo‘shish</button>
+        </form>
+        <div class="admin-items" id="table-items"></div>
+      </article>
+
+      <article class="admin-card menu-card">
+        <span class="step-label">03 / MENYU</span>
+        <h2>Taomlarni kiriting</h2>
+        <form id="product-form" class="admin-form">
+          <label for="product-name">Taom nomi</label>
+          <input id="product-name" placeholder="Masalan: Lag‘mon" required />
+          <label for="product-price">Narxi</label>
+          <input id="product-price" type="number" min="0" placeholder="32000" required />
+          <label for="product-image">Taom rasmi</label>
+          <input id="product-image" type="file" accept="image/*" />
+          <div class="image-preview small-preview" id="product-preview"><span>Taom rasmi</span></div>
+          <button class="admin-button" type="submit">+ Menyuga qo‘shish</button>
+        </form>
+        <div class="admin-items menu-items" id="product-items"></div>
+      </article>
+      </div>
+    </section>
+  </main>
+  <script src="admin.js"></script>
+</body>
+</html>

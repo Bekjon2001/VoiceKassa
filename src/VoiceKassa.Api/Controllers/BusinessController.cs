@@ -12,6 +12,20 @@ public class BusinessController : ControllerBase
 
     public BusinessController(BusinessService businessService) => _businessService = businessService;
 
+    [HttpPost("restaurant")]
+    public async Task<IActionResult> CreateRestaurant([FromBody] CreateRestaurantWithOwnerRequest request, CancellationToken ct)
+    {
+        var (success, error, owner) = await _businessService.CreateRestaurantWithOwnerAsync(request, ct);
+        return success ? Ok(owner) : BadRequest(new { error });
+    }
+
+    [HttpPost("owner/login")]
+    public async Task<IActionResult> LoginOwner([FromBody] OwnerLoginRequest request, CancellationToken ct)
+    {
+        var (success, error, owner) = await _businessService.LoginOwnerAsync(request, ct);
+        return success ? Ok(owner) : Unauthorized(new { error });
+    }
+
     /// <summary>Yangi biznes ro'yxatdan o'tkazish (restoran, do'kon, market, ombor).</summary>
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] CreateBusinessRequest request, CancellationToken ct)
@@ -71,6 +85,8 @@ public class BusinessController : ControllerBase
     [HttpPost("tables")]
     public async Task<IActionResult> CreateTable([FromBody] CreateTableRequest request, CancellationToken ct)
     {
+        var access = await _businessService.AuthorizeOwnerAsync(request.BusinessId, Request.Headers["X-Owner-Token"].FirstOrDefault(), ct);
+        if (!access.Success) return Unauthorized(new { error = access.Error });
         var (success, error, table) = await _businessService.CreateTableAsync(request, ct);
         return success ? Ok(table) : BadRequest(new { error });
     }

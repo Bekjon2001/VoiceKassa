@@ -146,7 +146,7 @@ function renderMenu(products) {
   });
 }
 
-document.getElementById("entry-form").addEventListener("submit", (event) => {
+document.getElementById("entry-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   const businessId = document.getElementById("business-id").value;
   const tableId = document.getElementById("table-id").value;
@@ -161,5 +161,17 @@ document.getElementById("entry-form").addEventListener("submit", (event) => {
     message.textContent = "Buyurtma matnini kiriting.";
     return;
   }
-  message.textContent = "Buyurtma yuborishga tayyor.";
+  message.textContent = "Buyurtma yuborilmoqda...";
+  try {
+    const response = await fetch(`${API_BASE}/Order/CreateFromVoice/voice`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ businessId: Number(businessId), tableId: Number(tableId), transcriptText: text }),
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || "Buyurtma yuborilmadi.");
+    message.textContent = `Buyurtma qabul qilindi. №${result.id}`;
+  } catch (error) {
+    message.textContent = `Buyurtma yuborilmadi: ${error.message}`;
+  }
 });
