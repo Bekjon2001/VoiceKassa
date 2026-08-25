@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="uz">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#f5f1e9" />
+  <title>VoiceKassa | Kirish</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <main class="shell tables-page">
+    <section class="intro-panel">   
+      <div class="brand-mark" aria-label="VoiceKassa">VK</div>
+      <p class="eyebrow">UNIVERSAL VOICE SALES SYSTEM</p>
+      <h1>Buyurtmani<br /><em>oson</em> boshlang.</h1>
+      <p class="intro-copy">Stolni tanlang va buyurtmani ovoz yoki matn orqali yuboring.</p>
+      <div class="status-line"><span class="status-dot"></span> Tizim tayyor</div>
+    </section>
+
+    <section class="entry-panel" aria-labelledby="restaurant-title">
+      <div class="panel-heading">
+        <span class="step-label">01 / KIRISH</span>
+        <h2 id="restaurant-title">Milliy Taomlar Restorani</h2>
+        <p>Stolingizni tanlang.</p>
+      </div>
+
+      <form id="entry-form" novalidate>
+        <div class="scan-box" id="scan-box">
+          <span class="scan-icon">⌁</span>
+          <strong>QR kodni skaner qiling</strong>
+          <small>Restoran QR kodi orqali menyu avtomatik ochiladi.</small>
+          <button class="qr-button" type="button" id="qr-button">QR kodni tekshirish</button>
+        </div>
+
+        <p class="location-note" id="location-note">Restoran va stol ma’lumoti hali aniqlanmadi.</p>
+
+        <section class="table-section" id="table-section" hidden aria-labelledby="table-title">
+          <span class="step-label">02 / STOL</span>
+          <h3 id="table-title">Stolni tanlang</h3>
+          <div class="table-list" id="table-list"></div>
+        </section>
+
+        <section class="menu-section" id="menu-section" hidden aria-labelledby="menu-title">
+          <div class="menu-heading">
+            <span class="step-label">03 / MENYU</span>
+            <h3 id="menu-title">Bugungi menyu</h3>
+          </div>
+          <div class="menu-list" id="menu-list"></div>
+        </section>
+
+        <input id="business-id" name="businessId" type="hidden" />
+        <input id="table-id" name="tableId" type="hidden" />
+
+        <div class="method-tabs" role="tablist" aria-label="Buyurtma kiritish usuli">
+          <button type="button" class="method-tab active" data-method="text" role="tab" aria-selected="true">Matn</button>
+          <button type="button" class="method-tab" data-method="voice" role="tab" aria-selected="false">Ovoz</button>
+        </div>
+
+        <label for="order-text">Buyurtma</label>
+        <textarea id="order-text" name="transcriptText" rows="4" placeholder="Masalan: ikki lag'mon, bitta choy..."></textarea>
+        <p class="voice-note" id="voice-note" hidden>Ovoz yozish keyingi bosqichda ulanadi.</p>
+
+        <button class="primary-button" type="submit">
+          <span>Buyurtmani davom ettirish</span><strong>→</strong>
+        </button>
+        <p class="form-message" id="form-message" role="status"></p>
+      </form>
+    </section>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>

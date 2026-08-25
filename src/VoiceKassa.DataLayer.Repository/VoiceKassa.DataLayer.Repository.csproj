@@ -14,7 +14,11 @@
   </ItemGroup>
 
   <ItemGroup>
+<<<<<<< HEAD
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="8.0.8" />
+=======
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="8.0.4" />
+>>>>>>> main
   </ItemGroup>
 
 </Project>

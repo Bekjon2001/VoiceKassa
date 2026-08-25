@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="uz">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#f5f1e9" />
+  <title>VoiceKassa | Menyu</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <main class="shell menu-page">
+    <section class="intro-panel">
+      <div class="brand-mark" aria-label="VoiceKassa">VK</div>
+      <p class="eyebrow">VOICEKASSA / RESTORAN</p>
+      <h1>Buyurtmani<br /><em>tanlang.</em></h1>
+      <p class="intro-copy">Menyudan taomlarni tanlang yoki buyurtmangizni ovoz bilan ayting.</p>
+      <a class="back-link" href="index.html">← Stolni almashtirish</a>
+    </section>
+
+    <section class="entry-panel" aria-labelledby="menu-page-title">
+      <div class="panel-heading">
+        <span class="step-label">03 / MENYU</span>
+        <h2 id="menu-page-title">Bugungi menyu</h2>
+        <p id="location-note">Menyu yuklanmoqda...</p>
+      </div>
+
+      <form id="entry-form" novalidate>
+        <section class="menu-section" id="menu-section" aria-labelledby="menu-title">
+          <div class="menu-list" id="menu-list"></div>
+        </section>
+
+        <input id="business-id" name="businessId" type="hidden" />
+        <input id="table-id" name="tableId" type="hidden" />
+
+        <div class="method-tabs" role="tablist" aria-label="Buyurtma kiritish usuli">
+          <button type="button" class="method-tab active" data-method="text" role="tab" aria-selected="true">Matn</button>
+          <button type="button" class="method-tab" data-method="voice" role="tab" aria-selected="false">Ovoz</button>
+        </div>
+        <label for="order-text">Buyurtma</label>
+        <textarea id="order-text" name="transcriptText" rows="4" placeholder="Masalan: ikki lag'mon, bitta choy..."></textarea>
+        <p class="voice-note" id="voice-note" hidden>Ovoz yozish keyingi bosqichda ulanadi.</p>
+        <button class="primary-button" type="submit"><span>Buyurtmani yuborish</span><strong>→</strong></button>
+        <p class="form-message" id="form-message" role="status"></p>
+      </form>
+    </section>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>

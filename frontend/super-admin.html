@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="uz">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VoiceKassa | Super Admin</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body class="admin-body">
+  <main class="admin-shell">
+    <section class="admin-card super-auth" id="super-auth">
+      <span class="step-label">SUPER ADMIN</span>
+      <h1>Super Admin kirishi</h1>
+      <p id="super-auth-note">Restoranlarni boshqarish uchun login qiling.</p>
+      <form id="super-login-form" class="login-form">
+        <input name="login" placeholder="Login" required>
+        <input name="password" type="password" placeholder="Parol" required>
+        <button class="admin-button" type="submit">Kirish</button>
+      </form>
+      <button class="text-button" id="show-first-super-form" type="button">Birinchi Super Adminni yaratish</button>
+      <form id="first-super-form" class="first-super-form" hidden>
+        <input name="fullName" placeholder="F.I.SH" required>
+        <input name="phoneNumber" placeholder="Telefon">
+        <input name="login" placeholder="Yangi login" required>
+        <input name="password" type="password" placeholder="Yangi parol" required>
+        <button class="admin-button" type="submit">Yaratish</button>
+      </form>
+      <p class="form-message" id="super-auth-message"></p>
+    </section>
+    <div id="super-dashboard" hidden>
+    <div class="workspace-layout">
+      <aside class="workspace-sidebar">
+        <div class="workspace-brand"><span>VK</span><strong>VoiceKassa</strong></div>
+        <nav class="workspace-nav" aria-label="Super Admin menyusi">
+          <button class="workspace-nav-item active" type="button" data-view="restaurants">▦ <span>Restoranlar</span><b>›</b></button>
+          <button class="workspace-nav-item" type="button" data-view="create">＋ <span>Restoran yaratish</span><b>›</b></button>
+          <button class="workspace-nav-item" type="button" data-view="system">⚙ <span>Tizim sozlamalari</span><b>›</b></button>
+        </nav>
+        <div class="workspace-profile"><small>SUPER ADMIN</small><strong>Platforma boshqaruvi</strong><button class="logout-button" type="button" onclick="location.reload();">Chiqish</button></div>
+      </aside>
+      <div class="workspace-content">
+        <header class="admin-header"><div><span class="eyebrow">VOICEKASSA / SUPER ADMIN</span><h1>Restoranlar</h1><p>Restoranlar va obunalarni boshqaring.</p></div></header>
+        <section class="super-admin-layout" data-view-panel="restaurants">
+          <section class="admin-card restaurant-list-card"><div class="table-toolbar"><div><span class="step-label">RESTORANLAR</span><h2>Ro‘yxat</h2></div><button class="admin-button" id="show-restaurant-form" type="button">+ Restoran qo‘shish</button></div><div class="data-table-wrap"><table class="data-table"><thead><tr><th>ID</th><th>Restoran</th><th>Xo‘jayin</th><th>Telefon</th><th>To‘lov</th><th>To‘lov sanasi</th><th>Obuna</th><th>Holati</th><th></th></tr></thead><tbody id="restaurant-list"><tr><td colspan="9" class="table-empty">Yuklanmoqda...</td></tr></tbody></table></div></section>
+          <section class="admin-card restaurant-details" id="restaurant-details"><span class="step-label">RESTORAN MA’LUMOTI</span><h2 id="selected-restaurant">Restoran tanlang</h2><div id="payment-details" class="detail-grid"><p class="form-message">Chap tomondagi ro‘yxatdan restoran tanlang.</p></div></section>
+        </section>
+        <section class="admin-card popup-form" id="restaurant-form-card" data-view-panel="create" hidden><span class="step-label">YANGI RESTORAN</span><h2>Restoran va egasini qo‘shish</h2><form id="restaurant-create-form" class="super-form"><div><label>Restoran nomi</label><input name="restaurantName" required></div><div><label>Xo‘jayin F.I.SH</label><input name="ownerFullName" required></div><div><label>Telefon</label><input name="ownerPhoneNumber" required></div><div><label>To‘lov summasi</label><input name="subscriptionAmount" type="number" min="0" required></div><div><label>To‘lov sanasi</label><input name="paymentPaidAt" type="datetime-local" required></div><div><label>Obuna (oy)</label><input name="subscriptionMonths" type="number" min="1" value="1" required></div><div><label>Login</label><input name="login" required></div><div><label>Parol</label><input name="password" type="password" required></div><button class="admin-button" type="submit">Yaratish</button><p id="restaurant-create-message" class="form-message"></p></form></section>
+        <section class="admin-card system-panel" data-view-panel="system" hidden><span class="step-label">TIZIM</span><h2>Tizim sozlamalari</h2><p class="section-note">Super Admin uchun platforma boshqaruv sozlamalari shu yerda bo‘ladi.</p></section>
+      </div>
+    </div>
+    </div>
+  </main>
+  <script src="super-admin.js"></script>
+</body>
+</html>

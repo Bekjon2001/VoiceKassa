@@ -24,6 +24,7 @@ builder.Services.AddSingleton(geminiOptions);
 builder.Services.AddHttpClient<GeminiApiClient>();
 
 // --- Application services / DI wiring ---
+<<<<<<< HEAD
 builder.Services.AddScoped<ISaleRepository, SaleRepository>();
 builder.Services.AddScoped<IShopRepository, ShopRepository>();
 builder.Services.AddScoped<IAiExtractionService, GeminiExtractionService>();
@@ -31,6 +32,15 @@ builder.Services.AddScoped<IAiQueryService, GeminiQueryService>();
 builder.Services.AddScoped<SaleService>();
 builder.Services.AddScoped<QueryService>();
 builder.Services.AddScoped<ShopService>();
+=======
+builder.Services.AddScoped<IOrderRepository, OrderRepository>();
+builder.Services.AddScoped<IBusinessRepository, BusinessRepository>();
+builder.Services.AddScoped<IAiExtractionService, GeminiExtractionService>();
+builder.Services.AddScoped<IAiQueryService, GeminiQueryService>();
+builder.Services.AddScoped<OrderService>();
+builder.Services.AddScoped<QueryService>();
+builder.Services.AddScoped<BusinessService>();
+>>>>>>> main
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
