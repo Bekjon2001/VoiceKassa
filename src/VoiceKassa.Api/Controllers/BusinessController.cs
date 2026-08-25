@@ -12,9 +12,31 @@ public class BusinessController : ControllerBase
 
     public BusinessController(BusinessService businessService) => _businessService = businessService;
 
+    [HttpPost("super-admin/first")]
+    public async Task<IActionResult> CreateFirstSuperAdmin([FromBody] CreateSuperAdminRequest request, CancellationToken ct)
+    {
+        var (success, error, account) = await _businessService.CreateFirstSuperAdminAsync(request, ct);
+        return success ? Ok(account) : BadRequest(new { error });
+    }
+
+    [HttpPost("super-admin/login")]
+    public async Task<IActionResult> LoginSuperAdmin([FromBody] SuperAdminLoginRequest request, CancellationToken ct)
+    {
+        var (success, error, account) = await _businessService.LoginSuperAdminAsync(request, ct);
+        return success ? Ok(account) : Unauthorized(new { error });
+    }
+
+    [HttpGet("super-admin/session")]
+    public async Task<IActionResult> CheckSuperAdmin(CancellationToken ct)
+    {
+        var token = Request.Headers["X-Super-Admin-Token"].FirstOrDefault();
+        return await _businessService.IsSuperAdminTokenAsync(token, ct) ? Ok() : Unauthorized();
+    }
+
     [HttpPost("restaurant")]
     public async Task<IActionResult> CreateRestaurant([FromBody] CreateRestaurantWithOwnerRequest request, CancellationToken ct)
     {
+        if (await _businessService.HasSuperAdminAsync(ct) && !await IsSuperAdmin(ct)) return Unauthorized();
         var (success, error, owner) = await _businessService.CreateRestaurantWithOwnerAsync(request, ct);
         return success ? Ok(owner) : BadRequest(new { error });
     }
@@ -37,6 +59,7 @@ public class BusinessController : ControllerBase
     [HttpGet]
     public async Task<IActionResult> GetAll(CancellationToken ct)
     {
+        if (!await IsSuperAdmin(ct)) return Unauthorized();
         var businesses = await _businessService.GetAllBusinessesAsync(ct);
         return Ok(businesses);
     }
@@ -48,11 +71,21 @@ public class BusinessController : ControllerBase
         return business is null ? NotFound() : Ok(business);
     }
 
+    [HttpGet("{businessId:long}/owner")]
+    public async Task<IActionResult> GetOwner(long businessId, CancellationToken ct)
+    {
+        if (!await IsSuperAdmin(ct)) return Unauthorized();
+        var owner = await _businessService.GetOwnerAdminAsync(businessId, ct);
+        return owner is null ? NotFound() : Ok(owner);
+    }
+
     // ---- Staff ----
 
     [HttpPost("staff")]
     public async Task<IActionResult> CreateStaff([FromBody] CreateStaffRequest request, CancellationToken ct)
     {
+        var ownerAccess = await _businessService.AuthorizeOwnerAsync(request.BusinessId, Request.Headers["X-Owner-Token"].FirstOrDefault(), ct);
+        if (!ownerAccess.Success) return Unauthorized(new { error = ownerAccess.Error });
         var (success, error, staff) = await _businessService.CreateStaffAsync(request, ct);
         return success ? Ok(staff) : BadRequest(new { error });
     }
@@ -60,8 +93,17 @@ public class BusinessController : ControllerBase
     [HttpGet("{businessId:long}/staff")]
     public async Task<IActionResult> GetStaff(long businessId, CancellationToken ct)
     {
+        if (!await IsSuperAdmin(ct)) return Unauthorized();
         var staff = await _businessService.GetStaffAsync(businessId, ct);
         return Ok(staff);
+    }
+
+    [HttpPut("staff/{staffId:long}/status")]
+    public async Task<IActionResult> UpdateStaffStatus(long staffId, [FromBody] UpdateStaffStatusRequest request, CancellationToken ct)
+    {
+        if (!await IsSuperAdmin(ct)) return Unauthorized();
+        var (success, error) = await _businessService.UpdateStaffStatusAsync(staffId, request, ct);
+        return success ? NoContent() : NotFound(new { error });
     }
 
     // ---- Category ----
@@ -104,4 +146,7 @@ public class BusinessController : ControllerBase
         var (success, error) = await _businessService.UpdateTableStatusAsync(tableId, request, ct);
         return success ? NoContent() : NotFound(new { error });
     }
+
+    private Task<bool> IsSuperAdmin(CancellationToken ct) =>
+        _businessService.IsSuperAdminTokenAsync(Request.Headers["X-Super-Admin-Token"].FirstOrDefault(), ct);
 }

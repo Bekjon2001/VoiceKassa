@@ -42,6 +42,40 @@ public class OwnerLoginResponse
     public DateTime PaymentPaidAt { get; set; }
 }
 
+public class SuperAdminLoginRequest
+{
+    public string Login { get; set; } = string.Empty;
+    public string Password { get; set; } = string.Empty;
+}
+
+public class CreateSuperAdminRequest
+{
+    public string FullName { get; set; } = string.Empty;
+    public string? PhoneNumber { get; set; }
+    public string Login { get; set; } = string.Empty;
+    public string Password { get; set; } = string.Empty;
+}
+
+public class SuperAdminLoginResponse
+{
+    public string FullName { get; set; } = string.Empty;
+    public string AccessToken { get; set; } = string.Empty;
+    public bool IsSuperAdmin { get; set; }
+}
+
+public class OwnerAdminResponse
+{
+    public long BusinessId { get; set; }
+    public string RestaurantName { get; set; } = string.Empty;
+    public string OwnerFullName { get; set; } = string.Empty;
+    public string OwnerPhoneNumber { get; set; } = string.Empty;
+    public string Login { get; set; } = string.Empty;
+    public decimal SubscriptionAmount { get; set; }
+    public DateTime PaymentPaidAt { get; set; }
+    public int SubscriptionMonths { get; set; }
+    public DateTime SubscriptionEndsAt { get; set; }
+}
+
 public class BusinessResponse
 {
     public long Id { get; set; }
@@ -69,6 +103,11 @@ public class StaffResponse
     public string FullName { get; set; } = string.Empty;
     public string? PhoneNumber { get; set; }
     public StaffRole Role { get; set; }
+    public bool IsActive { get; set; }
+}
+
+public class UpdateStaffStatusRequest
+{
     public bool IsActive { get; set; }
 }
 

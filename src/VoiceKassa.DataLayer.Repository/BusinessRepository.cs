@@ -12,6 +12,22 @@ public class BusinessRepository : IBusinessRepository
 
     public BusinessRepository(AppDbContext db) => _db = db;
 
+    public Task<bool> HasSuperAdminAsync(CancellationToken ct = default) =>
+        _db.UserAccounts.AnyAsync(x => x.IsSuperAdmin && x.IsActive, ct);
+
+    public async Task<UserAccount> CreateUserAccountAsync(UserAccount account, CancellationToken ct = default)
+    {
+        _db.UserAccounts.Add(account);
+        await _db.SaveChangesAsync(ct);
+        return account;
+    }
+
+    public Task<UserAccount?> GetUserByLoginAsync(string login, CancellationToken ct = default) =>
+        _db.UserAccounts.FirstOrDefaultAsync(x => x.Login == login && x.IsActive, ct);
+
+    public Task<UserAccount?> GetSuperAdminByTokenAsync(string token, CancellationToken ct = default) =>
+        _db.UserAccounts.FirstOrDefaultAsync(x => x.AccessToken == token && x.IsActive && x.IsSuperAdmin, ct);
+
     public async Task<RestaurantOwner> CreateRestaurantOwnerAsync(RestaurantOwner owner, CancellationToken ct = default)
     {
         _db.RestaurantOwners.Add(owner);
@@ -24,6 +40,9 @@ public class BusinessRepository : IBusinessRepository
 
     public Task<RestaurantOwner?> GetOwnerByTokenAsync(string token, CancellationToken ct = default) =>
         _db.RestaurantOwners.FirstOrDefaultAsync(o => o.AccessToken == token && o.IsActive, ct);
+
+    public Task<RestaurantOwner?> GetOwnerByBusinessIdAsync(long businessId, CancellationToken ct = default) =>
+        _db.RestaurantOwners.FirstOrDefaultAsync(o => o.BusinessId == businessId && o.IsActive, ct);
 
     public async Task<Business> CreateBusinessAsync(Business business, CancellationToken ct = default)
     {
@@ -47,6 +66,15 @@ public class BusinessRepository : IBusinessRepository
 
     public Task<List<Staff>> GetStaffByBusinessAsync(long businessId, CancellationToken ct = default) =>
         _db.StaffMembers.Where(s => s.BusinessId == businessId).OrderBy(s => s.FullName).ToListAsync(ct);
+
+    public async Task<bool> UpdateStaffStatusAsync(long staffId, bool isActive, CancellationToken ct = default)
+    {
+        var staff = await _db.StaffMembers.FindAsync(new object[] { staffId }, ct);
+        if (staff is null) return false;
+        staff.IsActive = isActive;
+        await _db.SaveChangesAsync(ct);
+        return true;
+    }
 
     public async Task<Category> CreateCategoryAsync(Category category, CancellationToken ct = default)
     {

@@ -10,15 +10,21 @@ namespace VoiceKassa.Application.Interfaces;
 /// </summary>
 public interface IBusinessRepository
 {
+    Task<bool> HasSuperAdminAsync(CancellationToken ct = default);
+    Task<UserAccount> CreateUserAccountAsync(UserAccount account, CancellationToken ct = default);
+    Task<UserAccount?> GetUserByLoginAsync(string login, CancellationToken ct = default);
+    Task<UserAccount?> GetSuperAdminByTokenAsync(string token, CancellationToken ct = default);
     Task<RestaurantOwner> CreateRestaurantOwnerAsync(RestaurantOwner owner, CancellationToken ct = default);
     Task<RestaurantOwner?> GetOwnerByLoginAsync(string login, CancellationToken ct = default);
     Task<RestaurantOwner?> GetOwnerByTokenAsync(string token, CancellationToken ct = default);
+    Task<RestaurantOwner?> GetOwnerByBusinessIdAsync(long businessId, CancellationToken ct = default);
     Task<Business> CreateBusinessAsync(Business business, CancellationToken ct = default);
     Task<Business?> GetBusinessByIdAsync(long businessId, CancellationToken ct = default);
     Task<List<Business>> GetAllBusinessesAsync(CancellationToken ct = default);
 
     Task<Staff> CreateStaffAsync(Staff staff, CancellationToken ct = default);
     Task<List<Staff>> GetStaffByBusinessAsync(long businessId, CancellationToken ct = default);
+    Task<bool> UpdateStaffStatusAsync(long staffId, bool isActive, CancellationToken ct = default);
 
     Task<Category> CreateCategoryAsync(Category category, CancellationToken ct = default);
     Task<List<Category>> GetCategoriesByBusinessAsync(long businessId, CancellationToken ct = default);

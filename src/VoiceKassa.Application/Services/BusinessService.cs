@@ -18,6 +18,39 @@ public class BusinessService
 
     public BusinessService(IBusinessRepository repo) => _repo = repo;
 
+    public async Task<(bool Success, string? Error, SuperAdminLoginResponse? Account)> CreateFirstSuperAdminAsync(
+        CreateSuperAdminRequest request, CancellationToken ct = default)
+    {
+        if (await _repo.HasSuperAdminAsync(ct)) return (false, "Super Admin allaqachon mavjud.", null);
+        if (string.IsNullOrWhiteSpace(request.FullName) || string.IsNullOrWhiteSpace(request.Login) || string.IsNullOrWhiteSpace(request.Password))
+            return (false, "F.I.SH, login va parol majburiy.", null);
+        if (await _repo.GetUserByLoginAsync(request.Login.Trim(), ct) is not null)
+            return (false, "Bu login allaqachon band.", null);
+
+        var account = await _repo.CreateUserAccountAsync(new UserAccount
+        {
+            FullName = request.FullName.Trim(), PhoneNumber = request.PhoneNumber?.Trim(),
+            Login = request.Login.Trim(), PasswordHash = HashPassword(request.Password),
+            IsActive = true, IsSuperAdmin = true,
+            AccessToken = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)),
+        }, ct);
+        return (true, null, new SuperAdminLoginResponse { FullName = account.FullName, AccessToken = account.AccessToken, IsSuperAdmin = true });
+    }
+
+    public async Task<(bool Success, string? Error, SuperAdminLoginResponse? Account)> LoginSuperAdminAsync(
+        SuperAdminLoginRequest request, CancellationToken ct = default)
+    {
+        var account = await _repo.GetUserByLoginAsync(request.Login.Trim(), ct);
+        if (account is null || !account.IsSuperAdmin || !VerifyPassword(request.Password, account.PasswordHash))
+            return (false, "Super Admin login yoki paroli noto'g'ri.", null);
+        return (true, null, new SuperAdminLoginResponse { FullName = account.FullName, AccessToken = account.AccessToken, IsSuperAdmin = true });
+    }
+
+    public async Task<bool> IsSuperAdminTokenAsync(string? token, CancellationToken ct = default) =>
+        !string.IsNullOrWhiteSpace(token) && await _repo.GetSuperAdminByTokenAsync(token, ct) is not null;
+
+    public Task<bool> HasSuperAdminAsync(CancellationToken ct = default) => _repo.HasSuperAdminAsync(ct);
+
     public async Task<(bool Success, string? Error, OwnerLoginResponse? Owner)> CreateRestaurantWithOwnerAsync(
         CreateRestaurantWithOwnerRequest request, CancellationToken ct = default)
     {
@@ -57,6 +90,20 @@ public class BusinessService
             return (false, "Obuna muddati tugagan.", null);
         var business = await _repo.GetBusinessByIdAsync(owner.BusinessId, ct);
         return business is null ? (false, "Restoran topilmadi.", null) : (true, null, ToOwnerResponse(owner, business));
+    }
+
+    public async Task<OwnerAdminResponse?> GetOwnerAdminAsync(long businessId, CancellationToken ct = default)
+    {
+        var owner = await _repo.GetOwnerByBusinessIdAsync(businessId, ct);
+        var business = await _repo.GetBusinessByIdAsync(businessId, ct);
+        if (owner is null || business is null) return null;
+        return new OwnerAdminResponse
+        {
+            BusinessId = business.Id, RestaurantName = business.Name, OwnerFullName = owner.FullName,
+            OwnerPhoneNumber = owner.PhoneNumber, Login = owner.Login,
+            SubscriptionAmount = owner.SubscriptionAmount, PaymentPaidAt = owner.PaymentPaidAt,
+            SubscriptionMonths = owner.SubscriptionMonths, SubscriptionEndsAt = owner.SubscriptionEndsAt,
+        };
     }
 
     public async Task<(bool Success, string? Error, RestaurantOwner? Owner)> AuthorizeOwnerAsync(
@@ -140,6 +187,13 @@ public class BusinessService
     {
         var staff = await _repo.GetStaffByBusinessAsync(businessId, ct);
         return staff.Select(ToStaffResponse).ToList();
+    }
+
+    public async Task<(bool Success, string? Error)> UpdateStaffStatusAsync(
+        long staffId, UpdateStaffStatusRequest request, CancellationToken ct = default)
+    {
+        var updated = await _repo.UpdateStaffStatusAsync(staffId, request.IsActive, ct);
+        return updated ? (true, null) : (false, "Bunday admin topilmadi.");
     }
 
     public async Task<(bool Success, string? Error, CategoryResponse? Category)> CreateCategoryAsync(

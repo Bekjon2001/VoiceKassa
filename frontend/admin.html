@@ -35,27 +35,32 @@
     </section>
 
     <section class="owner-area" id="owner-area" hidden>
-      <div class="owner-bar"><div><span class="step-label">RESTORAN EGASI</span><h2 id="owner-restaurant-name">Restoran boshqaruvi</h2></div><button class="logout-button" id="logout-button" type="button">Chiqish</button></div>
-      <div class="admin-grid">
-      <article class="admin-card restaurant-card">
-        <span class="step-label">01 / RESTORAN</span>
-        <h2>Restoran ma’lumotlari</h2>
-        <form id="restaurant-form" class="admin-form">
-          <label for="restaurant-name">Restoran nomi</label>
-          <input id="restaurant-name" value="Milliy Taomlar Restorani" required />
-          <label for="restaurant-address">Manzil</label>
-          <input id="restaurant-address" value="Toshkent shahri" />
-          <label for="restaurant-image">Restoran rasmi</label>
-          <input id="restaurant-image" type="file" accept="image/*" />
-          <div class="image-preview restaurant-preview" id="restaurant-preview"><span>Rasm tanlang</span></div>
-          <button class="admin-button" type="submit">Ma’lumotni saqlash</button>
-          <p class="form-message" id="restaurant-message"></p>
-        </form>
-      </article>
-
+      <div class="owner-workspace">
+      <aside class="owner-sidebar">
+        <div class="owner-sidebar-title"><span class="brand-mark">VK</span><strong id="owner-restaurant-name">Restoran boshqaruvi</strong></div>
+        <nav class="owner-nav" aria-label="Biznes bo‘limlari">
+          <button class="owner-nav-item active" type="button" data-owner-view="restaurant">▦ <span>Restoran</span><b>›</b></button>
+          <button class="owner-nav-item" type="button" data-owner-view="supermarket">▤ <span>Supermarket</span><b>›</b></button>
+          <button class="owner-nav-item" type="button" data-owner-view="shop">▣ <span>Do‘kon</span><b>›</b></button>
+          <button class="owner-nav-item" type="button" data-owner-view="organization">☷ <span>Tashkilot</span><b>›</b></button>
+        </nav>
+        <button class="logout-button owner-logout" id="logout-button" type="button">Chiqish</button>
+      </aside>
+      <section class="owner-content">
+      <div class="owner-bar"><div><span class="step-label">BOSHQARUV PANELI</span><h2 id="owner-view-title">Restoran</h2></div></div>
+      <div class="owner-stats" data-owner-panel="restaurant">
+        <div class="owner-stat"><small>Stollar</small><strong id="table-count">0</strong></div>
+        <div class="owner-stat"><small>Ovqatlar</small><strong id="food-count">0</strong></div>
+        <div class="owner-stat"><small>Ichimliklar</small><strong id="drink-count">0</strong></div>
+      </div>
+      <div class="owner-placeholder" data-owner-panel="supermarket" hidden><span class="step-label">SUPERMARKET</span><h2>Supermarket boshqaruvi</h2><p>Mahsulotlar, narxlar va ombor qoldig‘i shu bo‘limda boshqariladi.</p></div>
+      <div class="owner-placeholder" data-owner-panel="shop" hidden><span class="step-label">DO‘KON</span><h2>Do‘kon boshqaruvi</h2><p>Tovarlar, narxlar va sotuvlar shu bo‘limda boshqariladi.</p></div>
+      <div class="owner-placeholder" data-owner-panel="organization" hidden><span class="step-label">TASHKILOT</span><h2>Tashkilot ma’lumotlari</h2><p>Umumiy tashkilot ma’lumotlari shu bo‘limda boshqariladi.</p></div>
+      <div class="admin-grid" data-owner-panel="restaurant">
       <article class="admin-card">
-        <span class="step-label">02 / STOLLAR</span>
-        <h2>Stollarni kiriting</h2>
+        <span class="step-label">01 / STOLLAR</span>
+        <h2>Stollar</h2>
+        <p class="section-note">Restorandagi stollarni alohida boshqaring.</p>
         <form id="table-form" class="admin-form">
           <label for="table-name">Stol nomi</label>
           <input id="table-name" placeholder="Masalan: Stol 1" required />
@@ -70,13 +75,16 @@
       </article>
 
       <article class="admin-card menu-card">
-        <span class="step-label">03 / MENYU</span>
-        <h2>Taomlarni kiriting</h2>
+        <span class="step-label">02 / OVQATLAR</span>
+        <h2>Ovqatlar</h2>
+        <p class="section-note">Taom nomi, rasmi va narxini kiriting.</p>
         <form id="product-form" class="admin-form">
           <label for="product-name">Taom nomi</label>
           <input id="product-name" placeholder="Masalan: Lag‘mon" required />
           <label for="product-price">Narxi</label>
           <input id="product-price" type="number" min="0" placeholder="32000" required />
+          <label for="product-kind">Turi</label>
+          <select id="product-kind"><option value="food">Ovqat</option><option value="drink">Ichimlik</option></select>
           <label for="product-image">Taom rasmi</label>
           <input id="product-image" type="file" accept="image/*" />
           <div class="image-preview small-preview" id="product-preview"><span>Taom rasmi</span></div>
@@ -84,6 +92,32 @@
         </form>
         <div class="admin-items menu-items" id="product-items"></div>
       </article>
+
+      <article class="admin-card drink-card">
+        <span class="step-label">03 / ICHIMLIKLAR</span>
+        <h2>Ichimliklar</h2>
+        <p class="section-note">Qo‘shilgan ichimliklar shu yerda alohida chiqadi.</p>
+        <div class="admin-items drink-items" id="drink-items"></div>
+      </article>
+
+      <article class="admin-card staff-card">
+        <span class="step-label">04 / XODIMLAR</span>
+        <h2>Xodimlar</h2>
+        <p class="section-note">Kassir, menejer, ofitsiant yoki oshpaz qo‘shing.</p>
+        <form id="staff-form" class="admin-form">
+          <label for="staff-name">F.I.SH</label>
+          <input id="staff-name" placeholder="Xodim F.I.SH" required />
+          <label for="staff-phone">Telefon</label>
+          <input id="staff-phone" type="tel" placeholder="+998 90 123 45 67" required />
+          <label for="staff-role">Lavozim</label>
+          <select id="staff-role"><option value="2">Kassir</option><option value="1">Menejer</option><option value="3">Ofitsiant</option><option value="4">Oshpaz</option></select>
+          <button class="admin-button" type="submit">+ Xodim qo‘shish</button>
+          <p class="form-message" id="staff-message"></p>
+        </form>
+        <div class="admin-items" id="staff-items"></div>
+      </article>
+      </div>
+      </section>
       </div>
     </section>
   </main>
