@@ -122,30 +122,40 @@
               <span class="count-badge" id="table-count-badge" title="Jami stollar soni">0</span>
             </div>
             <p class="empty" id="tables-empty">Hali stol qo‘shilmagan.</p>
-            <div class="table-tiles" id="table-items"></div>
+            <div class="table-wrap" style="margin-top:10px">
+              <table class="data-table data-table--compact">
+                <thead><tr><th style="width:48px">№</th><th>Stol</th><th>Sig‘imi</th><th>Holati</th><th></th></tr></thead>
+                <tbody id="table-items"></tbody>
+              </table>
+            </div>
           </article>
         </div>
 
         <!-- Stol profili — alohida sahifa -->
         <div class="cards-grid panels" data-owner-panel="table-detail" hidden>
           <article class="card card--wide" id="table-detail-card">
-            <div class="card-head">
-              <div class="table-detail-head">
-                <img class="table-detail-img" id="table-detail-img" src="" alt="Stol rasmi" />
-                <div><span class="step-label">STOL PROFILI</span><h3 id="table-detail-name">Stol</h3><p class="sub" id="table-detail-capacity">—</p></div>
+            <div class="detail-topbar">
+              <button class="btn btn-ghost btn-sm back-to-tables" type="button">← Orqaga qaytish</button>
+              <span class="step-label">STOL PROFILI</span>
+            </div>
+            <div class="table-detail-hero">
+              <img class="table-detail-cover" id="table-detail-img" src="" alt="Stol rasmi" />
+              <div class="table-detail-headline">
+                <h3 id="table-detail-name">Stol</h3>
+                <p class="sub" id="table-detail-capacity">—</p>
               </div>
-              <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
-                <select class="ctl ctl--sm" id="table-status-select" style="min-width:140px">
+              <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+                <select class="ctl ctl--sm" id="table-status-select" style="min-width:150px">
                   <option value="0">Bo‘sh</option>
                   <option value="1">Band</option>
                   <option value="2">Tozalanmoqda</option>
                 </select>
-                <button class="btn btn-primary btn-sm" id="table-status-save" type="button" style="height:36px">Saqlash</button>
+                <button class="btn btn-primary btn-sm" id="table-status-save" type="button">Saqlash</button>
               </div>
             </div>
             <div class="detail-grid" id="table-detail-grid"></div>
             <div class="detail-page-foot">
-              <button class="btn btn-ghost btn-block" id="table-back-btn" type="button">← Orqaga qaytish</button>
+              <button class="btn btn-ghost btn-block back-to-tables" type="button">← Orqaga qaytish</button>
             </div>
           </article>
         </div>
@@ -259,6 +269,10 @@
         <!-- Xodim profili — alohida sahifa -->
         <div class="cards-grid panels" data-owner-panel="staff-detail" hidden>
           <article class="card card--wide" id="staff-detail-card">
+            <div class="detail-topbar">
+              <button class="btn btn-ghost btn-sm back-to-staff" type="button">← Orqaga qaytish</button>
+              <span class="step-label">XODIM PROFILI</span>
+            </div>
             <div class="card-head">
               <div class="staff-profile-head">
                 <span class="avatar avatar--lg" id="staff-detail-avatar">?</span>
@@ -293,7 +307,7 @@
               </table>
             </div>
             <div class="detail-page-foot">
-              <button class="btn btn-ghost btn-block" id="staff-back-btn" type="button">← Orqaga qaytish</button>
+              <button class="btn btn-ghost btn-block back-to-staff" type="button">← Orqaga qaytish</button>
             </div>
           </article>
         </div>

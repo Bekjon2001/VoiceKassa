@@ -280,9 +280,9 @@ window.addEventListener("DOMContentLoaded", () => {
   if (!(document.getElementById("owner-area") || {}).hidden) setOwnerView(selectedRestaurantSub || "tables");
 });
 
-// Alohida sahifalardan (profil) orqaga qaytish
-$("staff-back-btn").addEventListener("click", () => setOwnerView("staff"));
-$("table-back-btn").addEventListener("click", () => setOwnerView("tables"));
+// Alohida sahifalardan (profil) orqaga qaytish — tepada va pastdagi tugmalar
+document.querySelectorAll(".back-to-staff").forEach(btn => btn.addEventListener("click", () => setOwnerView("staff")));
+document.querySelectorAll(".back-to-tables").forEach(btn => btn.addEventListener("click", () => setOwnerView("tables")));
 
 // ---------- Logout ----------
 $("logout-button").addEventListener("click", resetToEntry);
@@ -313,26 +313,27 @@ function renderTables() {
   $("table-count").textContent = String(tables.length);
   const badge = $("table-count-badge");
   if (badge) badge.textContent = String(tables.length);
-  // Chiroyli plitkalar ko'rinishida chizish
-  $("table-items").innerHTML = tables.map(table => {
+
+  // Tablitsa ko'rinishida chizish: № | Stol | Sig'imi | Holati | Ko'rish
+  $("table-items").innerHTML = tables.map((table, index) => {
     const [label, cls] = tablePill(table.status);
-    return `<div class="tile" data-table-id="${table.id}">
-      <img class="tile-img" src="${table.image}" alt="${esc(table.name)}">
-      <div class="tile-body">
-        <strong>${esc(table.name)}</strong>
-        <small>${esc(String(table.capacity))} kishilik</small>
-        <div class="tile-foot">
-          <span class="pill ${cls}">${label}</span>
-          <button class="btn btn-ghost btn-sm tile-view" type="button">Ko‘rish →</button>
-        </div>
-      </div>
-    </div>`;
+    const img = table.image || fallbackTableImage;
+    return `<tr class="rowlink" data-table-id="${table.id}">
+      <td class="table-num">${index + 1}</td>
+      <td><div class="staff-cell">
+        <img class="item-thumb" src="${img}" alt="${esc(table.name)}">
+        <div class="staff-name"><strong>${esc(table.name)}</strong><small>ID: ${esc(String(table.id))}</small></div>
+      </div></td>
+      <td><strong>${esc(String(table.capacity || 0))}</strong> <span class="muted">kishilik</span></td>
+      <td><span class="pill ${cls}">${label}</span></td>
+      <td style="text-align:right;white-space:nowrap"><button class="btn btn-ghost btn-sm" type="button">Ko‘rish →</button></td>
+    </tr>`;
   }).join("");
 
-  // Plitka bosilganda — stol profili alohida sahifada ochiladi
-  document.querySelectorAll("#table-items .tile").forEach(el => {
-    el.addEventListener("click", () => {
-      const table = findTableById(Number(el.dataset.tableId));
+  // Qator bosilganda — stol profili alohida sahifada ochiladi
+  document.querySelectorAll("#table-items tr").forEach(row => {
+    row.addEventListener("click", () => {
+      const table = findTableById(Number(row.dataset.tableId));
       if (table) selectTable(table);
     });
   });
@@ -354,6 +355,7 @@ function selectTable(table) {
 
   const [label, cls] = tablePill(table.status);
   $("table-detail-grid").innerHTML = [
+    ["Stol nomi", esc(table.name || "Stol")],
     ["Stol ID", esc(String(table.id))],
     ["Sig‘imi", `${table.capacity || 0} kishilik`],
     ["Holati", `<span class="pill ${cls}">${label}</span>`],
