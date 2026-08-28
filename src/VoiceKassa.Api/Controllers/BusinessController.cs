@@ -41,6 +41,16 @@ public class BusinessController : ControllerBase
         return success ? Ok(owner) : BadRequest(new { error });
     }
 
+    /// <summary>Supermarket + egasini yaratadi (Super Admin). Backend bitta umumiy oqimdan
+    /// foydalanadi — farq faqat Business turida (Market).</summary>
+    [HttpPost("market")]
+    public async Task<IActionResult> CreateMarket([FromBody] CreateMarketWithOwnerRequest request, CancellationToken ct)
+    {
+        if (await _businessService.HasSuperAdminAsync(ct) && !await IsSuperAdmin(ct)) return Unauthorized();
+        var (success, error, owner) = await _businessService.CreateMarketWithOwnerAsync(request, ct);
+        return success ? Ok(owner) : BadRequest(new { error });
+    }
+
     [HttpPost("owner/login")]
     public async Task<IActionResult> LoginOwner([FromBody] OwnerLoginRequest request, CancellationToken ct)
     {
@@ -93,9 +103,34 @@ public class BusinessController : ControllerBase
     [HttpGet("{businessId:long}/staff")]
     public async Task<IActionResult> GetStaff(long businessId, CancellationToken ct)
     {
-        if (!await IsSuperAdmin(ct)) return Unauthorized();
+        // Owner o'z biznesining xodimlarini, Super Admin esa hammasini ko'ra oladi.
+        if (!await IsSuperAdmin(ct))
+        {
+            var ownerAccess = await _businessService.AuthorizeOwnerAsync(businessId, Request.Headers["X-Owner-Token"].FirstOrDefault(), ct);
+            if (!ownerAccess.Success) return Unauthorized(new { error = "Owner huquqi talab qilinadi." });
+        }
         var staff = await _businessService.GetStaffAsync(businessId, ct);
         return Ok(staff);
+    }
+
+    /// <summary>Xodim oyligini yangilash (owner). Tarixga avtomatik yoziladi.</summary>
+    [HttpPut("staff/{staffId:long}/salary")]
+    public async Task<IActionResult> UpdateStaffSalary(long staffId, [FromBody] UpdateStaffSalaryRequest request, CancellationToken ct)
+    {
+        var ownerAccess = await _businessService.AuthorizeStaffAsync(staffId, Request.Headers["X-Owner-Token"].FirstOrDefault(), ct);
+        if (!ownerAccess.Success) return Unauthorized(new { error = ownerAccess.Error });
+        var (success, error, staff) = await _businessService.UpdateStaffSalaryAsync(staffId, request, ct);
+        return success ? Ok(staff) : BadRequest(new { error });
+    }
+
+    /// <summary>Xodimni ishdan bo'shatish / faollashtirish (owner).</summary>
+    [HttpPut("staff/{staffId:long}/active")]
+    public async Task<IActionResult> SetStaffActive(long staffId, [FromBody] UpdateStaffStatusRequest request, CancellationToken ct)
+    {
+        var ownerAccess = await _businessService.AuthorizeStaffAsync(staffId, Request.Headers["X-Owner-Token"].FirstOrDefault(), ct);
+        if (!ownerAccess.Success) return Unauthorized(new { error = ownerAccess.Error });
+        var (success, error, staff) = await _businessService.SetStaffActiveAsync(staffId, request.IsActive, ct);
+        return success ? Ok(staff) : BadRequest(new { error });
     }
 
     [HttpPut("staff/{staffId:long}/status")]
@@ -145,6 +180,24 @@ public class BusinessController : ControllerBase
     {
         var (success, error) = await _businessService.UpdateTableStatusAsync(tableId, request, ct);
         return success ? NoContent() : NotFound(new { error });
+    }
+
+    /// <summary>Ega login/parolini restoranni qayta yaratmasdan tiklash (faqat Super Admin).</summary>
+    [HttpPut]
+    public async Task<IActionResult> ResetOwnerCredentials([FromBody] ResetOwnerCredentialsRequest request, CancellationToken ct)
+    {
+        if (!await IsSuperAdmin(ct)) return Unauthorized(new { error = "Super Admin sifatida kiring." });
+        var (success, error, owner) = await _businessService.ResetOwnerCredentialsAsync(request, ct);
+        return success ? Ok(owner) : BadRequest(new { error });
+    }
+
+    /// <summary>Restoran (egasi) akkountini passivlashtirish/faollashtirish (faqat Super Admin).</summary>
+    [HttpPut]
+    public async Task<IActionResult> UpdateOwnerStatus([FromBody] UpdateOwnerStatusRequest request, CancellationToken ct)
+    {
+        if (!await IsSuperAdmin(ct)) return Unauthorized(new { error = "Super Admin sifatida kiring." });
+        var (success, error, owner) = await _businessService.SetOwnerActiveAsync(request, ct);
+        return success ? Ok(owner) : BadRequest(new { error });
     }
 
     private Task<bool> IsSuperAdmin(CancellationToken ct) =>

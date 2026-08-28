@@ -62,19 +62,76 @@ public class BusinessService
         if (await _repo.GetOwnerByLoginAsync(request.Login.Trim(), ct) is not null)
             return (false, "Bu login allaqachon band.", null);
 
+        // Bir xil nomli FAOL restoran bo'lsa yaratish taqiqlanadi. Eski
+        // restoran passiv qilingan bo'lsa - shu nomni qayta ishlatish mumkin.
+        var normalizedName = request.RestaurantName.Trim().ToLowerInvariant();
+        var existingBusinesses = await _repo.GetAllBusinessesAsync(ct);
+        if (existingBusinesses.Any(b => b.IsActive &&
+                b.Name.Trim().ToLowerInvariant() == normalizedName))
+            return (false, "Bu nomdagi faol restoran allaqachon mavjud. Boshqa nom tanlang yoki eski restoranni faollashtiring.", null);
+
+        return await CreateBusinessWithOwnerCoreAsync(
+            name: request.RestaurantName, address: request.Address, phone: request.RestaurantPhoneNumber,
+            type: BusinessType.Restaurant, ownerFullName: request.OwnerFullName,
+            ownerPhoneNumber: request.OwnerPhoneNumber, subscriptionAmount: request.SubscriptionAmount,
+            paymentPaidAt: request.PaymentPaidAt, subscriptionMonths: request.SubscriptionMonths,
+            login: request.Login, password: request.Password, ct);
+    }
+
+    /// <summary>
+    /// Supermarket + egasini yaratish (Restoran bilan bir xil umumiy oqim,
+    /// farq faqat Business turida — Market). Backend bitta funksiya bilan
+    /// ikkala turga xizmat qiladi.
+    /// </summary>
+    public async Task<(bool Success, string? Error, OwnerLoginResponse? Owner)> CreateMarketWithOwnerAsync(
+        CreateMarketWithOwnerRequest request, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(request.MarketName) || string.IsNullOrWhiteSpace(request.OwnerFullName) ||
+            string.IsNullOrWhiteSpace(request.Login) || string.IsNullOrWhiteSpace(request.Password))
+            return (false, "Supermarket, xo'jayin, login va parol majburiy.", null);
+        if (request.SubscriptionMonths < 1 || request.SubscriptionAmount < 0 || request.PaymentPaidAt == default)
+            return (false, "Obuna oy va to'lov qiymati noto'g'ri.", null);
+        if (await _repo.GetOwnerByLoginAsync(request.Login.Trim(), ct) is not null)
+            return (false, "Bu login allaqachon band.", null);
+
+        // Bir xil nomli FAOL biznes bo'lsa yaratish taqiqlanadi. Eski
+        // biznes passiv qilingan bo'lsa - shu nomni qayta ishlatish mumkin.
+        var normalizedName = request.MarketName.Trim().ToLowerInvariant();
+        var existingBusinesses = await _repo.GetAllBusinessesAsync(ct);
+        if (existingBusinesses.Any(b => b.IsActive &&
+                b.Name.Trim().ToLowerInvariant() == normalizedName))
+            return (false, "Bu nomdagi faol supermarket allaqachon mavjud. Boshqa nom tanlang yoki eski supermarketni faollashtiring.", null);
+
+        return await CreateBusinessWithOwnerCoreAsync(
+            name: request.MarketName, address: request.Address, phone: request.MarketPhoneNumber,
+            type: BusinessType.Market, ownerFullName: request.OwnerFullName, ownerPhoneNumber: request.OwnerPhoneNumber,
+            subscriptionAmount: request.SubscriptionAmount, paymentPaidAt: request.PaymentPaidAt,
+            subscriptionMonths: request.SubscriptionMonths, login: request.Login, password: request.Password, ct);
+    }
+
+    /// <summary>
+    /// Umumiy yordamchi: Restoran yoki Supermarket + ega yaratish. Bitta
+    /// funksiya ikkala biznes turiga xizmat qiladi (Restaurant | Market).
+    /// </summary>
+    private async Task<(bool Success, string? Error, OwnerLoginResponse? Owner)> CreateBusinessWithOwnerCoreAsync(
+        string name, string? address, string? phone, BusinessType type,
+        string ownerFullName, string ownerPhoneNumber, decimal subscriptionAmount,
+        DateTime paymentPaidAt, int subscriptionMonths, string login, string password,
+        CancellationToken ct = default)
+    {
         var business = await _repo.CreateBusinessAsync(new Business
         {
-            Name = request.RestaurantName.Trim(), Type = BusinessType.Restaurant,
-            Address = request.Address, PhoneNumber = request.RestaurantPhoneNumber,
+            Name = name.Trim(), Type = type,
+            Address = address, PhoneNumber = phone,
         }, ct);
         var owner = await _repo.CreateRestaurantOwnerAsync(new RestaurantOwner
         {
-            BusinessId = business.Id, FullName = request.OwnerFullName.Trim(),
-            PhoneNumber = request.OwnerPhoneNumber.Trim(), Login = request.Login.Trim(),
-            PasswordHash = HashPassword(request.Password), SubscriptionAmount = request.SubscriptionAmount,
-            PaymentPaidAt = request.PaymentPaidAt.ToUniversalTime(),
-            SubscriptionMonths = request.SubscriptionMonths,
-            SubscriptionEndsAt = DateTime.UtcNow.AddMonths(request.SubscriptionMonths),
+            BusinessId = business.Id, FullName = ownerFullName.Trim(),
+            PhoneNumber = ownerPhoneNumber.Trim(), Login = login.Trim(),
+            PasswordHash = HashPassword(password), SubscriptionAmount = subscriptionAmount,
+            PaymentPaidAt = paymentPaidAt.ToUniversalTime(),
+            SubscriptionMonths = subscriptionMonths,
+            SubscriptionEndsAt = DateTime.UtcNow.AddMonths(subscriptionMonths),
             AccessToken = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)),
         }, ct);
         return (true, null, ToOwnerResponse(owner, business));
@@ -94,7 +151,8 @@ public class BusinessService
 
     public async Task<OwnerAdminResponse?> GetOwnerAdminAsync(long businessId, CancellationToken ct = default)
     {
-        var owner = await _repo.GetOwnerByBusinessIdAsync(businessId, ct);
+        // Passiv egani ham ko'rsatamiz — Super Admin "Faollashtirish" qila oladi.
+        var owner = await _repo.GetOwnerByBusinessIdAnyStateAsync(businessId, ct);
         var business = await _repo.GetBusinessByIdAsync(businessId, ct);
         if (owner is null || business is null) return null;
         return new OwnerAdminResponse
@@ -103,6 +161,7 @@ public class BusinessService
             OwnerPhoneNumber = owner.PhoneNumber, Login = owner.Login,
             SubscriptionAmount = owner.SubscriptionAmount, PaymentPaidAt = owner.PaymentPaidAt,
             SubscriptionMonths = owner.SubscriptionMonths, SubscriptionEndsAt = owner.SubscriptionEndsAt,
+            IsActive = owner.IsActive,
         };
     }
 
@@ -114,6 +173,54 @@ public class BusinessService
         if (owner is null || owner.BusinessId != businessId) return (false, "Owner huquqi tasdiqlanmadi.", null);
         if (owner.SubscriptionEndsAt <= DateTime.UtcNow) return (false, "Obuna muddati tugagan.", null);
         return (true, null, owner);
+    }
+
+    /// <summary>
+    /// Super Admin eganing login va/yoki parolini restoranni qayta
+    /// yaratmasdan tiklaydi. Ikkala maydon ham bo'sh bo'lsa xato qaytadi.
+    /// Login o'zgarsa boshqa egalar bilan to'qnashuvi tekshiriladi.
+    /// </summary>
+    public async Task<(bool Success, string? Error, OwnerAdminResponse? Owner)> ResetOwnerCredentialsAsync(
+        ResetOwnerCredentialsRequest request, CancellationToken ct = default)
+    {
+        var owner = await _repo.GetOwnerByBusinessIdAnyStateAsync(request.BusinessId, ct);
+        if (owner is null) return (false, "Bu biznes uchun egalar topilmadi.", null);
+
+        var newLogin = request.NewLogin?.Trim();
+        var hasNewLogin = !string.IsNullOrWhiteSpace(newLogin) &&
+                          !string.Equals(newLogin, owner.Login, StringComparison.OrdinalIgnoreCase);
+        var hasNewPassword = !string.IsNullOrWhiteSpace(request.NewPassword);
+
+        if (!hasNewLogin && !hasNewPassword)
+            return (false, "Yangi login yoki yangi parol kiritilishi kerak.", null);
+
+        if (hasNewLogin && await _repo.IsOwnerLoginTakenAsync(newLogin!, owner.BusinessId, ct))
+            return (false, "Bu login boshqa restoran egasida band.", null);
+
+        var newHash = hasNewPassword ? HashPassword(request.NewPassword!.Trim()) : null;
+        if (!await _repo.UpdateOwnerCredentialsAsync(owner.Id, hasNewLogin ? newLogin : null, newHash, ct))
+            return (false, "Ma'lumotni saqlab bo'lmadi.", null);
+
+        return (true, null, await GetOwnerAdminAsync(request.BusinessId, ct));
+    }
+
+    /// <summary>
+    /// Restoran (egasi) akkountini passivlashtirish/faollashtirish. Passiv
+    /// ega tizimga kira olmaydi, lekin obuna ma'lumotlari saqlanib qoladi.
+    /// </summary>
+    public async Task<(bool Success, string? Error, OwnerAdminResponse? Owner)> SetOwnerActiveAsync(
+        UpdateOwnerStatusRequest request, CancellationToken ct = default)
+    {
+        var owner = await _repo.GetOwnerByBusinessIdAnyStateAsync(request.BusinessId, ct);
+        if (owner is null) return (false, "Bu biznes uchun egalar topilmadi.", null);
+
+        if (owner.IsActive != request.IsActive)
+        {
+            if (!await _repo.UpdateOwnerActiveAsync(owner.Id, request.IsActive, ct))
+                return (false, "Holatni o'zgartirib bo'lmadi.", null);
+        }
+
+        return (true, null, await GetOwnerAdminAsync(request.BusinessId, ct));
     }
 
     private static string HashPassword(string password)
@@ -169,16 +276,30 @@ public class BusinessService
     {
         var business = await _repo.GetBusinessByIdAsync(request.BusinessId, ct);
         if (business is null) return (false, "Bunday biznes topilmadi.", null);
-        if (string.IsNullOrWhiteSpace(request.FullName)) return (false, "Xodim ismi bo'sh bo'lishi mumkin emas.", null);
+
+        var firstName = string.IsNullOrWhiteSpace(request.FirstName) ? "" : request.FirstName.Trim();
+        var lastName = string.IsNullOrWhiteSpace(request.LastName) ? "" : request.LastName.Trim();
+        var fullName = string.IsNullOrWhiteSpace(request.FullName)
+            ? string.Join(" ", new[] { firstName, lastName }.Where(x => x != "")).Trim()
+            : request.FullName.Trim();
+        if (string.IsNullOrWhiteSpace(fullName))
+            return (false, "Xodim ismi bo'sh bo'lishi mumkin emas.", null);
+        if (request.MonthlySalary < 0)
+            return (false, "Oylik manfiy bo'lishi mumkin emas.", null);
 
         var staff = new Staff
         {
             BusinessId = request.BusinessId,
-            FullName = request.FullName,
+            FullName = fullName,
+            FirstName = string.IsNullOrWhiteSpace(firstName) ? null : firstName,
+            LastName = string.IsNullOrWhiteSpace(lastName) ? null : lastName,
             PhoneNumber = request.PhoneNumber,
             Role = request.Role,
+            Age = request.Age,
+            MonthlySalary = request.MonthlySalary,
+            HireDate = request.HireDate,
+            IsActive = true,
         };
-
         var saved = await _repo.CreateStaffAsync(staff, ct);
         return (true, null, ToStaffResponse(saved));
     }
@@ -194,6 +315,35 @@ public class BusinessService
     {
         var updated = await _repo.UpdateStaffStatusAsync(staffId, request.IsActive, ct);
         return updated ? (true, null) : (false, "Bunday admin topilmadi.");
+    }
+
+    /// <summary>Oylikni yangilaydi va tarixga yozuv qo'shadi.</summary>
+    public async Task<(bool Success, string? Error, StaffResponse? Staff)> UpdateStaffSalaryAsync(
+        long staffId, UpdateStaffSalaryRequest request, CancellationToken ct = default)
+    {
+        if (request.NewSalary < 0) return (false, "Yangi oylik manfiy bo'lishi mumkin emas.", null);
+        var staff = await _repo.UpdateStaffSalaryAsync(staffId, request.NewSalary, request.Reason, ct);
+        if (staff is null) return (false, "Xodim topilmadi.", null);
+        return (true, null, ToStaffResponse(staff));
+    }
+
+    /// <summary>Ishdan bo'shatish / faollashtirish (FiredAt avtomatik boshqariladi).</summary>
+    public async Task<(bool Success, string? Error, StaffResponse? Staff)> SetStaffActiveAsync(
+        long staffId, bool isActive, CancellationToken ct = default)
+    {
+        var staff = await _repo.UpdateStaffActiveAsync(staffId, isActive, null, ct);
+        if (staff is null) return (false, "Xodim topilmadi.", null);
+        return (true, null, ToStaffResponse(staff));
+    }
+
+    /// <summary>Xodimning biznesi owner tokenga tegishli ekanini tekshiradi.</summary>
+    public async Task<(bool Success, string? Error)> AuthorizeStaffAsync(
+        long staffId, string? token, CancellationToken ct = default)
+    {
+        var staff = await _repo.GetStaffByIdAsync(staffId, ct);
+        if (staff is null) return (false, "Xodim topilmadi.");
+        var owner = await AuthorizeOwnerAsync(staff.BusinessId, token, ct);
+        return (owner.Success, owner.Error);
     }
 
     public async Task<(bool Success, string? Error, CategoryResponse? Category)> CreateCategoryAsync(
@@ -299,8 +449,19 @@ public class BusinessService
 
     private static StaffResponse ToStaffResponse(Staff s) => new()
     {
-        Id = s.Id, BusinessId = s.BusinessId, FullName = s.FullName,
+        Id = s.Id, BusinessId = s.BusinessId, FullName = s.FullName ?? "",
+        FirstName = s.FirstName, LastName = s.LastName,
         PhoneNumber = s.PhoneNumber, Role = s.Role, IsActive = s.IsActive,
+        Age = s.Age, MonthlySalary = s.MonthlySalary,
+        HireDate = s.HireDate, FiredAt = s.FiredAt,
+        SalaryHistory = (s.SalaryHistory ?? new List<SalaryHistory>())
+            .OrderByDescending(h => h.ChangedAt)
+            .Select(h => new SalaryHistoryResponse
+            {
+                Id = h.Id, ChangedAt = h.ChangedAt,
+                OldSalary = h.OldSalary, NewSalary = h.NewSalary, Reason = h.Reason,
+            })
+            .ToList(),
     };
 
     private static CategoryResponse ToCategoryResponse(Category c) => new()

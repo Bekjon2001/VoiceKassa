@@ -6,7 +6,9 @@ namespace VoiceKassa.Domain.Entities;
 
 /// <summary>
 /// Eski "Cashier" o'rniga - kassir, ofitsiant, oshpaz, menejer va h.k.
-/// hammasi shu bitta model, "Role" orqali farqlanadi.
+/// Hammasi shu bitta model, "Role" orqali farqlanadi.
+/// Yoshi, oyligi, ishga kirgan/boshatilgan sanasi va maosh tarixi
+/// (SalaryHistory) ham shu yerda.
 /// </summary>
 [Table("STAFF", Schema = "voicekassa")]
 public class Staff
@@ -19,9 +21,20 @@ public class Staff
     [Column("BUSINESS_ID")]
     public long BusinessId { get; set; }
 
+    [Column("FIRST_NAME")]
+    [MaxLength(200)]
+    public string? FirstName { get; set; }
+
+    [Column("LAST_NAME")]
+    [MaxLength(200)]
+    public string? LastName { get; set; }
+
+    /// <summary>
+    /// "Ism + Familiya" birikmasi — imkon yaratilganda matnli ko'rinish.
+    /// </summary>
     [Column("FULL_NAME")]
     [MaxLength(200)]
-    public string FullName { get; set; } = string.Empty;
+    public string? FullName { get; set; }
 
     [Column("PHONE_NUMBER")]
     [MaxLength(30)]
@@ -30,8 +43,20 @@ public class Staff
     [Column("ROLE")]
     public StaffRole Role { get; set; } = StaffRole.Cashier;
 
+    [Column("AGE")]
+    public int? Age { get; set; }
+
+    [Column("MONTHLY_SALARY", TypeName = "numeric(18,2)")]
+    public decimal MonthlySalary { get; set; }
+
+    [Column("HIRE_DATE")]
+    public DateTime? HireDate { get; set; }
+
     [Column("IS_ACTIVE")]
     public bool IsActive { get; set; } = true;
+
+    [Column("FIRED_AT")]
+    public DateTime? FiredAt { get; set; }
 
     [Column("CREATED_AT")]
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
@@ -39,4 +64,6 @@ public class Staff
     // ---- Navigation properties ----
     [ForeignKey(nameof(BusinessId))]
     public virtual Business? Business { get; set; }
+
+    public virtual ICollection<SalaryHistory> SalaryHistory { get; set; } = new List<SalaryHistory>();
 }

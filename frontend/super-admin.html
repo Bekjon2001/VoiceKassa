@@ -3,53 +3,245 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#f2f4f7" />
   <title>VoiceKassa | Super Admin</title>
-  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="admin.css" />
 </head>
-<body class="admin-body">
-  <main class="admin-shell">
-    <section class="admin-card super-auth" id="super-auth">
-      <span class="step-label">SUPER ADMIN</span>
-      <h1>Super Admin kirishi</h1>
-      <p id="super-auth-note">Restoranlarni boshqarish uchun login qiling.</p>
-      <form id="super-login-form" class="login-form">
-        <input name="login" placeholder="Login" required>
-        <input name="password" type="password" placeholder="Parol" required>
-        <button class="admin-button" type="submit">Kirish</button>
-      </form>
-      <button class="text-button" id="show-first-super-form" type="button">Birinchi Super Adminni yaratish</button>
-      <form id="first-super-form" class="first-super-form" hidden>
-        <input name="fullName" placeholder="F.I.SH" required>
-        <input name="phoneNumber" placeholder="Telefon">
-        <input name="login" placeholder="Yangi login" required>
-        <input name="password" type="password" placeholder="Yangi parol" required>
-        <button class="admin-button" type="submit">Yaratish</button>
-      </form>
-      <p class="form-message" id="super-auth-message"></p>
-    </section>
-    <div id="super-dashboard" hidden>
-    <div class="workspace-layout">
-      <aside class="workspace-sidebar">
-        <div class="workspace-brand"><span>VK</span><strong>VoiceKassa</strong></div>
-        <nav class="workspace-nav" aria-label="Super Admin menyusi">
-          <button class="workspace-nav-item active" type="button" data-view="restaurants">▦ <span>Restoranlar</span><b>›</b></button>
-          <button class="workspace-nav-item" type="button" data-view="create">＋ <span>Restoran yaratish</span><b>›</b></button>
-          <button class="workspace-nav-item" type="button" data-view="system">⚙ <span>Tizim sozlamalari</span><b>›</b></button>
-        </nav>
-        <div class="workspace-profile"><small>SUPER ADMIN</small><strong>Platforma boshqaruvi</strong><button class="logout-button" type="button" onclick="location.reload();">Chiqish</button></div>
+<body class="app-bg">
+<main>
+  <!-- ======================= KIRISH EKRANI ======================= -->
+  <section id="super-auth" class="auth-wrap">
+    <div class="auth-card">
+      <aside class="auth-aside">
+        <span class="brand-chip">VK</span>
+        <h1>VoiceKassa</h1>
+        <p class="tagline">Platforma boshqaruv paneli — Super Admin uchun.</p>
+        <ul class="aside-list">
+          <li>Barcha restoranlar va obunalar bir ro‘yxatda</li>
+          <li>Yangi restoran va uning egasini bir daqiqada yaratish</li>
+          <li>To‘lov sanasi va obuna muddatini nazorat qilish</li>
+        </ul>
+        <div class="aside-foot">
+          <a href="admin.html">Restoran egasi paneliga ↗</a><br /><br />
+          <a href="index.html">Mijoz oynasiga ↗</a>
+        </div>
       </aside>
-      <div class="workspace-content">
-        <header class="admin-header"><div><span class="eyebrow">VOICEKASSA / SUPER ADMIN</span><h1>Restoranlar</h1><p>Restoranlar va obunalarni boshqaring.</p></div></header>
-        <section class="super-admin-layout" data-view-panel="restaurants">
-          <section class="admin-card restaurant-list-card"><div class="table-toolbar"><div><span class="step-label">RESTORANLAR</span><h2>Ro‘yxat</h2></div><button class="admin-button" id="show-restaurant-form" type="button">+ Restoran qo‘shish</button></div><div class="data-table-wrap"><table class="data-table"><thead><tr><th>ID</th><th>Restoran</th><th>Xo‘jayin</th><th>Telefon</th><th>To‘lov</th><th>To‘lov sanasi</th><th>Obuna</th><th>Holati</th><th></th></tr></thead><tbody id="restaurant-list"><tr><td colspan="9" class="table-empty">Yuklanmoqda...</td></tr></tbody></table></div></section>
-          <section class="admin-card restaurant-details" id="restaurant-details"><span class="step-label">RESTORAN MA’LUMOTI</span><h2 id="selected-restaurant">Restoran tanlang</h2><div id="payment-details" class="detail-grid"><p class="form-message">Chap tomondagi ro‘yxatdan restoran tanlang.</p></div></section>
-        </section>
-        <section class="admin-card popup-form" id="restaurant-form-card" data-view-panel="create" hidden><span class="step-label">YANGI RESTORAN</span><h2>Restoran va egasini qo‘shish</h2><form id="restaurant-create-form" class="super-form"><div><label>Restoran nomi</label><input name="restaurantName" required></div><div><label>Xo‘jayin F.I.SH</label><input name="ownerFullName" required></div><div><label>Telefon</label><input name="ownerPhoneNumber" required></div><div><label>To‘lov summasi</label><input name="subscriptionAmount" type="number" min="0" required></div><div><label>To‘lov sanasi</label><input name="paymentPaidAt" type="datetime-local" required></div><div><label>Obuna (oy)</label><input name="subscriptionMonths" type="number" min="1" value="1" required></div><div><label>Login</label><input name="login" required></div><div><label>Parol</label><input name="password" type="password" required></div><button class="admin-button" type="submit">Yaratish</button><p id="restaurant-create-message" class="form-message"></p></form></section>
-        <section class="admin-card system-panel" data-view-panel="system" hidden><span class="step-label">TIZIM</span><h2>Tizim sozlamalari</h2><p class="section-note">Super Admin uchun platforma boshqaruv sozlamalari shu yerda bo‘ladi.</p></section>
+
+      <div class="auth-main">
+        <span class="step-label">Super Admin</span>
+        <h2>Kirish</h2>
+        <p class="lead">Restoranlarni boshqarish uchun tizimga kiring.</p>
+
+        <form id="super-login-form" novalidate>
+          <div class="field" style="margin-bottom:12px">
+            <label for="sa-login">Login</label>
+            <input class="ctl" id="sa-login" name="login" autocomplete="username" placeholder="Login" required />
+          </div>
+          <div class="field" style="margin-bottom:14px">
+            <label for="sa-password">Parol</label>
+            <input class="ctl" id="sa-password" name="password" type="password" autocomplete="current-password" placeholder="••••••••" required />
+          </div>
+          <button class="btn btn-primary btn-block" type="submit">Kirish</button>
+        </form>
+
+        <div class="divider">yoki</div>
+        <button class="text-btn" id="show-first-super-form" type="button">Birinchi Super Adminni yaratish</button>
+
+        <form id="first-super-form" hidden novalidate>
+          <div class="form-grid">
+            <div class="field"><label>F.I.SH</label><input class="ctl" name="fullName" placeholder="To‘liq ism" required /></div>
+            <div class="field"><label>Telefon</label><input class="ctl" name="phoneNumber" type="tel" placeholder="+998 90 123 45 67" /></div>
+            <div class="field"><label>Yangi login</label><input class="ctl" name="login" autocomplete="username" placeholder="admin" required /></div>
+            <div class="field"><label>Yangi parol</label><input class="ctl" name="password" type="password" autocomplete="new-password" placeholder="••••••••" required /></div>
+          </div>
+          <button class="btn btn-primary btn-block" type="submit" style="margin-top:14px">Yaratish</button>
+        </form>
+        <p class="form-message" id="super-auth-message"></p>
       </div>
     </div>
+  </section>
+<!-- ======================= DASHBOARD ======================= -->
+  <div id="super-dashboard" hidden>
+    <div class="shell">
+      <aside class="sidebar">
+        <div class="side-brand">
+          <span class="brand-chip">VK</span>
+          <span style="min-width:0"><strong>VoiceKassa</strong><small>Super Admin paneli</small></span>
+        </div>
+        <nav aria-label="Super Admin menyusi">
+          <button class="nav-item active" type="button" data-view="restaurants"><span class="icon-chip">▦</span><span>Restoranlar</span><b class="chev">›</b></button>
+          <button class="nav-item" type="button" data-view="create"><span class="icon-chip">＋</span><span>Restoran yaratish</span><b class="chev">›</b></button>
+          <button class="nav-item" type="button" data-view="markets"><span class="icon-chip">▤</span><span>Supermarketlar</span><b class="chev">›</b></button>
+          <button class="nav-item" type="button" data-view="market-create"><span class="icon-chip">＋</span><span>Supermarket yaratish</span><b class="chev">›</b></button>
+          <button class="nav-item" type="button" data-view="system"><span class="icon-chip">⚙</span><span>Tizim sozlamalari</span><b class="chev">›</b></button>
+        </nav>
+        <span class="side-spacer"></span>
+        <button class="btn btn-ghost btn-block" id="sa-logout-button" type="button" style="margin-top:10px">Chiqish</button>
+        <div class="side-links">
+          <a href="admin.html">Restoran egasi paneli ↗</a>
+          <a href="index.html">Mijoz oynasi ↗</a>
+        </div>
+      </aside>
+
+      <main class="content">
+        <header class="topbar">
+          <div>
+            <h1 id="sa-view-title">Restoranlar</h1>
+            <p class="topbar-sub" id="sa-view-subtitle">Restoranlar va obunalarni boshqaring.</p>
+          </div>
+          <span class="flash" id="sa-flash" hidden></span>
+        </header>
+
+        <section data-view-panel="restaurants" style="display:flex;flex-direction:column;gap:18px">
+          <div class="stats-row">
+            <div class="stat stat--g"><small>Jami restoranlar</small><strong class="stat-value" id="sa-total">0</strong><span class="stat-note">platformada</span></div>
+            <div class="stat stat--a"><small>Faol obuna</small><strong class="stat-value" id="sa-active">0</strong><span class="stat-note">muddati o‘tmagan</span></div>
+            <div class="stat stat--c"><small>Muddati tugagan</small><strong class="stat-value" id="sa-expired">0</strong><span class="stat-note">obuna yangilanishi kerak</span></div>
+            <div class="stat stat--v"><small>Passiv</small><strong class="stat-value" id="sa-passive">0</strong><span class="stat-note">vaqtincha o‘chirilgan</span></div>
+          </div>
+
+          <article class="card">
+            <div class="tools">
+              <span class="step-label">RESTORANLAR RO‘YXATI</span>
+              <div class="search-box" style="max-width:340px;margin-left:auto">
+                <input class="ctl" id="restaurant-search" placeholder="Nom, xo‘jayin yoki telefon bo‘yicha izlash..." />
+              </div>
+              <button class="btn btn-primary btn-sm" id="show-create-view" type="button">＋ Restoran qo‘shish</button>
+            </div>
+            <div class="table-wrap">
+              <table class="data-table">
+                <thead>
+                  <tr><th>ID</th><th>Restoran</th><th>Xo‘jayin</th><th>Telefon</th><th>To‘lov summasi</th><th>To‘lov sanasi</th><th>Obuna</th><th>Holati</th><th></th></tr>
+                </thead>
+                <tbody id="restaurant-list">
+                  <tr><td colspan="9" style="text-align:center;color:var(--muted)">Yuklanmoqda...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </article>
+
+          <article class="card" id="restaurant-details">
+            <div class="card-head">
+              <div><span class="step-label">RESTORAN MA’LUMOTI</span><h3 id="selected-restaurant">Restoran tanlang</h3></div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap" id="owner-actions" hidden>
+                <button class="btn btn-ghost btn-sm" id="toggle-owner-status" type="button">Passiv qilish</button>
+                <button class="btn btn-ghost btn-sm" id="show-reset-form" type="button">🔑 Login/parolni tiklash</button>
+              </div>
+            </div>
+            <div id="payment-details"><p class="empty" style="margin-top:0">Chap ro‘yxatdan restoran tanlansa, batafsil ma’lumot shu yerda chiqadi.</p></div>
+            <form id="reset-credentials-form" hidden novalidate>
+              <div class="form-grid" style="margin-top:14px">
+                <div class="field"><label for="new-owner-login">Yangi login (o‘zgarmasa bo‘sh qoldiring)</label><input class="ctl" id="new-owner-login" autocomplete="off" /></div>
+                <div class="field"><label for="new-owner-password">Yangi parol (o‘zgarmasa bo‘sh qoldiring)</label><input class="ctl" id="new-owner-password" type="password" autocomplete="new-password" placeholder="••••••••" /></div>
+              </div>
+              <div style="display:flex;gap:10px;margin-top:12px">
+                <button class="btn btn-primary btn-sm" type="submit">Saqlash</button>
+                <button class="btn btn-ghost btn-sm" type="button" id="cancel-reset-form">Bekor qilish</button>
+              </div>
+              <p class="form-message" id="reset-credentials-message"></p>
+            </form>
+          </article>
+        </section>
+<section data-view-panel="markets" hidden style="display:flex;flex-direction:column;gap:18px">
+          <div class="stats-row">
+            <div class="stat stat--g"><small>Jami supermarketlar</small><strong class="stat-value" id="market-total">0</strong><span class="stat-note">platformada</span></div>
+            <div class="stat stat--a"><small>Faol obuna</small><strong class="stat-value" id="market-active">0</strong><span class="stat-note">muddati o‘tmagan</span></div>
+            <div class="stat stat--c"><small>Muddati tugagan</small><strong class="stat-value" id="market-expired">0</strong><span class="stat-note">obuna yangilanishi kerak</span></div>
+            <div class="stat stat--v"><small>Passiv</small><strong class="stat-value" id="market-passive">0</strong><span class="stat-note">vaqtincha o‘chirilgan</span></div>
+          </div>
+
+          <article class="card">
+            <div class="tools">
+              <span class="step-label">SUPERMARKETLAR RO‘YXATI</span>
+              <div class="search-box" style="max-width:340px;margin-left:auto">
+                <input class="ctl" id="market-search" placeholder="Nom, xo‘jayin yoki telefon bo‘yicha izlash..." />
+              </div>
+              <button class="btn btn-primary btn-sm" id="show-create-market-view" type="button">＋ Supermarket qo‘shish</button>
+            </div>
+            <div class="table-wrap">
+              <table class="data-table">
+                <thead>
+                  <tr><th>ID</th><th>Supermarket</th><th>Xo‘jayin</th><th>Telefon</th><th>To‘lov summasi</th><th>To‘lov sanasi</th><th>Obuna</th><th>Holati</th><th></th></tr>
+                </thead>
+                <tbody id="market-list">
+                  <tr><td colspan="9" style="text-align:center;color:var(--muted)">Yuklanmoqda...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </article>
+
+          <article class="card" id="market-details">
+            <div class="card-head">
+              <div><span class="step-label">SUPERMARKET MA’LUMOTI</span><h3 id="selected-market">Supermarket tanlang</h3></div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap" id="market-owner-actions" hidden>
+                <button class="btn btn-ghost btn-sm" id="market-toggle-status" type="button">Passiv qilish</button>
+                <button class="btn btn-ghost btn-sm" id="market-show-reset-form" type="button">🔑 Login/parolni tiklash</button>
+              </div>
+            </div>
+            <div id="market-payment-details"><p class="empty" style="margin-top:0">Chap ro‘yxatdan supermarket tanlansa, batafsil ma’lumot shu yerda chiqadi.</p></div>
+            <form id="market-reset-credentials-form" hidden novalidate>
+              <div class="form-grid" style="margin-top:14px">
+                <div class="field"><label for="new-market-login">Yangi login (o‘zgarmasa bo‘sh qoldiring)</label><input class="ctl" id="new-market-login" autocomplete="off" /></div>
+                <div class="field"><label for="new-market-password">Yangi parol (o‘zgarmasa bo‘sh qoldiring)</label><input class="ctl" id="new-market-password" type="password" autocomplete="new-password" placeholder="••••••••" /></div>
+              </div>
+              <div style="display:flex;gap:10px;margin-top:12px">
+                <button class="btn btn-primary btn-sm" type="submit">Saqlash</button>
+                <button class="btn btn-ghost btn-sm" type="button" id="market-reset-cancel">Bekor qilish</button>
+              </div>
+              <p class="form-message" id="market-reset-message"></p>
+            </form>
+          </article>
+        </section>
+
+        <section class="cards-grid" data-view-panel="create" hidden>
+          <article class="card">
+            <div class="card-head"><div><span class="step-label">YANGI RESTORAN</span><h3>Restoran va egasini qo‘shish</h3><p class="sub">Yaratilgandan keyin egasiga login/parolni bering.</p></div></div>
+            <form id="restaurant-create-form" novalidate>
+              <div class="form-grid">
+                <div class="field"><label>Restoran nomi</label><input class="ctl" name="restaurantName" placeholder="Masalan: Bahor restorani" required /></div>
+                <div class="field"><label>Xo‘jayin F.I.SH</label><input class="ctl" name="ownerFullName" placeholder="Aliyev Alisher" required /></div>
+                <div class="field"><label>Telefon</label><input class="ctl" name="ownerPhoneNumber" type="tel" placeholder="+998 90 123 45 67" required /></div>
+                <div class="field"><label>To‘lov summasi</label><input class="ctl" name="subscriptionAmount" type="number" min="0" placeholder="500000" required /></div>
+                <div class="field"><label>To‘lov sanasi</label><input class="ctl" name="paymentPaidAt" type="datetime-local" required /></div>
+                <div class="field"><label>Obuna (oy)</label><input class="ctl" name="subscriptionMonths" type="number" min="1" value="1" required /></div>
+                <div class="field"><label>Login</label><input class="ctl" name="login" autocomplete="off" required /></div>
+                <div class="field"><label>Parol</label><input class="ctl" name="password" type="password" autocomplete="new-password" required /></div>
+              </div>
+              <button class="btn btn-primary" type="submit" style="margin-top:14px">Yaratish</button>
+              <p class="form-message" id="restaurant-create-message"></p>
+            </form>
+          </article>
+        </section>
+
+        <section class="cards-grid" data-view-panel="market-create" hidden>
+          <article class="card">
+            <div class="card-head"><div><span class="step-label">YANGI SUPERMARKET</span><h3>Supermarket va egasini qo‘shish</h3><p class="sub">Yaratilgandan keyin egasiga login/parolni bering.</p></div></div>
+            <form id="market-create-form" novalidate>
+              <div class="form-grid">
+                <div class="field"><label>Supermarket nomi</label><input class="ctl" name="marketName" placeholder="Masalan: Korzinka supermarket" required /></div>
+                <div class="field"><label>Xo‘jayin F.I.SH</label><input class="ctl" name="ownerFullName" placeholder="Aliyev Alisher" required /></div>
+                <div class="field"><label>Telefon</label><input class="ctl" name="ownerPhoneNumber" type="tel" placeholder="+998 90 123 45 67" required /></div>
+                <div class="field"><label>To‘lov summasi</label><input class="ctl" name="subscriptionAmount" type="number" min="0" placeholder="500000" required /></div>
+                <div class="field"><label>To‘lov sanasi</label><input class="ctl" name="paymentPaidAt" type="datetime-local" required /></div>
+                <div class="field"><label>Obuna (oy)</label><input class="ctl" name="subscriptionMonths" type="number" min="1" value="1" required /></div>
+                <div class="field"><label>Login</label><input class="ctl" name="login" autocomplete="off" required /></div>
+                <div class="field"><label>Parol</label><input class="ctl" name="password" type="password" autocomplete="new-password" required /></div>
+              </div>
+              <button class="btn btn-primary" type="submit" style="margin-top:14px">Yaratish</button>
+              <p class="form-message" id="market-create-message"></p>
+            </form>
+          </article>
+        </section>
+
+        <section class="placeholder" data-view-panel="system" hidden>
+          <span class="step-label">Tizim</span>
+          <h2>Tizim sozlamalari</h2>
+          <p>Super Admin uchun platforma boshqaruv sozlamalari shu yerda bo‘ladi.</p>
+        </section>
+      </main>
     </div>
-  </main>
-  <script src="super-admin.js"></script>
+  </div>
+</main>
+<script src="super-admin.js"></script>
 </body>
 </html>

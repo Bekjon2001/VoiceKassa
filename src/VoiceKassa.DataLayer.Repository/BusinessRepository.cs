@@ -44,6 +44,34 @@ public class BusinessRepository : IBusinessRepository
     public Task<RestaurantOwner?> GetOwnerByBusinessIdAsync(long businessId, CancellationToken ct = default) =>
         _db.RestaurantOwners.FirstOrDefaultAsync(o => o.BusinessId == businessId && o.IsActive, ct);
 
+    public Task<RestaurantOwner?> GetOwnerByBusinessIdAnyStateAsync(long businessId, CancellationToken ct = default) =>
+        _db.RestaurantOwners.FirstOrDefaultAsync(o => o.BusinessId == businessId, ct);
+
+    public Task<bool> IsOwnerLoginTakenAsync(string login, long excludeBusinessId, CancellationToken ct = default) =>
+        _db.RestaurantOwners.AnyAsync(o => o.Login == login && o.BusinessId != excludeBusinessId, ct);
+
+    public async Task<bool> UpdateOwnerCredentialsAsync(
+        long ownerId, string? newLogin, string? newPasswordHash, CancellationToken ct = default)
+    {
+        var owner = await _db.RestaurantOwners.FindAsync(new object[] { ownerId }, ct);
+        if (owner is null) return false;
+
+        if (!string.IsNullOrWhiteSpace(newLogin)) owner.Login = newLogin;
+        if (!string.IsNullOrWhiteSpace(newPasswordHash)) owner.PasswordHash = newPasswordHash;
+        await _db.SaveChangesAsync(ct);
+        return true;
+    }
+
+    public async Task<bool> UpdateOwnerActiveAsync(long ownerId, bool isActive, CancellationToken ct = default)
+    {
+        var owner = await _db.RestaurantOwners.FindAsync(new object[] { ownerId }, ct);
+        if (owner is null) return false;
+
+        owner.IsActive = isActive;
+        await _db.SaveChangesAsync(ct);
+        return true;
+    }
+
     public async Task<Business> CreateBusinessAsync(Business business, CancellationToken ct = default)
     {
         _db.Businesses.Add(business);
@@ -65,7 +93,16 @@ public class BusinessRepository : IBusinessRepository
     }
 
     public Task<List<Staff>> GetStaffByBusinessAsync(long businessId, CancellationToken ct = default) =>
-        _db.StaffMembers.Where(s => s.BusinessId == businessId).OrderBy(s => s.FullName).ToListAsync(ct);
+        _db.StaffMembers
+            .Include(s => s.SalaryHistory)
+            .Where(s => s.BusinessId == businessId)
+            .OrderBy(s => s.FullName)
+            .ToListAsync(ct);
+
+    public Task<Staff?> GetStaffByIdAsync(long staffId, CancellationToken ct = default) =>
+        _db.StaffMembers
+            .Include(s => s.SalaryHistory)
+            .FirstOrDefaultAsync(s => s.Id == staffId, ct);
 
     public async Task<bool> UpdateStaffStatusAsync(long staffId, bool isActive, CancellationToken ct = default)
     {
@@ -74,6 +111,39 @@ public class BusinessRepository : IBusinessRepository
         staff.IsActive = isActive;
         await _db.SaveChangesAsync(ct);
         return true;
+    }
+
+    public async Task<Staff?> UpdateStaffSalaryAsync(long staffId, decimal newSalary, string? reason, CancellationToken ct = default)
+    {
+        var staff = await _db.StaffMembers
+            .Include(s => s.SalaryHistory)
+            .FirstOrDefaultAsync(s => s.Id == staffId, ct);
+        if (staff is null) return null;
+
+        var oldSalary = staff.MonthlySalary;
+        staff.MonthlySalary = newSalary;
+        staff.SalaryHistory.Add(new SalaryHistory
+        {
+            StaffId = staff.Id,
+            ChangedAt = DateTime.UtcNow,
+            OldSalary = oldSalary,
+            NewSalary = newSalary,
+            Reason = reason,
+        });
+        await _db.SaveChangesAsync(ct);
+        return staff;
+    }
+
+    public async Task<Staff?> UpdateStaffActiveAsync(long staffId, bool isActive, DateTime? firedAt, CancellationToken ct = default)
+    {
+        var staff = await _db.StaffMembers.FindAsync(new object[] { staffId }, ct);
+        if (staff is null) return null;
+
+        staff.IsActive = isActive;
+        // Faollashtirishda FiredAt tozalanadi, bo'shatishda hozirgi vaqt yoziladi.
+        staff.FiredAt = isActive ? null : (firedAt ?? DateTime.UtcNow);
+        await _db.SaveChangesAsync(ct);
+        return staff;
     }
 
     public async Task<Category> CreateCategoryAsync(Category category, CancellationToken ct = default)

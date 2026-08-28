@@ -1,4 +1,7 @@
-const API_BASE = "http://localhost:55983";
+// Sahifa qaysi manzildan ochildi — API ham shu joyga ulanadi.
+const API_BASE = location.protocol.startsWith("http")
+  ? `${location.protocol}//${location.host}`
+  : "http://localhost:55983";
 const DEFAULT_BUSINESS_ID = "1";
 const DEFAULT_RESTAURANT_NAME = "Milliy Taomlar Restorani";
 const DEFAULT_TABLES = [

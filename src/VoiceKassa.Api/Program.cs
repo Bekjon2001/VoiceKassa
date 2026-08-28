@@ -24,27 +24,31 @@ builder.Services.AddSingleton(geminiOptions);
 builder.Services.AddHttpClient<GeminiApiClient>();
 
 // --- Application services / DI wiring ---
-<<<<<<< HEAD
-builder.Services.AddScoped<ISaleRepository, SaleRepository>();
-builder.Services.AddScoped<IShopRepository, ShopRepository>();
-builder.Services.AddScoped<IAiExtractionService, GeminiExtractionService>();
-builder.Services.AddScoped<IAiQueryService, GeminiQueryService>();
-builder.Services.AddScoped<SaleService>();
-builder.Services.AddScoped<QueryService>();
-builder.Services.AddScoped<ShopService>();
-=======
 builder.Services.AddScoped<IOrderRepository, OrderRepository>();
 builder.Services.AddScoped<IBusinessRepository, BusinessRepository>();
+builder.Services.AddScoped<IAuthRepository, AuthRepository>();
 builder.Services.AddScoped<IAiExtractionService, GeminiExtractionService>();
 builder.Services.AddScoped<IAiQueryService, GeminiQueryService>();
 builder.Services.AddScoped<OrderService>();
 builder.Services.AddScoped<QueryService>();
 builder.Services.AddScoped<BusinessService>();
->>>>>>> main
+builder.Services.AddScoped<AuthService>();
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+
+// Frontend papkasini ham shu serverdan beramiz: localhost:55983/admin.html
+// yoki shunchaki localhost:55983 (index.html) brauzerda ochiladi.
+// `dotnet run` da ContentRoot = src/VoiceKassa.Api, DLL ni to'g'ridan-to'g'ri
+// ishga tushirganda esa ildiz papka bo'lishi mumkin — ikkalasini ham tekshiramiz.
+var frontendDir = new[]
+    {
+        Path.Combine(builder.Environment.ContentRootPath, "..", "..", "frontend"),
+        Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "frontend"),
+    }
+    .Select(Path.GetFullPath)
+    .FirstOrDefault(Directory.Exists);
 
 builder.Services.AddCors(opt =>
 {
@@ -55,10 +59,19 @@ builder.Services.AddCors(opt =>
 
 var app = builder.Build();
 
-if (app.Environment.IsDevelopment())
+// Swagger har doim ochiq (MVP bosqichi, oson ko'rib chiqish uchun).
+app.UseSwagger();
+app.UseSwaggerUI();
+
+if (frontendDir is not null)
 {
-    app.UseSwagger();
-    app.UseSwaggerUI();
+    var frontendProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(frontendDir);
+    // "/" manzili index.html'ni ochadi
+    app.UseDefaultFiles(new DefaultFilesOptions { FileProvider = frontendProvider });
+    // admin.html, super-admin.html, css, js va h.k.
+    app.UseStaticFiles(new StaticFileOptions { FileProvider = frontendProvider });
+    // "/frontend/index.html" manzillari ham xuddi shu papkani ko'rsatadi.
+    app.UseStaticFiles(new StaticFileOptions { FileProvider = frontendProvider, RequestPath = "/frontend" });
 }
 
 app.UseCors();

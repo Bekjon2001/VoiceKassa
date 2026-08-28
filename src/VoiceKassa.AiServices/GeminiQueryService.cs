@@ -7,18 +7,11 @@ public class GeminiQueryService : IAiQueryService
     private readonly GeminiApiClient _client;
 
     private const string SystemPrompt = """
-<<<<<<< HEAD
-        Sen do'kon uchun AI hisobchisan. Senga JSON formatda savdo ma'lumotlari beriladi.
-        Faqat shu ma'lumotlar asosida, o'zbek tilida, qisqa va aniq javob ber.
-        Hech qanday raqamni o'zing o'ylab topma yoki taxmin qilma - faqat berilgan JSON'dagi
-        summalarni qo'shish, sanash yoki saralash orqali javob ber.
-=======
         Sen restoran yoki do'kon uchun AI hisobchisan. Senga JSON formatda
         savdo/buyurtma ma'lumotlari beriladi. Faqat shu ma'lumotlar asosida,
         o'zbek tilida, qisqa va aniq javob ber. Hech qanday raqamni o'zing
         o'ylab topma yoki taxmin qilma - faqat berilgan JSON'dagi summalarni
         qo'shish, sanash yoki saralash orqali javob ber.
->>>>>>> main
         Agar savolga javob berish uchun ma'lumot yetarli bo'lmasa, aniq shuni ayt.
         """;
 
