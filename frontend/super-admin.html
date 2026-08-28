@@ -74,6 +74,7 @@
           <button class="nav-item" type="button" data-view="markets"><span class="icon-chip">▤</span><span>Supermarketlar</span><b class="chev">›</b></button>
           <button class="nav-item" type="button" data-view="market-create"><span class="icon-chip">＋</span><span>Supermarket yaratish</span><b class="chev">›</b></button>
           <button class="nav-item" type="button" data-view="system"><span class="icon-chip">⚙</span><span>Tizim sozlamalari</span><b class="chev">›</b></button>
+          <button class="nav-item" type="button" data-view="ai"><span class="icon-chip">🤖</span><span>AI yordamchi</span><b class="chev">›</b></button>
         </nav>
         <span class="side-spacer"></span>
         <button class="btn btn-ghost btn-block" id="sa-logout-button" type="button" style="margin-top:10px">Chiqish</button>
@@ -237,6 +238,30 @@
           <span class="step-label">Tizim</span>
           <h2>Tizim sozlamalari</h2>
           <p>Super Admin uchun platforma boshqaruv sozlamalari shu yerda bo‘ladi.</p>
+        </section>
+
+        <!-- ======================= AI YORDAMCHI (ovozli) ======================= -->
+        <section class="cards-grid" data-view-panel="ai" hidden>
+          <article class="card card--wide">
+            <div class="card-head">
+              <div>
+                <span class="step-label">OVOZLI AI YORDAMCHI</span>
+                <h3>AI bilan suhbat</h3>
+                <p class="sub">Mikrofon orqali gapiring yoki yozib so‘rang — AI platformadagi real ma'lumotlar asosida javob beradi.</p>
+              </div>
+              <label class="ai-voice-toggle" title="Javobni ovoz bilan o‘qish">
+                <input type="checkbox" id="ai-voice-toggle" checked />
+                <span>🔊 Ovozli javob</span>
+              </label>
+            </div>
+            <div class="ai-chat" id="sa-ai-messages" aria-live="polite"></div>
+            <div class="ai-composer">
+              <input class="ctl" id="sa-ai-input" placeholder="Savolingizni yozing yoki mikrofondan gapiring..." autocomplete="off" />
+              <button class="btn btn-ghost" id="sa-ai-mic" type="button" title="Mikrofon bilan gapirish">🎤</button>
+              <button class="btn btn-primary" id="sa-ai-send" type="button">Yuborish</button>
+            </div>
+            <p class="form-message" id="sa-ai-message"></p>
+          </article>
         </section>
       </main>
     </div>

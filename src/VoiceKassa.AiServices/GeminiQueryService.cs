@@ -23,4 +23,19 @@ public class GeminiQueryService : IAiQueryService
         var answer = await _client.CompleteAsync(SystemPrompt, userMessage, maxTokens: 500, ct: ct);
         return string.IsNullOrWhiteSpace(answer) ? "Javob topilmadi." : answer;
     }
+
+    private const string SuperAdminSystemPrompt = """
+        Sen VoiceKassa platformasining Super Admin AI yordamchisisan.
+        Senga barcha restoran/supermarket/do'konlar va ularning obuna holati JSON
+        formatda beriladi. Faqat shu ma'lumotlar asosida, o'zbek tilida, qisqa va
+        aniq javob ber. Hech qanday raqamni o'zing o'ylab topma yoki taxmin qilma.
+        Agar savolga javob berish uchun ma'lumot yetarli bo'lmasa, aniq shuni ayting.
+        """;
+
+    public async Task<string> AnswerPlatformAsync(string question, string dataContextJson, CancellationToken ct = default)
+    {
+        var userMessage = $"Platformadagi bizneslar (JSON):\n{dataContextJson}\n\nSavol: {question}";
+        var answer = await _client.CompleteAsync(SuperAdminSystemPrompt, userMessage, maxTokens: 500, ct: ct);
+        return string.IsNullOrWhiteSpace(answer) ? "Javob topilmadi." : answer;
+    }
 }

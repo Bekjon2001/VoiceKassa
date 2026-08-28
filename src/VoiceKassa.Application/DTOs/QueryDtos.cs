@@ -6,6 +6,11 @@ public class AskQuestionRequest
     public string Question { get; set; } = string.Empty;
 }
 
+public class AskSuperAdminRequest
+{
+    public string Question { get; set; } = string.Empty;
+}
+
 public class AskQuestionResponse
 {
     public string Answer { get; set; } = string.Empty;

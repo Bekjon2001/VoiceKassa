@@ -253,7 +253,7 @@
             <form id="product-form" class="panel-form" novalidate style="margin:0">
               <div class="form-grid">
                 <div class="field"><label for="product-name">Nomi</label><input class="ctl" id="product-name" placeholder="Masalan: Lag‘mon" required /></div>
-                <div class="field"><label for="product-price">Narxi (so‘m)</label><input class="ctl" id="product-price" type="number" min="0" placeholder="32000" required /></div>
+                <div class="field"><label for="product-price">Narxi (so‘m)</label><input class="ctl" id="product-price" type="text" inputmode="numeric" placeholder="32000" required /></div>
                 <div class="field"><label for="product-kind">Turi</label>
                   <select class="ctl" id="product-kind"><option value="food">Ovqat</option><option value="drink">Ichimlik</option><option value="fruit">Meva</option><option value="dessert">Shirinlik</option></select>
                 </div>
@@ -330,9 +330,9 @@
                 <div class="field"><label for="staff-first">Ism</label><input class="ctl" id="staff-first" placeholder="Ali" required /></div>
                 <div class="field"><label for="staff-last">Familiya</label><input class="ctl" id="staff-last" placeholder="Aliyev" required /></div>
                 <div class="field"><label for="staff-phone2">Telefon</label><input class="ctl" id="staff-phone2" type="tel" placeholder="+998 90 123 45 67" required /></div>
-                <div class="field"><label for="staff-age">Yosh</label><input class="ctl" id="staff-age" type="number" min="14" max="100" /></div>
-                <div class="field"><label for="staff-salary">Oylik (so‘m)</label><input class="ctl" id="staff-salary" type="number" min="0" value="0" /></div>
-                <div class="field"><label for="staff-hired">Ishga kirgan sana</label><input class="ctl" id="staff-hired" type="date" /></div>
+                <div class="field"><label for="staff-age">Yosh</label><input class="ctl" id="staff-age" type="number" min="14" max="100" required /></div>
+                <div class="field"><label for="staff-salary">Oylik (so‘m)</label><input class="ctl" id="staff-salary" type="text" inputmode="numeric" value="0" /></div>
+                <div class="field"><label for="staff-hired">Ishga kirgan sana</label><input class="ctl" id="staff-hired" type="date" required /></div>
                 <div class="field"><label for="staff-role">Lavozim</label>
                   <select class="ctl" id="staff-role"><option value="1">Menejer</option><option value="2">Kassir</option><option value="3">Ofitsiant</option><option value="4">Oshpaz</option></select>
                 </div>
@@ -367,7 +367,7 @@
 
             <form id="staff-salary-form" hidden novalidate style="margin-top:6px">
               <div class="form-grid">
-                <div class="field"><label for="new-salary">Yangi oylik (so‘m)</label><input class="ctl" id="new-salary" type="number" min="0" required /></div>
+                <div class="field"><label for="new-salary">Yangi oylik (so‘m)</label><input class="ctl" id="new-salary" type="text" inputmode="numeric" required /></div>
                 <div class="field"><label for="sal-reason">Sabab/izoh</label><input class="ctl" id="sal-reason" placeholder="Masalan: Yillik ko‘tarilish" /></div>
               </div>
               <div style="display:flex;gap:10px;margin-top:12px">

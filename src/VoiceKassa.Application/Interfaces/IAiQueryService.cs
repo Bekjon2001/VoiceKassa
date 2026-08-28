@@ -4,4 +4,7 @@ namespace VoiceKassa.Application.Interfaces;
 public interface IAiQueryService
 {
     Task<string> AnswerAsync(string question, string dataContextJson, CancellationToken ct = default);
+
+    /// <summary>Super Admin platforma darajasidagi savoliga (barcha bizneslar/obunalar haqida) javob beradi.</summary>
+    Task<string> AnswerPlatformAsync(string question, string dataContextJson, CancellationToken ct = default);
 }

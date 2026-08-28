@@ -9,8 +9,13 @@ namespace VoiceKassa.Api.Controllers;
 public class QueryController : ControllerBase
 {
     private readonly QueryService _queryService;
+    private readonly BusinessService _businessService;
 
-    public QueryController(QueryService queryService) => _queryService = queryService;
+    public QueryController(QueryService queryService, BusinessService businessService)
+    {
+        _queryService = queryService;
+        _businessService = businessService;
+    }
 
     /// <summary>
     /// Biznes egasi tabiiy tilda savol beradi: "bugun qancha savdo bo'ldi?",
@@ -21,6 +26,24 @@ public class QueryController : ControllerBase
     public async Task<IActionResult> Ask([FromBody] AskQuestionRequest request, CancellationToken ct)
     {
         var response = await _queryService.AskAsync(request, ct);
+        return Ok(response);
+    }
+
+    /// <summary>
+    /// Super Admin platforma darajasidagi savol beradi: "qancha restoran bor?",
+    /// "muddati tugagan obunalar nechta?" - javob faqat haqiqiy bazadagi
+    /// barcha bizneslar/obunalar asosida beriladi.
+    /// </summary>
+    [HttpPost("ask-super")]
+    public async Task<IActionResult> AskSuperAdmin([FromBody] AskSuperAdminRequest request, CancellationToken ct)
+    {
+        if (!await IsSuperAdmin(ct))
+            return Unauthorized(new { error = "Super Admin sifatida kiring." });
+
+        if (string.IsNullOrWhiteSpace(request.Question))
+            return BadRequest(new { error = "Savol bo'sh bo'lishi mumkin emas." });
+
+        var response = await _queryService.AskSuperAdminAsync(request.Question.Trim(), ct);
         return Ok(response);
     }
 
@@ -38,4 +61,7 @@ public class QueryController : ControllerBase
         var summary = await _queryService.GetSummaryAsync(businessId, fromUtc, toUtc, ct);
         return Ok(summary);
     }
+
+    private Task<bool> IsSuperAdmin(CancellationToken ct) =>
+        _businessService.IsSuperAdminTokenAsync(Request.Headers["X-Super-Admin-Token"].FirstOrDefault(), ct);
 }

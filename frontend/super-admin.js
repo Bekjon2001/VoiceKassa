@@ -14,6 +14,7 @@ const VIEW_TITLES = {
   markets: ["Supermarketlar", "Supermarketlar va obunalarni boshqaring."],
   "market-create": ["Yangi supermarket", "Yangi supermarket va uning egasini ro‘yxatdan o‘tkazing."],
   system: ["Tizim sozlamalari", "Platforma darajasidagi sozlamalar."],
+  ai: ["AI yordamchi", "Ovozli AI yordamchi — platforma haqida savol bering."],
 };
 
 let superAdminToken = "";
@@ -617,6 +618,123 @@ $("market-toggle-status").addEventListener("click", async () => {
   }
 });
 
+// ======================= Ovozli AI yordamchi =======================
+const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+const canMic = typeof SpeechRec !== "undefined";
+const canSpeak = typeof window.speechSynthesis !== "undefined";
+const aiMsgEl = $("sa-ai-message");
+
+let aiRecognition = null;
+let aiListening = false;
+
+// Salvodagi sun'iy intellekt javobini chatga qo'shish
+function aiAddMessage(who, text) {
+  const box = $("sa-ai-messages");
+  if (!box) return;
+  const div = document.createElement("div");
+  div.className = "ai-msg " + (who === "user" ? "ai-msg--user" : "ai-msg--bot");
+  const label = document.createElement("span");
+  label.textContent = who === "user" ? "Siz" : "AI";
+  const body = document.createElement("div");
+  body.textContent = text;
+  div.appendChild(label);
+  div.appendChild(body);
+  box.appendChild(div);
+  box.scrollTop = box.scrollHeight;
+}
+
+// Javobni ovoz bilan o'qish (agar toggle yoqilgan bo'lsa)
+function aiSpeak(text) {
+  if (!canSpeak) return;
+  const toggle = $("ai-voice-toggle");
+  if (toggle && !toggle.checked) return;
+  try {
+    window.speechSynthesis.cancel();
+    const utter = new SpeechSynthesisUtterance(text);
+    utter.lang = "uz-UZ";
+    utter.rate = 1;
+    window.speechSynthesis.speak(utter);
+  } catch { /* ignore */ }
+}
+
+// Savolni backendga yuborish va javobni ko'rsatish
+async function aiAsk(question) {
+  const q = String(question || "").trim();
+  const input = $("sa-ai-input");
+  if (input) input.value = "";
+  if (!q) {
+    if (aiMsgEl) setMsg(aiMsgEl, "Avval savolingizni yozing yoki mikrofonda gapiring.", "err");
+    return;
+  }
+  aiAddMessage("user", q);
+  if (aiMsgEl) setMsg(aiMsgEl, "AI javob kutilmoqda...", "");
+  try {
+    const res = await postJson(
+      "/Query/AskSuperAdmin/ask-super",
+      { question: q },
+      { "X-Super-Admin-Token": superAdminToken }
+    );
+    if (aiMsgEl) setMsg(aiMsgEl, "", "");
+    const answer = res && res.answer ? String(res.answer).trim() : "";
+    if (answer) {
+      aiAddMessage("bot", answer);
+      aiSpeak(answer);
+    } else {
+      aiAddMessage("bot", "AI javob bermadi. Serverda AI xizmati (Gemini) sozlanmagan bo‘lishi mumkin.");
+    }
+  } catch (error) {
+    if (aiMsgEl) setMsg(aiMsgEl, "", "");
+    aiAddMessage("bot", "Xatolik: " + error.message);
+  }
+}
+
+// Mikrofon tugmasi
+$("sa-ai-mic").addEventListener("click", () => {
+  if (!canMic) return;
+  if (aiListening) {
+    if (aiRecognition) aiRecognition.stop();
+    aiListening = false;
+    lockMicUi(false);
+    if (aiMsgEl) setMsg(aiMsgEl, "", "");
+    return;
+  }
+  aiRecognition = new SpeechRec();
+  aiRecognition.lang = "uz-UZ";
+  aiRecognition.interimResults = false;
+  aiRecognition.maxAlternatives = 1;
+  aiRecognition.onstart = () => { aiListening = true; lockMicUi(true); };
+  aiRecognition.onresult = event => {
+    const text = event.results[0][0].transcript.trim();
+    const input = $("sa-ai-input");
+    if (input) { input.value = text; input.focus(); }
+    aiAsk(text);
+  };
+  aiRecognition.onerror = () => {
+    aiListening = false; lockMicUi(false);
+    if (aiMsgEl) setMsg(aiMsgEl, "Mikrofon ishlamadi. Qaytadan urinib ko‘ring.", "err");
+  };
+  aiRecognition.onend = () => { aiListening = false; lockMicUi(false); };
+  try { aiRecognition.start(); } catch { /* ignore */ }
+});
+
+function lockMicUi(listening) {
+  const mic = $("sa-ai-mic");
+  if (!mic) return;
+  mic.textContent = listening ? "🔴" : "🎤";
+  mic.classList.toggle("btn-primary", listening);
+}
+
+// Brauzer mikrofonni qo'llab-quvvatlamasa — tugma o'chiriladi
+if (!canMic) {
+  const mic = $("sa-ai-mic");
+  if (mic) { mic.disabled = true; mic.title = "Brauzer mikrofonni qo‘llab-quvvatlamaydi"; }
+}
+
+// Yuborish va Enter
+$("sa-ai-send").addEventListener("click", () => aiAsk($("sa-ai-input").value));
+$("sa-ai-input").addEventListener("keydown", event => {
+  if (event.key === "Enter") { event.preventDefault(); aiAsk($("sa-ai-input").value); }
+});
 // ---------- Login/parolni tiklash (supermarket qayta yaratmasdan) ----------
 $("market-show-reset-form").addEventListener("click", () => {
   const form = $("market-reset-credentials-form");

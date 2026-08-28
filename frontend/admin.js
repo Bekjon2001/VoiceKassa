@@ -3,6 +3,7 @@ const API_BASE = location.protocol.startsWith("http")
   ? `${location.protocol}//${location.host}`
   : "http://localhost:55983";
 const SESSION_KEY = "vk_owner_session";
+const VIEW_STORAGE_KEY = "vk_owner_view";
 const fallbackTableImage = "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=500&q=80";
 const fallbackFoodImage = "https://images.unsplash.com/photo-1547592180-85f173990554?auto=format&fit=crop&w=700&q=80";
 
@@ -65,6 +66,36 @@ function fmtSum(value) {
   return Number(value || 0).toLocaleString("uz-UZ");
 }
 
+// ---------- Pul maydonlari: minglar ajratib yozish (1 500 000) ----------
+function formatMoneyDigits(str) {
+  return String(str || "").replace(/[^\d]/g, "");
+}
+function groupDigits(str) {
+  return str.replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+}
+function wireMoneyInput(id) {
+  const el = $(id);
+  if (!el) return;
+  el.addEventListener("input", () => {
+    const digits = formatMoneyDigits(el.value);
+    el.value = digits ? groupDigits(digits) : "";
+  });
+}
+function moneyValue(el) {
+  return Number(formatMoneyDigits(el.value));
+}
+wireMoneyInput("staff-salary");
+wireMoneyInput("product-price");
+wireMoneyInput("new-salary");
+
+// ---------- Sana: ishga kirish bugun yoki kelajak bo'lishi kerak ----------
+const HIRE_MIN_DATE = (() => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+})();
+const hireDateEl = $("staff-hired");
+if (hireDateEl) hireDateEl.min = HIRE_MIN_DATE;
+
 function setMsg(el, text, state) {
   if (!el) return;
   el.textContent = text;
@@ -113,7 +144,7 @@ function enterWorkspace(session) {
   $("owner-area").hidden = false;
   $("owner-restaurant-name").textContent = session.restaurantName || "Restoran";
   loadWorkspaceData();
-  setOwnerView(selectedRestaurantSub || "tables");
+  setOwnerView(restoreOwnerView());
 }
 
 function resetToEntry() {
@@ -262,6 +293,28 @@ function setOwnerView(view) {
   const pair = VIEW_TITLES[view] || (STAFF_VIEWS.includes(view) ? ["Restoran", ""] : [view, ""]);
   $("owner-view-title").textContent = pair[0];
   $("owner-view-subtitle").textContent = pair[1];
+
+  // Oxirgi ochilgan sahifani yodda saqlash (refresh'da ham o'sha sahifa ochiladi)
+  try { sessionStorage.setItem(VIEW_STORAGE_KEY, view); } catch { /* ignore */ }
+}
+
+// Refresh'da o'sha sahifa ochilib qolishi uchun eslab qolingan ko'rinishni tiklash.
+// Profil/qo'shish sahifalari ma'lumotga bog'liq bo'lgani uchun ular ro'yxat sahifasiga qaytariladi.
+function restoreOwnerView() {
+  try {
+    const saved = sessionStorage.getItem(VIEW_STORAGE_KEY);
+    if (!saved) return "tables";
+    const detailMap = {
+      "staff-detail": "staff",
+      "staff-add": "staff",
+      "table-detail": "tables",
+      "table-add": "tables",
+      "meals-add": "meals-food",
+    };
+    const target = detailMap[saved] || saved;
+    const known = [...RESTAURANT_VIEWS, "supermarket", "shop", "organization"];
+    return known.includes(target) ? target : "tables";
+  } catch { return "tables"; }
 }
 
 document.querySelectorAll(".nav-item[data-owner-view]").forEach(item => {
@@ -292,9 +345,9 @@ document.querySelectorAll(".nav-item.sub[data-owner-view]").forEach(item => {
   });
 });
 
-// Birinchi ochishda oxirgi tanlangan bo'limni ko'rsatish
+// Birinchi ochishda oxirgi ochilgan bo'limni ko'rsatish (refresh'da ham qoladi)
 window.addEventListener("DOMContentLoaded", () => {
-  if (!(document.getElementById("owner-area") || {}).hidden) setOwnerView(selectedRestaurantSub || "tables");
+  if (!(document.getElementById("owner-area") || {}).hidden) setOwnerView(restoreOwnerView());
 });
 
 // Alohida sahifalardan (profil) orqaga qaytish — tepada va pastdagi tugmalar
@@ -652,7 +705,7 @@ $("table-status-save").addEventListener("click", async () => {
   if (!person || !requireOwner()) return;
   const newStatus = Number($("table-status-select").value);
   try {
-    await api(`/Business/tables/${person.id}/status`, {
+    await api(`/Business/UpdateTableStatus/tables/${person.id}/status`, {
       method: "PUT",
       headers: { "X-Owner-Token": ownerToken },
       body: JSON.stringify({ status: newStatus }),
@@ -683,7 +736,7 @@ $("product-form-cancel").addEventListener("click", () => setOwnerView(mealsRetur
 $("product-form").addEventListener("submit", event => {
   event.preventDefault();
   const name = $("product-name").value.trim();
-  const price = Number($("product-price").value);
+  const price = moneyValue($("product-price"));
   const kind = $("product-kind").value;
   const preview = document.querySelector("#product-preview img");
   if (!name || price < 0) return;
@@ -790,19 +843,29 @@ $("staff-create-form").addEventListener("submit", async event => {
   event.preventDefault();
   const message = $("staff-create-message");
   if (!requireOwner()) return;
+  // Majburiy maydonlar: ism, telefon, yosh, ishga kirgan sana
+  const first = $("staff-first").value.trim();
+  const phone = $("staff-phone2").value.trim();
+  const ageRaw = $("staff-age").value;
+  const hireRaw = $("staff-hired").value;
+  if (!first) { setMsg(message, "Ism majburiy maydon.", "err"); return; }
+  if (!phone) { setMsg(message, "Telefon raqami majburiy maydon.", "err"); return; }
+  const age = Number(ageRaw);
+  if (!ageRaw || !Number.isFinite(age) || age < 14 || age > 100) { setMsg(message, "Yosh majburiy (14–100 oralig‘ida).", "err"); return; }
+  if (!hireRaw) { setMsg(message, "Ishga kirgan sana majburiy maydon.", "err"); return; }
+  if (hireRaw < HIRE_MIN_DATE) { setMsg(message, "Ishga kirgan sana bugungidan kichik bo‘lishi mumkin emas.", "err"); return; }
   setMsg(message, "Saqlanmoqda...");
   try {
-    const hireRaw = $("staff-hired").value;
     const saved = await api("/Business/CreateStaff/staff", {
       method: "POST",
       headers: { "X-Owner-Token": ownerToken },
       body: JSON.stringify({
         businessId: Number(activeBusinessId),
-        firstName: $("staff-first").value.trim(),
+        firstName: first,
         lastName: $("staff-last").value.trim(),
-        phoneNumber: $("staff-phone2").value.trim(),
-        age: $("staff-age").value ? Number($("staff-age").value) : null,
-        monthlySalary: Number($("staff-salary").value || 0),
+        phoneNumber: phone,
+        age: age,
+        monthlySalary: moneyValue($("staff-salary")),
         hireDate: hireRaw ? new Date(hireRaw + "T00:00:00").toISOString() : null,
         role: Number($("staff-role").value),
       }),
@@ -851,11 +914,11 @@ $("staff-salary-form").addEventListener("submit", async event => {
   const message = $("salary-message");
   const person = findStaffById(selectedStaffId);
   if (!person || !requireOwner()) return;
-  const newSalary = Number($("new-salary").value);
+  const newSalary = moneyValue($("new-salary"));
   if (newSalary < 0) { setMsg(message, "Yangi oylik manfiy bo‘lishi mumkin emas.", "err"); return; }
   setMsg(message, "Saqlanmoqda...");
   try {
-    const updated = await api(`/Business/staff/${person.id}/salary`, {
+    const updated = await api(`/Business/UpdateStaffSalary/staff/${person.id}/salary`, {
       method: "PUT",
       headers: { "X-Owner-Token": ownerToken },
       body: JSON.stringify({ newSalary, reason: $("sal-reason").value.trim() || null }),
@@ -882,7 +945,7 @@ $("staff-fire-btn").addEventListener("click", async () => {
   );
   if (!confirmed) return;
   try {
-    const updated = await api(`/Business/staff/${person.id}/active`, {
+    const updated = await api(`/Business/SetStaffActive/staff/${person.id}/active`, {
       method: "PUT",
       headers: { "X-Owner-Token": ownerToken },
       body: JSON.stringify({ isActive: makeActive }),

@@ -9,11 +9,13 @@ public class QueryService
 {
     private readonly IOrderRepository _orderRepo;
     private readonly IAiQueryService _aiQuery;
+    private readonly IBusinessRepository _businessRepo;
 
-    public QueryService(IOrderRepository orderRepo, IAiQueryService aiQuery)
+    public QueryService(IOrderRepository orderRepo, IAiQueryService aiQuery, IBusinessRepository businessRepo)
     {
         _orderRepo = orderRepo;
         _aiQuery = aiQuery;
+        _businessRepo = businessRepo;
     }
 
     public async Task<AskQuestionResponse> AskAsync(AskQuestionRequest request, CancellationToken ct = default)
@@ -59,5 +61,37 @@ public class QueryService
             .ToList();
 
         return summary;
+    }
+
+    /// <summary>
+    /// Super Admin platforma darajasida tabiiy tilda savol beradi: barcha restoranlar,
+    /// supermarketlar, obuna holati va egasi haqida. AI faqat haqiqiy bazadagi
+    /// ma'lumotlar asosida javob beradi.
+    /// </summary>
+    public async Task<AskQuestionResponse> AskSuperAdminAsync(string question, CancellationToken ct = default)
+    {
+        var businesses = await _businessRepo.GetAllBusinessesAsync(ct);
+
+        var payload = new List<object>();
+        foreach (var business in businesses)
+        {
+            var owner = await _businessRepo.GetOwnerByBusinessIdAnyStateAsync(business.Id, ct);
+            payload.Add(new
+            {
+                Id = business.Id,
+                Name = business.Name,
+                Type = business.Type.ToString(),
+                IsActive = business.IsActive,
+                Phone = business.PhoneNumber,
+                OwnerFullName = owner?.FullName,
+                OwnerPhone = owner?.PhoneNumber,
+                SubscriptionEndsAt = owner?.SubscriptionEndsAt,
+                SubscriptionActive = owner != null && owner.IsActive && owner.SubscriptionEndsAt > DateTime.UtcNow,
+            });
+        }
+
+        var contextJson = JsonSerializer.Serialize(payload);
+        var answer = await _aiQuery.AnswerPlatformAsync(question, contextJson, ct);
+        return new AskQuestionResponse { Answer = answer };
     }
 }

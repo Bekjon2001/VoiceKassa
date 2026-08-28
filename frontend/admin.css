@@ -190,6 +190,22 @@ button{font-family:inherit}
 .table-detail-headline .sub{margin:0}
 .detail-page-foot{margin-top:18px;padding-top:14px;border-top:1px solid var(--line)}
 
+/* ---------- Ovozli AI yordamchi (Super Admin) ---------- */
+.ai-chat{display:flex;flex-direction:column;gap:11px;background:#f7f9f8;border:1px solid var(--line);border-radius:14px;padding:14px;max-height:360px;overflow-y:auto;min-height:130px}
+.ai-msg{max-width:84%;display:flex;flex-direction:column;gap:3px;animation:aiFade .2s ease}
+.ai-msg--user{align-self:flex-end}
+.ai-msg--bot{align-self:flex-start}
+.ai-msg>span{font-size:11px;font-weight:700;color:var(--muted)}
+.ai-msg>div{background:#fff;border:1px solid var(--line);border-radius:12px;padding:9px 13px;font-size:14px;line-height:1.5;white-space:pre-wrap;word-break:break-word}
+.ai-msg--user>div{background:var(--green);border-color:var(--green);color:#fff;border-bottom-right-radius:4px}
+.ai-msg--bot>div{background:#fff;border-bottom-left-radius:4px}
+.ai-composer{display:flex;gap:8px;margin-top:12px}
+.ai-composer .ctl{flex:1;min-width:0}
+.ai-composer .btn{flex:0 0 auto}
+.ai-voice-toggle{display:inline-flex;align-items:center;gap:7px;font-size:13px;font-weight:600;color:var(--muted);cursor:pointer;background:#f2f5f3;border:1px solid var(--line);border-radius:999px;padding:7px 13px;user-select:none}
+.ai-voice-toggle input{accent-color:var(--green);cursor:pointer}
+@keyframes aiFade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+
 .placeholder{background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--green);border-radius:var(--radius);box-shadow:var(--shadow);padding:26px}
 .placeholder h2{margin:4px 0 6px;font-size:19px}
 .placeholder p{margin:0;color:var(--muted);font-size:14px;max-width:560px}
