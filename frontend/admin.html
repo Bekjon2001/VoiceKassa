@@ -58,7 +58,15 @@
             <div class="subnav" id="restaurant-subnav">
               <button class="nav-item sub" type="button" data-owner-view="staff"><span class="icon-chip">👤</span><span>Xodimlar</span></button>
               <button class="nav-item sub" type="button" data-owner-view="tables"><span class="icon-chip">▰</span><span>Stollar</span></button>
-              <button class="nav-item sub" type="button" data-owner-view="meals"><span class="icon-chip">🍽</span><span>Ovqatlar</span></button>
+              <div class="nav-group nav-group--nested" data-owner-group="meals">
+                <button class="nav-item sub" type="button" data-owner-toggle="meals"><span class="icon-chip">🍽</span><span>Ovqatlar</span><b class="chev">▸</b></button>
+                <div class="subnav">
+                  <button class="nav-item sub" type="button" data-owner-view="meals-food"><span class="icon-chip">🍚</span><span>Taomlar</span></button>
+                  <button class="nav-item sub" type="button" data-owner-view="meals-drink"><span class="icon-chip">🥤</span><span>Ichimliklar</span></button>
+                  <button class="nav-item sub" type="button" data-owner-view="meals-fruit"><span class="icon-chip">🍎</span><span>Mevalar</span></button>
+                  <button class="nav-item sub" type="button" data-owner-view="meals-dessert"><span class="icon-chip">🍰</span><span>Shirinliklar</span></button>
+                </div>
+              </div>
             </div>
           </div>
           <button class="nav-item" type="button" data-owner-view="supermarket"><span class="icon-chip">▤</span><span>Supermarket</span><b class="chev">›</b></button>
@@ -79,7 +87,7 @@
           <span class="flash" id="workspace-flash" hidden></span>
         </header>
 
-        <section class="stats-row" data-owner-panel="tables meals table-detail">
+        <section class="stats-row" data-owner-panel="tables meals meals-food meals-drink meals-fruit meals-dessert table-detail">
           <div class="stat stat--g"><small>Bugungi savdo</small><strong class="stat-value" id="sales-today">—</strong><span class="stat-note" id="orders-today-note">buyurtmalar: —</span></div>
           <div class="stat stat--c"><small>Stollar</small><strong class="stat-value" id="table-count">0</strong><span class="stat-note">jami stollar</span></div>
                     <div class="stat stat--a"><small>Ovqatlar</small><strong class="stat-value" id="food-count">0</strong><span class="stat-note">menyuda</span></div>
@@ -105,21 +113,13 @@
 
         <!-- ======================= STOLLAR ======================= -->
         <div class="cards-grid panels" data-owner-panel="tables" hidden>
-          <article class="card">
-            <div class="card-head"><div><span class="step-label">Yangi stol</span><h3>Stol qo‘shish</h3><p class="sub">Restorandagi stollarni qo‘shing.</p></div></div>
-            <form id="table-form" novalidate>
-              <div class="field" style="margin-bottom:10px"><label for="table-name">Stol nomi</label><input class="ctl" id="table-name" placeholder="Masalan: Stol 1" required /></div>
-              <div class="field" style="margin-bottom:10px"><label for="table-capacity">Sig‘imi (kishilik)</label><input class="ctl" id="table-capacity" type="number" min="1" value="4" required /></div>
-              <div class="field" style="margin-bottom:12px"><label for="table-image">Stol rasmi (ixtiyoriy)</label><input class="ctl" id="table-image" type="file" accept="image/*" /></div>
-              <div class="thumb-preview" id="table-preview"><span>Stol rasmi</span></div>
-              <button class="btn btn-primary btn-block" type="submit" style="margin-top:12px">＋ Stol qo‘shish</button>
-            </form>
-          </article>
-
-          <article class="card">
+          <article class="card card--wide">
             <div class="card-head">
               <div><span class="step-label">STOLLAR RO‘YXATI</span><h3>Stollar</h3><p class="sub">Stolni tanlang — alohida sahifada ko‘rsatiladi.</p></div>
-              <span class="count-badge" id="table-count-badge" title="Jami stollar soni">0</span>
+              <div style="display:flex;gap:8px;align-items:center">
+                <span class="count-badge" id="table-count-badge" title="Jami stollar soni">0</span>
+                <button class="btn btn-primary btn-sm" id="table-add-toggle" type="button">＋ Stol qo‘shish</button>
+              </div>
             </div>
             <p class="empty" id="tables-empty">Hali stol qo‘shilmagan.</p>
             <div class="table-wrap" style="margin-top:10px">
@@ -128,6 +128,29 @@
                 <tbody id="table-items"></tbody>
               </table>
             </div>
+          </article>
+        </div>
+
+        <!-- Yangi stol — alohida sahifa -->
+        <div class="cards-grid panels" data-owner-panel="table-add" hidden>
+          <article class="card card--wide">
+            <div class="detail-topbar">
+              <button class="btn btn-ghost btn-sm back-to-tables" type="button">← Orqaga qaytish</button>
+              <span class="step-label">YANGI STOL</span>
+            </div>
+            <form id="table-form" class="panel-form" novalidate style="margin:0">
+              <div class="form-grid">
+                <div class="field"><label for="table-name">Stol nomi</label><input class="ctl" id="table-name" placeholder="Masalan: Stol 1" required /></div>
+                <div class="field"><label for="table-capacity">Sig‘imi (kishilik)</label><input class="ctl" id="table-capacity" type="number" min="1" value="4" required /></div>
+                <div class="field"><label for="table-image">Stol rasmi (ixtiyoriy)</label><input class="ctl" id="table-image" type="file" accept="image/*" /></div>
+                <div class="field"><label>Ko‘rinishi</label><div class="thumb-preview" id="table-preview"><span>Stol rasmi</span></div></div>
+              </div>
+              <div style="display:flex;gap:10px;margin-top:12px">
+                <button class="btn btn-primary btn-sm" type="submit">＋ Saqlash</button>
+                <button class="btn btn-ghost btn-sm back-to-tables" type="button">Bekor qilish</button>
+              </div>
+              <p class="form-message" id="table-form-message"></p>
+            </form>
           </article>
         </div>
 
@@ -160,40 +183,89 @@
           </article>
         </div>
 
-        <!-- ======================= OVQATLAR/ICHIMLIKLAR ======================= -->
-        <div class="cards-grid panels" data-owner-panel="meals" hidden>
-          <article class="card">
-            <div class="card-head"><div><span class="step-label">Ovqatlar</span><h3>Ovqatlar</h3><p class="sub">Taom nomi va narxini kiriting.</p></div></div>
-            <form id="product-form" novalidate>
-              <div class="field" style="margin-bottom:10px"><label for="product-name">Taom nomi</label><input class="ctl" id="product-name" placeholder="Masalan: Lag‘mon" required /></div>
-              <div class="field" style="margin-bottom:10px"><label for="product-price">Narxi (so‘m)</label><input class="ctl" id="product-price" type="number" min="0" placeholder="32000" required /></div>
-              <div class="field" style="margin-bottom:10px"><label for="product-kind">Turi</label>
-                                <select class="ctl" id="product-kind"><option value="food">Ovqat</option><option value="drink">Ichimlik</option><option value="fruit">Meva</option><option value="dessert">Shirinlik</option></select>
+<!-- ======================= OVQATLAR: TAOMLAR ======================= -->
+        <div class="cards-grid panels" data-owner-panel="meals-food" hidden>
+          <article class="card card--wide">
+            <div class="card-head">
+              <div><span class="step-label">MENYU — TAOMLAR</span><h3>Taomlar</h3><p class="sub">Qo'shilgan taomlar shu yerda chiqadi.</p></div>
+              <div style="display:flex;gap:8px;align-items:center">
+                <span class="count-badge" id="food-count-badge" title="Jami taomlar soni">0</span>
+                <button class="btn btn-primary btn-sm" type="button" data-product-add data-kind="food" data-return-view="meals-food">＋ Qo‘shish</button>
               </div>
-              <div class="field" style="margin-bottom:12px"><label for="product-image">Taom rasmi (ixtiyoriy)</label><input class="ctl" id="product-image" type="file" accept="image/*" /></div>
-              <div class="thumb-preview" id="product-preview"><span>Taom rasmi</span></div>
-              <button class="btn btn-primary btn-block" type="submit" style="margin-top:12px">＋ Menyuga qo‘shish</button>
-            </form>
-            <p class="empty" id="products-empty">Hali taom qo‘shilmagan.</p>
+            </div>
+            <p class="empty" id="products-empty">Hali taom qo'shilmagan.</p>
             <div class="items" id="product-items"></div>
           </article>
+        </div>
 
-                    <article class="card">
-            <div class="card-head"><div><span class="step-label">03 / Ichimliklar</span><h3>Ichimliklar</h3><p class="sub">Qo'shilgan ichimliklar shu yerda chiqadi.</p></div></div>
+        <!-- ======================= OVQATLAR: ICHIMLIKLAR ======================= -->
+        <div class="cards-grid panels" data-owner-panel="meals-drink" hidden>
+          <article class="card card--wide">
+            <div class="card-head">
+              <div><span class="step-label">MENYU — ICHIMLIKLAR</span><h3>Ichimliklar</h3><p class="sub">Qo'shilgan ichimliklar shu yerda chiqadi.</p></div>
+              <div style="display:flex;gap:8px;align-items:center">
+                <span class="count-badge" id="drink-count-badge" title="Jami ichimliklar soni">0</span>
+                <button class="btn btn-primary btn-sm" type="button" data-product-add data-kind="drink" data-return-view="meals-drink">＋ Qo‘shish</button>
+              </div>
+            </div>
             <p class="empty" id="drinks-empty">Hali ichimlik qo'shilmagan.</p>
             <div class="items" id="drink-items"></div>
           </article>
+        </div>
 
-          <article class="card">
-            <div class="card-head"><div><span class="step-label">04 / Mevalar</span><h3>Mevalar</h3><p class="sub">Qo'shilgan mevalar shu yerda chiqadi.</p></div></div>
+        <!-- ======================= OVQATLAR: MEVALAR ======================= -->
+        <div class="cards-grid panels" data-owner-panel="meals-fruit" hidden>
+          <article class="card card--wide">
+            <div class="card-head">
+              <div><span class="step-label">MENYU — MEVALAR</span><h3>Mevalar</h3><p class="sub">Qo'shilgan mevalar shu yerda chiqadi.</p></div>
+              <div style="display:flex;gap:8px;align-items:center">
+                <span class="count-badge" id="fruit-count-badge" title="Jami mevalar soni">0</span>
+                <button class="btn btn-primary btn-sm" type="button" data-product-add data-kind="fruit" data-return-view="meals-fruit">＋ Qo‘shish</button>
+              </div>
+            </div>
             <p class="empty" id="fruits-empty">Hali meva qo'shilmagan.</p>
             <div class="items" id="fruit-items"></div>
           </article>
+        </div>
 
-          <article class="card">
-            <div class="card-head"><div><span class="step-label">05 / Shirinliklar</span><h3>Shirinliklar</h3><p class="sub">Qo'shilgan shirinliklar shu yerda chiqadi.</p></div></div>
+        <!-- ======================= OVQATLAR: SHIRINLIKLAR ======================= -->
+        <div class="cards-grid panels" data-owner-panel="meals-dessert" hidden>
+          <article class="card card--wide">
+            <div class="card-head">
+              <div><span class="step-label">MENYU — SHIRINLIKLAR</span><h3>Shirinliklar</h3><p class="sub">Qo'shilgan shirinliklar shu yerda chiqadi.</p></div>
+              <div style="display:flex;gap:8px;align-items:center">
+                <span class="count-badge" id="dessert-count-badge" title="Jami shirinliklar soni">0</span>
+                <button class="btn btn-primary btn-sm" type="button" data-product-add data-kind="dessert" data-return-view="meals-dessert">＋ Qo‘shish</button>
+              </div>
+            </div>
             <p class="empty" id="desserts-empty">Hali shirinlik qo'shilmagan.</p>
             <div class="items" id="dessert-items"></div>
+          </article>
+        </div>
+
+        <!-- Yangi mahsulot — alohida sahifa -->
+        <div class="cards-grid panels" data-owner-panel="meals-add" hidden>
+          <article class="card card--wide">
+            <div class="detail-topbar">
+              <button class="btn btn-ghost btn-sm" id="product-back-btn" type="button">← Orqaga qaytish</button>
+              <span class="step-label">YANGI MAHSULOT</span>
+            </div>
+            <form id="product-form" class="panel-form" novalidate style="margin:0">
+              <div class="form-grid">
+                <div class="field"><label for="product-name">Nomi</label><input class="ctl" id="product-name" placeholder="Masalan: Lag‘mon" required /></div>
+                <div class="field"><label for="product-price">Narxi (so‘m)</label><input class="ctl" id="product-price" type="number" min="0" placeholder="32000" required /></div>
+                <div class="field"><label for="product-kind">Turi</label>
+                  <select class="ctl" id="product-kind"><option value="food">Ovqat</option><option value="drink">Ichimlik</option><option value="fruit">Meva</option><option value="dessert">Shirinlik</option></select>
+                </div>
+                <div class="field"><label for="product-image">Rasmi (ixtiyoriy)</label><input class="ctl" id="product-image" type="file" accept="image/*" /></div>
+              </div>
+              <div class="field" style="max-width:280px"><label>Ko‘rinishi</label><div class="thumb-preview" id="product-preview"><span>Taom rasmi</span></div></div>
+              <div style="display:flex;gap:10px;margin-top:12px">
+                <button class="btn btn-primary btn-sm" type="submit">＋ Saqlash</button>
+                <button class="btn btn-ghost btn-sm" id="product-form-cancel" type="button">Bekor qilish</button>
+              </div>
+              <p class="form-message" id="product-form-message"></p>
+            </form>
           </article>
         </div>
 
@@ -235,8 +307,25 @@
               </select>
             </div>
 
-            <form id="staff-create-form" class="panel-form" hidden novalidate>
-              <div class="card-head" style="margin-bottom:12px"><div><span class="step-label">YANGI XODIM</span><h3 style="margin:0">Xodim qo‘shish</h3></div></div>
+            <div class="table-wrap" style="margin-top:6px">
+              <table class="data-table">
+                <thead><tr><th>Xodim</th><th>Telefon</th><th>Lavozim</th><th>Yosh</th><th>Oylik</th><th>Staj</th><th>Holati</th><th></th></tr></thead>
+                <tbody id="staff-list">
+                  <tr><td colspan="8" style="text-align:center;color:var(--muted)">Yuklanmoqda...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </article>
+        </div>
+
+        <!-- Yangi xodim — alohida sahifa -->
+        <div class="cards-grid" data-owner-panel="staff-add" hidden>
+          <article class="card card--wide">
+            <div class="detail-topbar">
+              <button class="btn btn-ghost btn-sm back-to-staff" type="button">← Orqaga qaytish</button>
+              <span class="step-label">YANGI XODIM</span>
+            </div>
+            <form id="staff-create-form" class="panel-form" novalidate style="margin:0">
               <div class="form-grid">
                 <div class="field"><label for="staff-first">Ism</label><input class="ctl" id="staff-first" placeholder="Ali" required /></div>
                 <div class="field"><label for="staff-last">Familiya</label><input class="ctl" id="staff-last" placeholder="Aliyev" required /></div>
@@ -250,19 +339,10 @@
               </div>
               <div style="display:flex;gap:10px;margin-top:12px">
                 <button class="btn btn-primary btn-sm" type="submit">Saqlash</button>
-                <button class="btn btn-ghost btn-sm" type="button" id="staff-create-cancel">Bekor qilish</button>
+                <button class="btn btn-ghost btn-sm back-to-staff" type="button">Bekor qilish</button>
               </div>
               <p class="form-message" id="staff-create-message"></p>
             </form>
-
-            <div class="table-wrap" style="margin-top:6px">
-              <table class="data-table">
-                <thead><tr><th>Xodim</th><th>Telefon</th><th>Lavozim</th><th>Yosh</th><th>Oylik</th><th>Staj</th><th>Holati</th><th></th></tr></thead>
-                <tbody id="staff-list">
-                  <tr><td colspan="8" style="text-align:center;color:var(--muted)">Yuklanmoqda...</td></tr>
-                </tbody>
-              </table>
-            </div>
           </article>
         </div>
 

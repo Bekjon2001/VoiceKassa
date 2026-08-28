@@ -12,6 +12,13 @@ const VIEW_TITLES = {
   meals: ["Ovqatlar", "Menyu va ichimliklarni boshqaring."],
   "staff-detail": ["Xodim profili", "Xodim ma’lumotlari va maosh tarixi."],
   "table-detail": ["Stol profili", "Stol ma’lumotlari va holati."],
+  "staff-add": ["Yangi xodim", "Yangi xodim qo‘shish."],
+  "table-add": ["Yangi stol", "Yangi stol qo‘shish."],
+  "meals-food": ["Taomlar", "Menyudagi taomlar ro‘yxati."],
+  "meals-drink": ["Ichimliklar", "Menyudagi ichimliklar ro‘yxati."],
+  "meals-fruit": ["Mevalar", "Menyudagi mevalar ro‘yxati."],
+  "meals-dessert": ["Shirinliklar", "Menyudagi shirinliklar ro‘yxati."],
+  "meals-add": ["Yangi mahsulot", "Menyuga yangi mahsulot qo‘shish."],
   supermarket: ["Supermarket", "Mahsulotlar, narxlar va ombor qoldig‘i shu bo‘limda boshqariladi."],
   shop: ["Do‘kon", "Tovarlar, narxlar va sotuvlar shu bo‘limda boshqariladi."],
   organization: ["Tashkilot", "Umumiy tashkilot ma’lumotlari shu bo‘limda boshqariladi."],
@@ -25,8 +32,11 @@ const ROLE_META = {
   4: { badge: "role-badge--cook", avatar: "avatar--cook" },
 };
 const STAFF_VIEWS = ["staff", "tables", "meals"];
-// Restoran guruhiga tegishli barcha ko‘rinishlar (flyout bo‘limlari + ularning profillari)
-const RESTAURANT_VIEWS = [...STAFF_VIEWS, "staff-detail", "table-detail"];
+// Restoran guruhiga tegishli barcha ko‘rinishlar (flyout bo‘limlari + ularning qo'shish/profil sahifalari)
+const RESTAURANT_VIEWS = [...STAFF_VIEWS, "staff-detail", "table-detail", "staff-add", "table-add",
+  "meals-food", "meals-drink", "meals-fruit", "meals-dessert", "meals-add"];
+// Menyu kategoriyalari — "Ovqatlar" flyout bo'limlari
+const MEALS_VIEWS = ["meals-food", "meals-drink", "meals-fruit", "meals-dessert", "meals-add"];
 
 // ---------- Holat ----------
 let ownerToken = "";
@@ -232,6 +242,13 @@ function setOwnerView(view) {
   if (restaurantGroup && isRestaurantView) restaurantGroup.classList.remove("open");
   if (toggleBtn) toggleBtn.classList.toggle("active", isRestaurantView);
 
+  // "Ovqatlar" ichki (nested) flyoutini boshqarish
+  const mealsGroup = document.querySelector(".nav-group[data-owner-group=\"meals\"]");
+  const mealsToggle = mealsGroup ? mealsGroup.querySelector("[data-owner-toggle]") : null;
+  const isMealsView = MEALS_VIEWS.includes(view);
+  if (mealsGroup && isMealsView) mealsGroup.classList.remove("open");
+  if (mealsToggle) mealsToggle.classList.toggle("active", isMealsView);
+
   // Nav itemlarini belgilash
   document.querySelectorAll(".nav-item[data-owner-view]")
     .forEach(nav => nav.classList.toggle("active", nav.dataset.ownerView === view));
@@ -378,6 +395,8 @@ function renderProducts() {
   $("drink-count").textContent = String(drinks.length);
   $("fruit-count").textContent = String(fruits.length);
   $("dessert-count").textContent = String(desserts.length);
+  const badgeMap = { "food-count-badge": foods.length, "drink-count-badge": drinks.length, "fruit-count-badge": fruits.length, "dessert-count-badge": desserts.length };
+  Object.entries(badgeMap).forEach(([id, n]) => { const el = $(id); if (el) el.textContent = String(n); });
   const rowHtml = product => `<div class="item">
       <img class="item-thumb" src="${product.image}" alt="">
       <div class="item-body"><strong>${esc(product.name)}</strong><small>${product.isAvailable ? "Mavjud" : "Vaqtincha yo‘q"}</small></div>
@@ -587,6 +606,12 @@ function requireOwner() {
   return false;
 }
 // ---------- CRUD: Stol ----------
+// "＋ Stol qo'shish" — alohida sahifada ochiladi
+$("table-add-toggle").addEventListener("click", () => {
+  $("table-form-message").textContent = "";
+  setOwnerView("table-add");
+});
+
 $("table-form").addEventListener("submit", event => {
   event.preventDefault();
   const name = $("table-name").value.trim();
@@ -614,6 +639,7 @@ async function createTable(name, capacity, image, form) {
     form.reset();
     $("table-preview").innerHTML = "<span>Stol rasmi</span>";
     renderTables();
+    setOwnerView("tables"); // saqlangach ro'yxatga (getList) qaytish
     flash("Stol qo‘shildi.");
     } catch (error) {
     flash("Stolni saqlab bo‘lmadi: " + error.message, true);
@@ -640,6 +666,20 @@ $("table-status-save").addEventListener("click", async () => {
   }
 }); 
 // ---------- CRUD: Mahsulot (taom/ichimlik) ----------
+// "＋ Qo'shish" (menyu kategoriyalari) — alohida sahifada ochiladi; qaysi bo'limdan bosilgani eslab qolinadi
+let mealsReturnView = "meals-food";
+document.querySelectorAll("[data-product-add]").forEach(btn => {
+  btn.addEventListener("click", () => {
+    mealsReturnView = btn.dataset.returnView || "meals-food";
+    $("product-kind").value = btn.dataset.kind || "food";
+    $("product-form-message").textContent = "";
+    setOwnerView("meals-add");
+  });
+});
+
+$("product-back-btn").addEventListener("click", () => setOwnerView(mealsReturnView));
+$("product-form-cancel").addEventListener("click", () => setOwnerView(mealsReturnView));
+
 $("product-form").addEventListener("submit", event => {
   event.preventDefault();
   const name = $("product-name").value.trim();
@@ -669,6 +709,7 @@ async function createProduct(name, price, kind, image, form) {
     form.reset();
     $("product-preview").innerHTML = "<span>Taom rasmi</span>";
     renderProducts();
+    setOwnerView(mealsReturnView); // saqlangach ro'yxatga (getList) qaytish
         flash(kind === "drink" ? "Ichimlik menyuga qo‘shildi."
           : kind === "fruit" ? "Meva menyuga qo‘shildi."
           : kind === "dessert" ? "Shirinlik menyuga qo‘shildi."
@@ -734,14 +775,10 @@ $("staff-export-btn").addEventListener("click", () => {
   flash("Xodimlar ro‘yxati CSV ko‘rinishida yuklab olindi.");
 });
 
+// "＋ Xodim qo'shish" — alohida sahifada ochiladi
 $("staff-add-btn").addEventListener("click", () => {
-  const form = $("staff-create-form");
-  form.hidden = !form.hidden;
-  if (!form.hidden) $("staff-first").focus();
-});
-
-$("staff-create-cancel").addEventListener("click", () => {
-  $("staff-create-form").hidden = true;
+  $("staff-create-message").textContent = "";
+  setOwnerView("staff-add");
 });
 
 $("staff-search").addEventListener("input", event => {
@@ -772,9 +809,9 @@ $("staff-create-form").addEventListener("submit", async event => {
     });
     staff.push(savedToRow(saved));
     event.target.reset();
-    event.target.hidden = true;
     renderStaff();
     setMsg(message, "Xodim qo‘shildi.", "ok");
+    setOwnerView("staff"); // saqlangach ro'yxatga (getList) qaytish
     flash("Xodim qo‘shildi.");
   } catch (error) {
     setMsg(message, error.message, "err");

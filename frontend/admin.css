@@ -176,7 +176,8 @@ button{font-family:inherit}
 .detail-item strong{display:block;margin-top:5px;font-size:14.5px;word-break:break-word}
 
 /* ---------- Stollar ro'yxati (tablitsa) ---------- */
-.data-table.data-table--compact{min-width:480px}
+.card--wide .data-table--compact,
+.data-table--compact{min-width:520px}
 .table-num{color:var(--muted);font-weight:600}
 
 /* ---------- Alohida sahifa: stol/xodim profili ---------- */
