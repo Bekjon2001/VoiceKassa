@@ -792,16 +792,39 @@ function playAudioBlob(blob, signal) {
   return new Promise((resolve, reject) => {
     if (!aiAudioEl) aiAudioEl = new Audio();
     const url = URL.createObjectURL(blob);
-    aiAudioEl.src = url;
-    aiAudioEl.onended = () => { URL.revokeObjectURL(url); resolve(); };
-    aiAudioEl.onerror = () => { URL.revokeObjectURL(url); reject(new Error("audio playback")); };
-    const onAbort = () => {
-      aiAudioEl.pause();
+    const audio = aiAudioEl;
+    let settled = false;
+    const cleanup = () => {
       URL.revokeObjectURL(url);
-      reject(new DOMException("aborted", "AbortError"));
+      audio.onended = null;
+      audio.onerror = null;
+      audio.oncanplay = null;
+      audio.onloadeddata = null;
+    };
+    const finish = (err) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      if (err) reject(err); else resolve();
+    };
+    const onAbort = () => {
+      try { audio.pause(); } catch { /* ignore */ }
+      finish(new DOMException("aborted", "AbortError"));
     };
     signal.addEventListener("abort", onAbort, { once: true });
-    aiAudioEl.play().catch(err => { URL.revokeObjectURL(url); reject(err); });
+    audio.onended = () => finish();
+    audio.onerror = () => finish(new Error("audio playback"));
+    // src ni play() dan OLDIN o'rnatamiz va ma'lumot tayyor bo'lishini
+    // kutamiz — bu brauzer "interrupted" xatosining oldini oladi.
+    audio.src = url;
+    const start = () => {
+      const p = audio.play();
+      if (p && typeof p.then === "function") {
+        p.catch(err => finish(err));
+      }
+    };
+    if (audio.readyState >= 2) start();
+    else audio.onloadeddata = start;
   });
 }
 
@@ -855,8 +878,11 @@ async function aiSpeak(text) {
     }
   } catch (error) {
     if (error && error.name === "AbortError") return;
-    // Zaxira: brauzer ovozi (lokkal o'zbekcha ovoz bo'lmasa ham ishlaydi)
-    if (canSpeak) {
+    console.warn("AI ovoz yordamchi xatosi:", error);
+    if (aiMsgEl) setMsg(aiMsgEl, "Ovoz xizmati javob bera olmadi. Qayta urinib ko'ring.", "err");
+    // Zaxira: brauzer ovozi. Faqat o'zbek ovozi mavjud bo'lsa ishlatamiz —
+    // aks holda noto'g'ri talaffuz beradi va foydalanuvchini chalg'itadi.
+    if (canSpeak && hasLocalUzbekVoice()) {
       try {
         const utter = new SpeechSynthesisUtterance(clean || "Javob topilmadi.");
         utter.lang = "uz-UZ";
@@ -867,6 +893,14 @@ async function aiSpeak(text) {
       } catch { /* ignore */ }
     }
   }
+}
+
+// Brauzerda o'zbekcha (uz-UZ) yoki ruscha (ru-RU) ovoz mavjudligini tekshiradi.
+// Edge TTS ishlamay qolgan taşırdir, noto'g'ri til ovozini ishlatmaslik uchun.
+function hasLocalUzbekVoice() {
+  if (!canSpeak) return false;
+  const voices = window.speechSynthesis.getVoices() || [];
+  return voices.some(v => /^(uz|ru)/i.test(v.lang || ""));
 }
 
 // Savolni backendga yuborish va javobni ko'rsatish

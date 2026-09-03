@@ -54,20 +54,27 @@ public sealed class EdgeTtsService
 
         if (text.Length > 1500) text = text[..1500];
 
-        // Bing ba'zan birinchi urinishda javob bermaydi (so'rov 45-60s cho'ziladi
-        // yoki vaqtincha xato beradi) — aynan shu sababli ovoz ba'zan chiqmaydi.
-        // Bir marta qayta urinamiz.
-        for (var attempt = 1; ; attempt++)
+        // Bing ba'zan birinchi urinishda audio qaytarmaydi (so'rov 30-45s
+        // cho'ziladi yoki vaqtincha xato beradi) — aynan shu sababli ovoz
+        // ba'zan chiqmaydi. 3 martagacha qayta urinib ko'ramiz.
+        Exception? lastError = null;
+        for (var attempt = 1; attempt <= 3; attempt++)
         {
+            if (ct.IsCancellationRequested) throw new OperationCanceledException(ct);
             try
             {
-                                return await SynthesizeOnceAsync(text, voice!, ct);
+                return await SynthesizeOnceAsync(text, voice!, ct);
             }
-            catch (Exception) when (attempt < 2 && !ct.IsCancellationRequested)
+            catch (OperationCanceledException) { throw; }
+            catch (Exception ex)
             {
-                // Birinchi urinish muvaffaqiyatsiz — qayta urinamiz
+                lastError = ex;
+                // 2-urinishdan keyin biroz kutamiz, so'ng qayta urinamiz
+                try { await Task.Delay(TimeSpan.FromMilliseconds(400 * attempt), ct); }
+                catch (OperationCanceledException) { throw; }
             }
         }
+        throw lastError ?? new InvalidOperationException("Ovozlash xizmati audio qaytarmadi.");
     }
 
     private async Task<byte[]> SynthesizeOnceAsync(string text, string voice, CancellationToken ct)
@@ -80,7 +87,7 @@ public sealed class EdgeTtsService
             ApplyHeaders(ws);
 
             using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            linked.CancelAfter(TimeSpan.FromSeconds(60));
+            linked.CancelAfter(TimeSpan.FromSeconds(30));
 
             await ws.ConnectAsync(new Uri(url), linked.Token);
             await SendTextAsync(ws, BuildSpeechConfig(), linked.Token);
