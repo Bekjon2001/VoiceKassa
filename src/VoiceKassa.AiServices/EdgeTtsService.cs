@@ -45,6 +45,8 @@ public sealed class EdgeTtsService
         else if (!isRussian && voice.StartsWith("ru", StringComparison.OrdinalIgnoreCase))
             voice = defaultVoice;
 
+        text = NormalizeSpeechText(text);
+
         // Madina/Sardor raqamlarni rus talaffuzida o'qiydi — shuning uchun
         // o'zbekcha matnda raqamlar/sanalarni o'zbekcha so'zlarga aylantiramiz.
         if (!isRussian && voice.StartsWith("uz", StringComparison.OrdinalIgnoreCase))
@@ -240,36 +242,42 @@ private static string BuildUrl()
         return false;
     }
 
-    /// <summary>Raqamlar/sanalarni o'zbekcha so'zlarga aylantiradi (TTS to'g'ri o'qishi uchun).</summary>
     public static string NormalizeUzbekNumbers(string text)
     {
         if (string.IsNullOrWhiteSpace(text)) return text ?? "";
 
-        // 1) Sanalar: "2027-01-25" → "25 yanvar 2027-yil", "25.08.2026" → "25 avgust 2026-yil"
+        text = NormalizeSpeechText(text);
+
         text = Regex.Replace(text, @"\b(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})\b",
             m => DatePhrase(int.Parse(m.Groups[1].Value), int.Parse(m.Groups[2].Value), int.Parse(m.Groups[3].Value)));
         text = Regex.Replace(text, @"\b(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})\b",
             m => DatePhrase(int.Parse(m.Groups[3].Value), int.Parse(m.Groups[2].Value), int.Parse(m.Groups[1].Value)));
         text = text.Replace("-yil", " yil");
 
-        // 2) Foiz: "50%" → "50 foiz"
         text = Regex.Replace(text, @"(\d)\s*%", "$1 foiz");
-
-        // 3) O'nlik kasr: "1.5" yoki "1,5" → "1 nuqta 5"
         text = Regex.Replace(text, @"(?<=\d)[.,](?=\d)", " nuqta ");
-
-        // 4) Ming ajratgichlari: "100 000" / "100'000" / "100,000" → "100000"
         text = Regex.Replace(text, @"(?<=\d)[\s'’](?=\d{3}(\D|$))", "");
         text = Regex.Replace(text, @"(?<=\d),(?=\d{3}(\D|$))", "");
-
-        // 5) Vaqt: "14:30" → "14 soat 30"
         text = Regex.Replace(text, @"\b(\d{1,2}):(\d{2})\b", "$1 soat $2");
-
-        // 6) Qolgan barcha sonlar → o'zbekcha so'zlar
         text = Regex.Replace(text, @"\d+", m => NumberToUzbekWords(long.Parse(m.Value)));
 
-        // 7) Ortiqcha bo'shliqlarni yig'ish
         return Regex.Replace(text, @"\s{2,}", " ").Trim();
+    }
+
+    public static string NormalizeSpeechText(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return text ?? "";
+
+        var cleaned = Regex.Replace(text, @"```[\s\S]*?```", " ");
+        cleaned = Regex.Replace(cleaned, @"`([^`]*)`", "$1");
+        cleaned = Regex.Replace(cleaned, @"\[([^\]]+)\]\([^)]*\)", "$1");
+        cleaned = Regex.Replace(cleaned, @"https?:\/\/\S+", " ");
+        cleaned = Regex.Replace(cleaned, @"[*_~#>]+", " ");
+        cleaned = Regex.Replace(cleaned, @"\s*[\r\n]+\s*", ". ");
+        cleaned = Regex.Replace(cleaned, @"\s*([;:])\s*", ". ");
+        cleaned = Regex.Replace(cleaned, @"\s{2,}", " ");
+    
+        return cleaned.Trim();
     }
 
     private static string DatePhrase(int year, int month, int day)

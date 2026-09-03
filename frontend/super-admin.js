@@ -716,53 +716,50 @@ function buildAiTable(rows) {
   return table;
 }
 
-// --- Ovoz tanlash: eng yaxshi o'zbekcha (yatoki mos) ovozni topish ---
-let aiVoice = null; // tanlangan ovoz
-function pickUzbekVoice() {
+// --- Ovoz tanlash: faqat ayol ovozlar (o'zbek va rus) ---
+let aiVoice = null;
+function pickFemaleVoice() {
   if (!window.speechSynthesis) return null;
-  const voices = window.speechSynthesis.getVoices();
-  if (!voices || voices.length === 0) return null;
-  // 1) Eng avval o'zbekcha ovozlarni izlaymiz
-  const uz = voices.filter(v => (v.lang || "").toLowerCase().replace("_", "-").startsWith("uz"));
-  if (uz.length) {
-    // Yaxshi (Microsoft / Google / o'zbekcha muruvvatli) ovozni ustun qilamiz
-    const best = uz.find(v => /(microsoft|google|natasha|madina|uzbek|dilnoza|neu)/i.test(v.name + " " + v.lang));
-    return best || uz[0];
-  }
-  // 2) O'zbekcha bo'lmasa — o'zbekcha belgilarni bera oladigan yaqin tillardan olamiz
-  const fallback = voices.find(v => /(tr-TR|az-AZ|kk-KZ|ky-KG|ru-RU)/i.test(v.lang || ""));
-  return fallback || voices[0] || null;
+  const voices = window.speechSynthesis.getVoices() || [];
+  const preferredNames = ["Madina", "Svetlana", "Zira", "Aynur", "Artemida", "Microsoft", "Google"];
+  const allFemale = voices.filter(v => {
+    const name = (v.name || "").toLowerCase();
+    const lang = (v.lang || "").toLowerCase();
+    return /(madina|svetlana|zira|aynur|female|woman|ayol)/i.test(name + " " + lang)
+      || preferredNames.some(item => name.includes(item.toLowerCase()));
+  });
+  if (allFemale.length) return allFemale[0];
+  return voices.find(v => /(uz|ru)/i.test(v.lang || "")) || voices[0] || null;
 }
 
-// Ovozlar ro'yxati brauzerda asinxron yuklanadi — yuklangach qayta tanlaymiz
 if (window.speechSynthesis) {
-  aiVoice = pickUzbekVoice();
-  window.speechSynthesis.onvoiceschanged = () => { aiVoice = pickUzbekVoice(); };
+  aiVoice = pickFemaleVoice();
+  window.speechSynthesis.onvoiceschanged = () => { aiVoice = pickFemaleVoice(); };
 }
 
 // Matnni ovozli o'qish uchun tozalash (markdown, emoji, kod, maxsus belgilarni olib tashlash → "imlo xatolari" yo'qoladi)
 function speechClean(text) {
   return String(text || "")
-    .replace(/```[\s\S]*?```/g, " ")                    // kod bloklari
-    .replace(/`([^`]*)`/g, "$1")                        // inline kod
-    .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")            // markdown havolalar
-    .replace(/\(https?:\/\/[^)\s]+\)/g, "")             // (URL) ko'rinishidagi havolalar
-    .replace(/https?:\/\/\S+/g, "")                     // qolgan URL'lar
-    .replace(/^#{1,6}\s*/gm, "")                        // sarlavhalar (#)
-    .replace(/[*_~]{1,}/g, "")                          // **, *, _, ~ (markdown)
-    .replace(/^[\s|:+\-]+$/gm, " ")                     // jadval ajratgich / gorizontal chiziqlar
-    .replace(/-{2,}/g, " ")                             // qolgan ko'p chiziqlar (---, ----)
-    // Ro'yxatlarni gapga aylantiramiz (o'qilganda to'g'ri eshitilishi uchun)
+    .replace(/```[\s\S]*?```/g, " ")
+    .replace(/`([^`]*)`/g, "$1")
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
+    .replace(/\(https?:\/\/[^)\s]+\)/g, "")
+    .replace(/https?:\/\/\S+/g, "")
+    .replace(/^#{1,6}\s*/gm, "")
+    .replace(/[*_~]{1,}/g, " ")
     .replace(/^\s*[-•▪◦‣]\s*/gm, ". ")
     .replace(/^\s*(\d+)[.):]\s*/gm, ". ")
-    // Emoji va rasm belgilarini olib tashlash
+    .replace(/^[\s|:+\-]+$/gm, " ")
+    .replace(/-{2,}/g, " ")
     .replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE0F}\u{2190}-\u{21FF}\u{2500}-\u{257F}\u{25A0}-\u{25FF}\u{2700}-\u{27BF}\u{1F680}]/gu, " ")
-    // Boshqa maxsus belgilar, tirnoq/bo'sh satrlarni tartibga solish
     .replace(/[│┃||]{1,}/g, " ")
     .replace(/[ \u00A0\u200B\u3000]+/g, " ")
     .replace(/\s*\n+\s*/g, ". ")
+    .replace(/\s*([;:])\s*/g, ". ")
     .replace(/\.{2,}/g, ".")
-    .replace(/[ \t]{2,}/g, " ")
+    .replace(/\s{2,}/g, " ")
+    .replace(/\s+([.,!?])/g, "$1")
+    .replace(/([.,!?])([A-Za-z\u0400-\u04FF])/g, "$1 $2")
     .replace(/\s+/g, " ")
     .trim();
 }
