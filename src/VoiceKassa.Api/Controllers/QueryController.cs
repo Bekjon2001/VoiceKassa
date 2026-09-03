@@ -57,7 +57,7 @@ public class QueryController : ControllerBase
     /// Brauzerning standart speechSynthesis ovozi bilan solishtirganda ancha sifatli.
     /// </summary>
     [HttpGet("speak-super")]
-    public async Task<IActionResult> SpeakSuper([FromQuery] string text, CancellationToken ct)
+    public async Task<IActionResult> SpeakSuper([FromQuery] string text, [FromQuery] string? voice, CancellationToken ct)
     {
         if (!await IsSuperAdmin(ct))
             return Unauthorized(new { error = "Super Admin sifatida kiring." });
@@ -67,7 +67,9 @@ public class QueryController : ControllerBase
 
         try
         {
-            var bytes = await _ttsService.SynthesizeAsync(text.Trim(), ct: ct);
+            // voice berilmasa — til avtomatik aniqlanadi: kirill matn → ruscha
+            // ovoz (ru-RU-SvetlanaNeural), o'zbekcha matn → uz-UZ-MadinaNeural.
+            var bytes = await _ttsService.SynthesizeAsync(text.Trim(), voice, ct);
             return File(bytes, "audio/mpeg");
         }
         catch (OperationCanceledException)

@@ -627,6 +627,21 @@ const aiMsgEl = $("sa-ai-message");
 let aiRecognition = null;
 let aiListening = false;
 
+// Chatda ko'rsatish uchun markdown belgilarni tozalash (qatorlar saqlanadi)
+function mdDisplayClean(text) {
+  return String(text || "")
+    .replace(/```[a-zA-Z]*\n?/g, "")                // kod blok belgilari
+    .replace(/`([^`]*)`/g, "$1")                    // inline kod
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")        // [havola](url) → matn
+    .replace(/^#{1,6}\s*/gm, "")                    // sarlavha belgilari (#)
+    .replace(/^\s*[-*•‣◦▪]{1,2}\s+/gm, "• ")        // ro'yxat belgisi (qalin '**' dan oldin!)
+    .replace(/(\*\*\*|___)([^\*_]+?)\1/g, "$2")     // ***qalin kursiv***
+    .replace(/(\*\*|__)([^\*_]+?)\1/g, "$2")        // **qalin**
+    .replace(/(\*|_)([^\*_]+?)\1/g, "$2")           // *kursiv*
+    .replace(/~~([^~]+)~~/g, "$1")                  // ~~o'chirilgan~~
+    .trim();
+}
+
 // Salvodagi sun'iy intellekt javobini chatga qo'shish
 function aiAddMessage(who, text) {
   const box = $("sa-ai-messages");
@@ -636,7 +651,7 @@ function aiAddMessage(who, text) {
   const label = document.createElement("span");
   label.textContent = who === "user" ? "Siz" : "AI";
   const body = document.createElement("div");
-  body.textContent = text;
+  body.textContent = who === "user" ? text : mdDisplayClean(text);
   div.appendChild(label);
   div.appendChild(body);
   box.appendChild(div);
