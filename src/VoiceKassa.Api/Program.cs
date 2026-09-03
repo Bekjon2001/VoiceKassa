@@ -22,6 +22,7 @@ var geminiOptions = new GeminiApiOptions
 };
 builder.Services.AddSingleton(geminiOptions);
 builder.Services.AddHttpClient<GeminiApiClient>();
+builder.Services.AddSingleton<EdgeTtsService>();
 
 // --- Application services / DI wiring ---
 builder.Services.AddScoped<IOrderRepository, OrderRepository>();

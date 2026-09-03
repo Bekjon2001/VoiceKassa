@@ -643,18 +643,139 @@ function aiAddMessage(who, text) {
   box.scrollTop = box.scrollHeight;
 }
 
-// Javobni ovoz bilan o'qish (agar toggle yoqilgan bo'lsa)
-function aiSpeak(text) {
-  if (!canSpeak) return;
+// --- Ovoz tanlash: eng yaxshi o'zbekcha (yatoki mos) ovozni topish ---
+let aiVoice = null; // tanlangan ovoz
+function pickUzbekVoice() {
+  if (!window.speechSynthesis) return null;
+  const voices = window.speechSynthesis.getVoices();
+  if (!voices || voices.length === 0) return null;
+  // 1) Eng avval o'zbekcha ovozlarni izlaymiz
+  const uz = voices.filter(v => (v.lang || "").toLowerCase().replace("_", "-").startsWith("uz"));
+  if (uz.length) {
+    // Yaxshi (Microsoft / Google / o'zbekcha muruvvatli) ovozni ustun qilamiz
+    const best = uz.find(v => /(microsoft|google|natasha|madina|uzbek|dilnoza|neu)/i.test(v.name + " " + v.lang));
+    return best || uz[0];
+  }
+  // 2) O'zbekcha bo'lmasa — o'zbekcha belgilarni bera oladigan yaqin tillardan olamiz
+  const fallback = voices.find(v => /(tr-TR|az-AZ|kk-KZ|ky-KG|ru-RU)/i.test(v.lang || ""));
+  return fallback || voices[0] || null;
+}
+
+// Ovozlar ro'yxati brauzerda asinxron yuklanadi — yuklangach qayta tanlaymiz
+if (window.speechSynthesis) {
+  aiVoice = pickUzbekVoice();
+  window.speechSynthesis.onvoiceschanged = () => { aiVoice = pickUzbekVoice(); };
+}
+
+// Matnni ovozli o'qish uchun tozalash (markdown, emoji, kod, maxsus belgilarni olib tashlash → "imlo xatolari" yo'qoladi)
+function speechClean(text) {
+  return String(text || "")
+    .replace(/```[\s\S]*?```/g, " ")                    // kod bloklari
+    .replace(/`([^`]*)`/g, "$1")                        // inline kod
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")            // markdown havolalar
+    .replace(/\(https?:\/\/[^)\s]+\)/g, "")             // (URL) ko'rinishidagi havolalar
+    .replace(/https?:\/\/\S+/g, "")                     // qolgan URL'lar
+    .replace(/^#{1,6}\s*/gm, "")                        // sarlavhalar (#)
+    .replace(/[*_~]{1,}/g, "")                          // **, *, _, ~ (markdown)
+    .replace(/^[\s|:+\-]+$/gm, " ")                     // jadval ajratgich / gorizontal chiziqlar
+    .replace(/-{2,}/g, " ")                             // qolgan ko'p chiziqlar (---, ----)
+    // Ro'yxatlarni gapga aylantiramiz (o'qilganda to'g'ri eshitilishi uchun)
+    .replace(/^\s*[-•▪◦‣]\s*/gm, ". ")
+    .replace(/^\s*(\d+)[.):]\s*/gm, ". ")
+    // Emoji va rasm belgilarini olib tashlash
+    .replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE0F}\u{2190}-\u{21FF}\u{2500}-\u{257F}\u{25A0}-\u{25FF}\u{2700}-\u{27BF}\u{1F680}]/gu, " ")
+    // Boshqa maxsus belgilar, tirnoq/bo'sh satrlarni tartibga solish
+    .replace(/[│┃||]{1,}/g, " ")
+    .replace(/[ \u00A0\u200B\u3000]+/g, " ")
+    .replace(/\s*\n+\s*/g, ". ")
+    .replace(/\.{2,}/g, ".")
+    .replace(/[ \t]{2,}/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+// Uzoq javobni o'zbeka ovozga bo'laklash (har bir bo'lak ~180 belgi, gaplar kesishmasin)
+function splitSpeechChunks(text, max) {
+  const sentences = text.split(/(?<=[.!?…])\s+/);
+  const chunks = [];
+  let cur = "";
+  for (const raw of sentences) {
+    const piece = String(raw || "").trim();
+    if (!piece) continue;
+    if (cur && (cur + " " + piece).length > max) { chunks.push(cur); cur = piece; }
+    else cur = cur ? cur + " " + piece : piece;
+  }
+  if (cur) chunks.push(cur);
+  // Hali ham uzun bo'lak bo'lsa (juda uzun so'zlar) — kesib tashlaymiz
+  const out = [];
+  for (const chunk of chunks) {
+    if (chunk.length <= max) { out.push(chunk); continue; }
+    for (let i = 0; i < chunk.length; i += max) out.push(chunk.slice(i, i + max));
+  }
+  return out;
+}
+
+let aiAudioEl = null;      // yagona audio pleer
+let aiSpeakAbort = null;   // joriy ovozni to'xtatish (yangi savol berilsa)
+
+function playAudioBlob(blob, signal) {
+  return new Promise((resolve, reject) => {
+    if (!aiAudioEl) aiAudioEl = new Audio();
+    const url = URL.createObjectURL(blob);
+    aiAudioEl.src = url;
+    aiAudioEl.onended = () => { URL.revokeObjectURL(url); resolve(); };
+    aiAudioEl.onerror = () => { URL.revokeObjectURL(url); reject(new Error("audio playback")); };
+    const onAbort = () => {
+      aiAudioEl.pause();
+      URL.revokeObjectURL(url);
+      reject(new DOMException("aborted", "AbortError"));
+    };
+    signal.addEventListener("abort", onAbort, { once: true });
+    aiAudioEl.play().catch(err => { URL.revokeObjectURL(url); reject(err); });
+  });
+}
+
+// Javobni o'qish: birinchi navbatda Edge TTS (backend proxy) — haqiqiy o'zbekcha
+// nervli ovoz (uz-UZ-MadinaNeural); ishlamasa brauzerning speechSynthesis ovozi zaxira sifatida.
+async function aiSpeak(text) {
   const toggle = $("ai-voice-toggle");
   if (toggle && !toggle.checked) return;
+  if (aiSpeakAbort) aiSpeakAbort.abort(); // oldingi ovozni to'xtatamiz
+  const control = new AbortController();
+  aiSpeakAbort = control;
+
+  const clean = speechClean(text);
+  if (!clean) return;
+  if (canSpeak) { try { window.speechSynthesis.cancel(); } catch { /* ignore */ } }
+  if (aiAudioEl) { try { aiAudioEl.pause(); } catch { /* ignore */ } }
+
+  const chunks = splitSpeechChunks(clean, 180);
   try {
-    window.speechSynthesis.cancel();
-    const utter = new SpeechSynthesisUtterance(text);
-    utter.lang = "uz-UZ";
-    utter.rate = 1;
-    window.speechSynthesis.speak(utter);
-  } catch { /* ignore */ }
+    for (const chunk of chunks) {
+      if (control.signal.aborted) return;
+      const res = await fetch("/Query/SpeakSuper/speak-super?text=" + encodeURIComponent(chunk), {
+        headers: superAdminToken ? { "X-Super-Admin-Token": superAdminToken } : {},
+        signal: control.signal,
+      });
+      if (!res.ok) throw new Error("tts-status-" + res.status);
+      const blob = await res.blob();
+      if (control.signal.aborted) return;
+      await playAudioBlob(blob, control.signal);
+    }
+  } catch (error) {
+    if (error && error.name === "AbortError") return;
+    // Zaxira: brauzer ovozi (lokkal o'zbekcha ovoz bo'lmasa ham ishlaydi)
+    if (canSpeak) {
+      try {
+        const utter = new SpeechSynthesisUtterance(clean || "Javob topilmadi.");
+        utter.lang = "uz-UZ";
+        if (aiVoice) utter.voice = aiVoice;
+        utter.rate = 0.95;
+        utter.pitch = 1;
+        window.speechSynthesis.speak(utter);
+      } catch { /* ignore */ }
+    }
+  }
 }
 
 // Savolni backendga yuborish va javobni ko'rsatish

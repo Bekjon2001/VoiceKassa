@@ -71,12 +71,13 @@ public class QueryService
     public async Task<AskQuestionResponse> AskSuperAdminAsync(string question, CancellationToken ct = default)
     {
         var businesses = await _businessRepo.GetAllBusinessesAsync(ct);
+        var now = DateTime.UtcNow;
 
-        var payload = new List<object>();
+        var payloadItems = new List<object>();
         foreach (var business in businesses)
         {
             var owner = await _businessRepo.GetOwnerByBusinessIdAnyStateAsync(business.Id, ct);
-            payload.Add(new
+            payloadItems.Add(new
             {
                 Id = business.Id,
                 Name = business.Name,
@@ -85,12 +86,25 @@ public class QueryService
                 Phone = business.PhoneNumber,
                 OwnerFullName = owner?.FullName,
                 OwnerPhone = owner?.PhoneNumber,
+                // To'lov / obuna ma'lumotlari — AI shu asosda "oxirgi 1 oy to'lovi" kabi
+                // savollarga javob beradi.
+                SubscriptionAmount = owner?.SubscriptionAmount ?? 0m,
+                PaymentPaidAt = owner?.PaymentPaidAt,      // oxirgi to'lov sanasi (UTC)
+                SubscriptionMonths = owner?.SubscriptionMonths ?? 0,
                 SubscriptionEndsAt = owner?.SubscriptionEndsAt,
-                SubscriptionActive = owner != null && owner.IsActive && owner.SubscriptionEndsAt > DateTime.UtcNow,
+                SubscriptionActive = owner != null && owner.IsActive && owner.SubscriptionEndsAt > now,
             });
         }
 
-        var contextJson = JsonSerializer.Serialize(payload);
+        // AI hozirgi sana va "oxirgi 1 oy" chegarasini bilishi uchun metama'lumot beriladi.
+        var context = new
+        {
+            NowUtc = now,
+            LastMonthUtc = now.AddMonths(-1),
+            Businesses = payloadItems,
+        };
+
+        var contextJson = JsonSerializer.Serialize(context);
         var answer = await _aiQuery.AnswerPlatformAsync(question, contextJson, ct);
         return new AskQuestionResponse { Answer = answer };
     }
