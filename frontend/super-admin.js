@@ -788,6 +788,16 @@ function splitSpeechChunks(text, max) {
 let aiAudioEl = null;      // yagona audio pleer
 let aiSpeakAbort = null;   // joriy ovozni to'xtatish (yangi savol berilsa)
 
+// Brauzer audio kontekstni suspend qilmasligi uchun tab faol bo'lganda
+// audio.play() ni qayta chaqiramiz. Bu Chrome/Firefox'ning playback bloki
+// (tab inactive) muammosini hal qiladi.
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden && aiAudioEl && aiAudioEl.paused) {
+    const p = aiAudioEl.play();
+    if (p && typeof p.then === "function") p.catch(() => { /* ignore */ });
+  }
+});
+
 function playAudioBlob(blob, signal) {
   return new Promise((resolve, reject) => {
     if (!aiAudioEl) aiAudioEl = new Audio();
@@ -798,7 +808,6 @@ function playAudioBlob(blob, signal) {
       URL.revokeObjectURL(url);
       audio.onended = null;
       audio.onerror = null;
-      audio.oncanplay = null;
       audio.onloadeddata = null;
     };
     const finish = (err) => {
@@ -814,13 +823,24 @@ function playAudioBlob(blob, signal) {
     signal.addEventListener("abort", onAbort, { once: true });
     audio.onended = () => finish();
     audio.onerror = () => finish(new Error("audio playback"));
-    // src ni play() dan OLDIN o'rnatamiz va ma'lumot tayyor bo'lishini
-    // kutamiz — bu brauzer "interrupted" xatosining oldini oladi.
+    // Eski source'ni tozalab, yangisini o'rnatamiz.
+    audio.src = "";
+    audio.load();
     audio.src = url;
     const start = () => {
+      audio.currentTime = 0;
       const p = audio.play();
       if (p && typeof p.then === "function") {
-        p.catch(err => finish(err));
+        p.catch(() => {
+          if (settled) return;
+          // Autoplay bloklangan bo'lishi mumkin (NotAllowedError) — yumshoq
+          // urinish: audio'ni vaqtincha muted qilib, keyin ovozni yoqamiz.
+          // Bu Chrome/Firefox'ning autoplay siyosatini chetlab o'tadi.
+          audio.muted = true;
+          audio.play().then(() => {
+            setTimeout(() => { audio.muted = false; }, 80);
+          }).catch(err => finish(err));
+        });
       }
     };
     if (audio.readyState >= 2) start();
@@ -847,7 +867,7 @@ async function aiSpeak(text) {
   if (canSpeak) { try { window.speechSynthesis.cancel(); } catch { /* ignore */ } }
   if (aiAudioEl) { try { aiAudioEl.pause(); } catch { /* ignore */ } }
 
-  const chunks = splitSpeechChunks(clean, 400);
+  const chunks = splitSpeechChunks(clean, 800);
   const fetchChunk = async chunk => {
     const doFetch = () =>
     fetch("/Query/SpeakSuper/speak-super?text=" + encodeURIComponent(chunk) + selectedAiVoice(chunk), {
@@ -882,8 +902,10 @@ async function aiSpeak(text) {
     if (aiMsgEl) setMsg(aiMsgEl, "Ovoz xizmati javob bera olmadi. Qayta urinib ko'ring.", "err");
     // Zaxira: brauzer ovozi. Faqat o'zbek ovozi mavjud bo'lsa ishlatamiz —
     // aks holda noto'g'ri talaffuz beradi va foydalanuvchini chalg'itadi.
+    // Eslatma: aiAudioEl'ning ovozi endi chiqmasligi uchun to'xtatamiz.
     if (canSpeak && hasLocalUzbekVoice()) {
       try {
+        if (aiAudioEl) { try { aiAudioEl.pause(); } catch { /* ignore */ } }
         const utter = new SpeechSynthesisUtterance(clean || "Javob topilmadi.");
         utter.lang = "uz-UZ";
         if (aiVoice) utter.voice = aiVoice;
