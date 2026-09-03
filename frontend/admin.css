@@ -199,6 +199,9 @@ button{font-family:inherit}
 .ai-msg>div{background:#fff;border:1px solid var(--line);border-radius:12px;padding:9px 13px;font-size:14px;line-height:1.5;white-space:pre-wrap;word-break:break-word}
 .ai-msg--user>div{background:var(--green);border-color:var(--green);color:#fff;border-bottom-right-radius:4px}
 .ai-msg--bot>div{background:#fff;border-bottom-left-radius:4px}
+.ai-table{border-collapse:collapse;margin:8px 0;font-size:13px;max-width:100%;display:block;overflow-x:auto}
+.ai-table th,.ai-table td{border:1px solid var(--line);padding:4px 9px;text-align:left}
+.ai-table th{background:#eef3ef;font-weight:700;white-space:nowrap}
 .ai-composer{display:flex;gap:8px;margin-top:12px}
 .ai-composer .ctl{flex:1;min-width:0}
 .ai-composer .btn{flex:0 0 auto}

@@ -183,7 +183,7 @@ private static string BuildUrl()
     {
         const string json = "{\"context\":{\"synthesis\":{\"audio\":{\"metadataoptions\":" +
                             "{\"sentenceBoundaryEnabled\":\"true\",\"wordBoundaryEnabled\":\"false\"}," +
-                            "\"outputFormat\":\"audio-24khz-48kbitrate-mono-mp3\"}}}}";
+                            "\"outputFormat\":\"audio-24khz-96kbitrate-mono-mp3\"}}}}";
         return $"X-Timestamp:{DateToString()}\r\n" +
                "Content-Type:application/json; charset=utf-8\r\n" +
                "Path:speech.config\r\n\r\n" + json + "\r\n";
@@ -198,7 +198,7 @@ private static string BuildUrl()
                $"X-Timestamp:{DateToString()}Z\r\n" +
                "Path:ssml\r\n\r\n" +
                $"<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='{lang}'>" +
-               $"<voice name='{voice}'><prosody pitch='+0Hz' rate='+10%' volume='+0%'>" +
+               $"<voice name='{voice}'><prosody pitch='+0Hz' rate='+0%' volume='+0%'>" +
                $"{escaped}</prosody></voice></speak>";
     }
 

@@ -651,11 +651,69 @@ function aiAddMessage(who, text) {
   const label = document.createElement("span");
   label.textContent = who === "user" ? "Siz" : "AI";
   const body = document.createElement("div");
-  body.textContent = who === "user" ? text : mdDisplayClean(text);
+  if (who === "user") body.textContent = text;
+  else appendRichAiText(body, text);
   div.appendChild(label);
   div.appendChild(body);
   box.appendChild(div);
   box.scrollTop = box.scrollHeight;
+}
+
+// AI javobini boyitilgan ko'rinishda chizish: markdown jadval → HTML jadval,
+// qolgan qatorlar → tozalangan matn.
+function appendRichAiText(body, text) {
+  const lines = String(text || "").replace(/\r/g, "").split("\n");
+  let i = 0;
+  const buf = [];
+  const flush = () => {
+    if (!buf.length) return;
+    body.appendChild(document.createTextNode(buf.join("\n")));
+    buf.length = 0;
+  };
+  while (i < lines.length) {
+    if (isAiTableLine(lines[i])) {
+      const rows = [];
+      let j = i;
+      while (j < lines.length && isAiTableLine(lines[j])) {
+        if (!isAiTableSep(lines[j])) rows.push(lines[j]); // --- ajratgichni tashlab yuboramiz
+        j++;
+      }
+      if (rows.length >= 2) {
+        flush();
+        body.appendChild(buildAiTable(rows));
+        i = j;
+        continue;
+      }
+    }
+    buf.push(mdDisplayClean(lines[i]));
+    i++;
+  }
+  flush();
+}
+
+function isAiTableLine(line) {
+  return /^\s*\|.+\|/.test(String(line || ""));
+}
+
+function isAiTableSep(line) {
+  const s = String(line || "");
+  return /^\s*\|?[\s:|-]+\|?\s*$/.test(s) && s.includes("-");
+}
+
+function buildAiTable(rows) {
+  const table = document.createElement("table");
+  table.className = "ai-table";
+  rows.forEach((row, idx) => {
+    const tr = document.createElement("tr");
+    const cells = row.trim().replace(/^\|/, "").replace(/\|$/, "").split("|");
+    cells.forEach(cell => {
+      const el = document.createElement(idx === 0 ? "th" : "td");
+      el.textContent = mdDisplayClean(cell).trim();
+      tr.appendChild(el);
+    });
+    table.appendChild(tr);
+  });
+  return table;
 }
 
 // --- Ovoz tanlash: eng yaxshi o'zbekcha (yatoki mos) ovozni topish ---
@@ -750,6 +808,20 @@ function playAudioBlob(blob, signal) {
   });
 }
 
+// Ovoz tanlash: foydalanuvchi tanlagan ovoz (bo'sh bo'lsa — tilga qarab avtomatik)
+const voiceSel = $("ai-voice-select");
+if (voiceSel) {
+  voiceSel.value = localStorage.getItem("aiVoice") || "";
+  voiceSel.addEventListener("change", () => {
+    localStorage.setItem("aiVoice", voiceSel.value);
+    if (aiSpeakAbort) aiSpeakAbort.abort(); // yangi ovozda qaytadan boshlash uchun joriyni to'xtatamiz
+  });
+}
+function selectedAiVoice() {
+  const v = voiceSel && voiceSel.value ? voiceSel.value : "";
+  return v ? "&voice=" + encodeURIComponent(v) : "";
+}
+
 // Javobni o'qish: birinchi navbatda Edge TTS (backend proxy) — haqiqiy o'zbekcha
 // nervli ovoz (uz-UZ-MadinaNeural); ishlamasa brauzerning speechSynthesis ovozi zaxira sifatida.
 async function aiSpeak(text) {
@@ -764,16 +836,23 @@ async function aiSpeak(text) {
   if (canSpeak) { try { window.speechSynthesis.cancel(); } catch { /* ignore */ } }
   if (aiAudioEl) { try { aiAudioEl.pause(); } catch { /* ignore */ } }
 
-  const chunks = splitSpeechChunks(clean, 180);
-  try {
-    for (const chunk of chunks) {
-      if (control.signal.aborted) return;
-      const res = await fetch("/Query/SpeakSuper/speak-super?text=" + encodeURIComponent(chunk), {
-        headers: superAdminToken ? { "X-Super-Admin-Token": superAdminToken } : {},
-        signal: control.signal,
-      });
+  const chunks = splitSpeechChunks(clean, 400);
+  const fetchChunk = chunk =>
+    fetch("/Query/SpeakSuper/speak-super?text=" + encodeURIComponent(chunk) + selectedAiVoice(), {
+      headers: superAdminToken ? { "X-Super-Admin-Token": superAdminToken } : {},
+      signal: control.signal,
+    }).then(res => {
       if (!res.ok) throw new Error("tts-status-" + res.status);
-      const blob = await res.blob();
+      return res.blob();
+    });
+  try {
+    // Birinchi bo'lakni yuklaymiz; keyingisini hozirgi ovoz chalinayotgan
+    // paytda oldindan yuklaymiz — bo'laklar orasida pauza qolmaydi.
+    let nextPromise = fetchChunk(chunks[0]);
+    for (let i = 0; i < chunks.length; i++) {
+      if (control.signal.aborted) return;
+      const blob = await nextPromise;
+      nextPromise = i + 1 < chunks.length ? fetchChunk(chunks[i + 1]) : null;
       if (control.signal.aborted) return;
       await playAudioBlob(blob, control.signal);
     }

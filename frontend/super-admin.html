@@ -257,6 +257,13 @@
             <div class="ai-chat" id="sa-ai-messages" aria-live="polite"></div>
             <div class="ai-composer">
               <input class="ctl" id="sa-ai-input" placeholder="Savolingizni yozing yoki mikrofondan gapiring..." autocomplete="off" />
+              <select class="ctl" id="ai-voice-select" title="Ovoz tanlash" style="max-width:170px;flex:none">
+                <option value="">🔊 Avto ovoz</option>
+                <option value="ru-RU-SvetlanaNeural">Svetlana (ru, ayol)</option>
+                <option value="ru-RU-DmitryNeural">Dmitry (ru, erkak)</option>
+                <option value="uz-UZ-MadinaNeural">Madina (uz, ayol)</option>
+                <option value="uz-UZ-SardorNeural">Sardor (uz, erkak)</option>
+              </select>
               <button class="btn btn-ghost" id="sa-ai-mic" type="button" title="Mikrofon bilan gapirish">🎤</button>
               <button class="btn btn-primary" id="sa-ai-send" type="button">Yuborish</button>
             </div>

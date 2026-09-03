@@ -12,12 +12,13 @@ public class GeminiQueryService : IAiQueryService
         1. Har doim faqat RUS TILIDA javob ber. Savol o'zbekcha, ruscha yoki boshqa
            tilda kelganidan qat'i nazar, javob HAR DOIM rus tilida bo'lishi SHART.
            O'zbek tilida yoki boshqa tillarda hech qachon javob berma.
-        2. Javobni oddiy matn (plain text) ko'rinishida yoz: **, *, _, #, `, jadval
-           va boshqa markdown belgilarni UMUMAN ishlatma. Ro'yxat kerak bo'lsa,
-           oddiy gaplar bilan yoz.
-        3. Faqat shu ma'lumotlar asosida qisqa va aniq javob ber. Hech qanday raqamni
-           o'zing o'ylab topma yoki taxmin qilma — faqat berilgan JSON'dagi summalarni
-           qo'shish, sanash yoki saralash orqali javob ber.
+        2. Oddiy holatda javobni oddiy matn ko'rinishida yoz: **, *, #, ` va boshqa
+           markdown belgilarni ishlatma. LEKIN agar foydalanuvchi aniq jadval so'rasa
+           (masalan: "jadval shaklida chiqar", "выведи таблицу", "таблицей"), bunday
+           ma'lumotni to'g'ri MARKDOWN JADVAL ko'rinishida ber:
+           | Nomi | Turi | Summa |
+           |------|------|-------|
+           Jadval ichida ham ** yoki * belgilar ishlatma, hujayralar faqat toza matn bo'lsin.
         4. Agar savolga javob berish uchun ma'lumot yetarli bo'lmasa, rus tilida aniq shuni ayt.
         """;
 
@@ -44,9 +45,13 @@ public class GeminiQueryService : IAiQueryService
         1. Har doim faqat RUS TILIDA javob ber. Savol o'zbekcha, ruscha yoki boshqa
            tilda berilganidan qat'i nazar, javob HAR DOIM rus tilida bo'lishi SHART.
            O'zbek tilida yoki boshqa tillarda hech qachon javob berma.
-        2. Javobni oddiy matn (plain text) ko'rinishida yoz: **, *, _, #, `, jadval
-           va boshqa markdown belgilarni UMUMAN ishlatma. Ro'yxat kerak bo'lsa,
-           oddiy gaplar bilan yoz.
+        2. Oddiy holatda javobni oddiy matn ko'rinishida yoz: **, *, #, ` va boshqa
+           markdown belgilarni ishlatma. LEKIN agar foydalanuvchi aniq jadval so'rasa
+           (masalan: "jadval shaklida chiqar", "выведи таблицу", "таблицей"), bunday
+           ma'lumotni to'g'ri MARKDOWN JADVAL ko'rinishida ber:
+           | Nomi | Turi | Summa |
+           |------|------|-------|
+           Jadval ichida ham ** yoki * belgilar ishlatma, hujayralar faqat toza matn bo'lsin.
         3. Senga barcha restoran/supermarket/do'konlar va ularning obuna holati JSON
            formatda beriladi. Faqat shu ma'lumotlar asosida qisqa va aniq javob ber.
            Hech qanday raqamni o'zing o'ylab topma yoki taxmin qilma.
