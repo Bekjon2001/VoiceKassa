@@ -32,3 +32,9 @@ Thumbs.db
 # Vaqtinchalik test/build natijalari
 build_out.txt
 vk_*.txt
+
+# Server log chiqishlari (maxfiy ma'lumot saqlashi mumkin)
+_srv_out.txt
+_srv_err.txt
+_tbl_*.txt
+_time_*.txt
