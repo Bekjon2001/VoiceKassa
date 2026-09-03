@@ -41,9 +41,9 @@ public sealed class EdgeTtsService
         if (!Regex.IsMatch(voice ?? string.Empty, @"^[A-Za-z]{2}-[A-Za-z]{2}-[A-Za-z0-9]+$"))
             voice = defaultVoice;
         else if (isRussian && voice.StartsWith("uz", StringComparison.OrdinalIgnoreCase))
-            voice = defaultVoice;
+            voice = "ru-RU-SvetlanaNeural";
         else if (!isRussian && voice.StartsWith("ru", StringComparison.OrdinalIgnoreCase))
-            voice = defaultVoice;
+            voice = "uz-UZ-MadinaNeural";
 
         text = NormalizeSpeechText(text);
 

@@ -1,0 +1,79 @@
+﻿48:         text = NormalizeSpeechText(text);
+49: 
+50:         // Madina/Sardor raqamlarni rus talaffuzida o'qiydi â€” shuning uchun
+51:         // o'zbekcha matnda raqamlar/sanalarni o'zbekcha so'zlarga aylantiramiz.
+52:         if (!isRussian && voice.StartsWith("uz", StringComparison.OrdinalIgnoreCase))
+53:             text = NormalizeUzbekNumbers(text);
+54: 
+55:         if (text.Length > 1500) text = text[..1500];
+56: 
+57:         var url = BuildUrl();
+58:         var ws = new ClientWebSocket();
+59:         try
+60:         {
+61:             ws.Options.KeepAliveInterval = TimeSpan.FromSeconds(10);
+62:             ApplyHeaders(ws);
+63: 
+64:             using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct);
+65:             linked.CancelAfter(TimeSpan.FromSeconds(45));
+66: 
+67:             await ws.ConnectAsync(new Uri(url), linked.Token);
+68:             await SendTextAsync(ws, BuildSpeechConfig(), linked.Token);
+69:             await SendTextAsync(ws, BuildSsml(text, voice), linked.Token);
+70: 
+71:             var frames = new List<byte[]>();
+72:             var buffer = new byte[128 * 1024];
+73:             var msgBytes = new List<byte>();
+74: 
+75:             while (ws.State == WebSocketState.Open)
+76:             {
+77:                 WebSocketReceiveResult result;
+78:                 try
+79:                 {
+80:                     result = await ws.ReceiveAsync(buffer, linked.Token);
+81:                 }
+82:                 catch
+83:                 {
+84:                     break;
+85:                 }
+86: 
+87:                 if (result.MessageType == WebSocketMessageType.Close)
+88:                 {
+89:                     break;
+90:                 }
+91: 
+92:                 msgBytes.AddRange(buffer.AsSpan(0, result.Count).ToArray());
+93:                 if (!result.EndOfMessage) continue;
+94: 
+95:                 if (result.MessageType == WebSocketMessageType.Text)
+96:                 {
+97:                     var textMsg = Encoding.UTF8.GetString(msgBytes.ToArray());
+98:                     if (IsTurnEnd(textMsg)) break;
+99:                 }
+100:                 else if (result.MessageType == WebSocketMessageType.Binary)
+101:                 {
+102:                     var payload = msgBytes.ToArray();
+103:                     if (TryReadAudio(payload, out var audio) && audio.Length > 0)
+104:                         frames.Add(audio);
+105:                 }
+106:                 msgBytes.Clear();
+107:             }
+108: 
+109:             if (frames.Count == 0)
+110:                 throw new InvalidOperationException("Ovozlash xizmati audio qaytarmadi.");
+111: 
+112:             using var audioStream = new MemoryStream();
+113:             foreach (var frame in frames) audioStream.Write(frame, 0, frame.Length);
+114:             return audioStream.ToArray();
+115:         }
+116:         finally
+117:         {
+118:             try { ws.Abort(); } catch { /* ignore */ }
+119:             ws.Dispose();
+120:         }
+121:     }
+122: 
+123:     private static bool IsTurnEnd(string msg)
+124:     {
+125:         var pathIdx = msg.IndexOf("Path:", StringComparison.Ordinal);
+126:         return pathIdx >= 0 &&

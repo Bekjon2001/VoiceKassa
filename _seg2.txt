@@ -1,0 +1,3 @@
+﻿L48: text = NormalizeSpeechText(text);
+L249: text = NormalizeSpeechText(text);
+L267: public static string NormalizeSpeechText(string text)

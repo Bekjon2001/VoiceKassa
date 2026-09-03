@@ -805,28 +805,9 @@ function playAudioBlob(blob, signal) {
   });
 }
 
-// Ovoz tanlash: foydalanuvchi tanlagan ovoz (bo'sh bo'lsa — tilga qarab avtomatik)
-const voiceSel = $("ai-voice-select");
-if (voiceSel) {
-  const saved = localStorage.getItem("aiVoice") || "";
-  const defaultUzVoice = "uz-UZ-MadinaNeural";
-  const valid = ["", "uz-UZ-MadinaNeural", "uz-UZ-SardorNeural", "ru-RU-SvetlanaNeural", "ru-RU-DmitryNeural"];
-  const nextValue = valid.includes(saved) ? saved : defaultUzVoice;
-  voiceSel.value = nextValue;
-  localStorage.setItem("aiVoice", nextValue);
-  voiceSel.addEventListener("change", () => {
-    const chosen = voiceSel.value || defaultUzVoice;
-    localStorage.setItem("aiVoice", chosen);
-    if (aiSpeakAbort) aiSpeakAbort.abort(); // yangi ovozda qaytadan boshlash uchun joriyni to'xtatamiz
-  });
-}
 function selectedAiVoice(text) {
-  const defaultUz = "uz-UZ-MadinaNeural";
-  const defaultRu = "ru-RU-SvetlanaNeural";
-  const selected = voiceSel && voiceSel.value ? voiceSel.value : defaultUz;
   const hasCyr = /[А-Яа-яЁё]/.test(String(text || ""));
-  const preferred = hasCyr ? (selected.startsWith("uz") ? defaultRu : selected) : (selected.startsWith("ru") ? defaultUz : selected);
-  return preferred ? "&voice=" + encodeURIComponent(preferred) : "";
+  return "&voice=" + encodeURIComponent(hasCyr ? "ru-RU-SvetlanaNeural" : "uz-UZ-MadinaNeural");
 }
 
 // Javobni o'qish: birinchi navbatda Edge TTS (backend proxy) — haqiqiy o'zbekcha
