@@ -33,8 +33,16 @@ public class GeminiApiClient
 
     public async Task<string> CompleteAsync(string systemPrompt, string userMessage, int maxTokens = 1000, CancellationToken ct = default)
     {
-        // 1) Belgilangan model ro'yxati bo'yicha urinamiz.
-        var models = new List<string> { _options.Model, "gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash" };
+                // 1) Belgilangan model ro'yxati bo'yicha urinamiz.
+        //    Takrorlanuvchi modellarni olib tashlaymiz: appsettings Developmentda
+        //    Model = "gemini-2.5-flash" va ro'yxatda "gemini-2.5-flash" ham bor —
+        //    bu model sekin/throttlingda, har bir urinish 100s (HttpClient default)
+        //    ketadi, shu sababli 4–5 daqiqalik kechikish hosil bo'lardi. Distinct
+        //    + 30s/maket (quyida) orqali tezkor va aniq javobga erishamiz.
+        var models = new List<string> { _options.Model, "gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash" }
+            .Where(m => !string.IsNullOrWhiteSpace(m))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
 
         string? lastError = null;
         foreach (var model in models)
@@ -52,6 +60,13 @@ public class GeminiApiClient
         throw new HttpRequestException($"Gemini so'rovi bajarilmadi: barcha modellar mavjud emas yoki ruxsat etilmagan. {lastError ?? ""}");
     }
 
+    // Bitta modelga so'rov uchun maksimal kutish muddati. Gemini ning ba'zi modellari
+    // (gemini-2.5-flash) Development kaliti uchun sekin yoki throttling qiladi;
+    // HttpClient'ning 100slik default timeouti "bir urinish = 100s"ga teng bo'lib,
+    // model takrorlanishi sababli 4–5 daqiqalik kechikishga olib bormoqda. 30s
+    // chetka — sekin urinishlar tezkor o'tadi, keyingi modelga o'tiladi.
+    private static readonly TimeSpan PerAttemptTimeout = TimeSpan.FromSeconds(30);
+
     /// <summary>Berilgan modelga urinadi; muvaffaqiyat bo'lsa matn, aks holda null qaytaradi.</summary>
     private async Task<string?> TryModelAsync(string model, string systemPrompt, string userMessage, int maxTokens, CancellationToken ct)
     {
@@ -59,10 +74,14 @@ public class GeminiApiClient
         {
             var url = $"{_options.BaseUrl}/{model}:generateContent?key={_options.ApiKey}";
             var payload = BuildPayload(systemPrompt, userMessage, maxTokens);
-            var response = await _http.PostAsJsonAsync(url, payload, ct);
+
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            timeoutCts.CancelAfter(PerAttemptTimeout);
+
+            var response = await _http.PostAsJsonAsync(url, payload, timeoutCts.Token);
             if (!response.IsSuccessStatusCode) return null;
 
-            var result = await response.Content.ReadFromJsonAsync<GeminiResponse>(cancellationToken: ct);
+            var result = await response.Content.ReadFromJsonAsync<GeminiResponse>(cancellationToken: timeoutCts.Token);
             var text = result?.Candidates?.FirstOrDefault()?.Content?.Parts?.FirstOrDefault()?.Text;
             return string.IsNullOrWhiteSpace(text) ? null : text!;
         }
@@ -105,7 +124,10 @@ public class GeminiApiClient
             // Eng yaxshi tanlovlar: flaflash/light tarafdagi modellarni oldinga chiqaramiz.
             candidates.Sort((a, b) => ScoreModel(a).CompareTo(ScoreModel(b)));
 
-            foreach (var candidate in candidates)
+                        // Avtomatik topilgan modellar ro'yxatini cheklaymiz: eng yaxshi 4tasi
+            // yetarli (asosan flash-model). Barchasini urish 5+ daqiqalik kechikishga
+            // sabab bo'lishi mumkin, chunki har biri 30s'ga qadar kutishi mumkin.
+            foreach (var candidate in candidates.Take(4))
             {
                 var text = await TryModelAsync(candidate, systemPrompt, userMessage, maxTokens, ct);
                 if (text != null) return text;
