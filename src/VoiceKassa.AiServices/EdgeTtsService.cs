@@ -32,12 +32,17 @@ public sealed class EdgeTtsService
     {
         if (string.IsNullOrWhiteSpace(text)) throw new ArgumentException("Matn bo'sh", nameof(text));
 
-        // Tilni avtomatik aniqlash: matnda kirill harflari bo'lsa (AI ruscha
-        // javob qaytargan bo'lsa) ruscha ovoz, aks holda o'zbekcha ovoz.
         var isRussian = HasCyrillic(text);
         var defaultVoice = isRussian ? "ru-RU-SvetlanaNeural" : "uz-UZ-MadinaNeural";
-        if (string.IsNullOrWhiteSpace(voice) ||
-            !Regex.IsMatch(voice, @"^[A-Za-z]{2}-[A-Za-z]{2}-[A-Za-z0-9]+$"))
+
+        // Foydalanuvchi tanlagan ovoz matn tiliga mos kelmasa avtomatik
+        // o'zbek/rus defaultiga qaytaramiz. Bu "ru-RU" ovozini o'zbek matnga
+        // qo'llash holatini oldini oladi va imlo/so'z talaffuzidagi xatolarni kamaytiradi.
+        if (!Regex.IsMatch(voice ?? string.Empty, @"^[A-Za-z]{2}-[A-Za-z]{2}-[A-Za-z0-9]+$"))
+            voice = defaultVoice;
+        else if (isRussian && voice.StartsWith("uz", StringComparison.OrdinalIgnoreCase))
+            voice = defaultVoice;
+        else if (!isRussian && voice.StartsWith("ru", StringComparison.OrdinalIgnoreCase))
             voice = defaultVoice;
 
         // Madina/Sardor raqamlarni rus talaffuzida o'qiydi — shuning uchun

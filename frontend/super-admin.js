@@ -811,15 +811,25 @@ function playAudioBlob(blob, signal) {
 // Ovoz tanlash: foydalanuvchi tanlagan ovoz (bo'sh bo'lsa — tilga qarab avtomatik)
 const voiceSel = $("ai-voice-select");
 if (voiceSel) {
-  voiceSel.value = localStorage.getItem("aiVoice") || "";
+  const saved = localStorage.getItem("aiVoice") || "";
+  const defaultUzVoice = "uz-UZ-MadinaNeural";
+  const valid = ["", "uz-UZ-MadinaNeural", "uz-UZ-SardorNeural", "ru-RU-SvetlanaNeural", "ru-RU-DmitryNeural"];
+  const nextValue = valid.includes(saved) ? saved : defaultUzVoice;
+  voiceSel.value = nextValue;
+  localStorage.setItem("aiVoice", nextValue);
   voiceSel.addEventListener("change", () => {
-    localStorage.setItem("aiVoice", voiceSel.value);
+    const chosen = voiceSel.value || defaultUzVoice;
+    localStorage.setItem("aiVoice", chosen);
     if (aiSpeakAbort) aiSpeakAbort.abort(); // yangi ovozda qaytadan boshlash uchun joriyni to'xtatamiz
   });
 }
-function selectedAiVoice() {
-  const v = voiceSel && voiceSel.value ? voiceSel.value : "";
-  return v ? "&voice=" + encodeURIComponent(v) : "";
+function selectedAiVoice(text) {
+  const defaultUz = "uz-UZ-MadinaNeural";
+  const defaultRu = "ru-RU-SvetlanaNeural";
+  const selected = voiceSel && voiceSel.value ? voiceSel.value : defaultUz;
+  const hasCyr = /[А-Яа-яЁё]/.test(String(text || ""));
+  const preferred = hasCyr ? (selected.startsWith("uz") ? defaultRu : selected) : (selected.startsWith("ru") ? defaultUz : selected);
+  return preferred ? "&voice=" + encodeURIComponent(preferred) : "";
 }
 
 // Javobni o'qish: birinchi navbatda Edge TTS (backend proxy) — haqiqiy o'zbekcha
@@ -838,7 +848,7 @@ async function aiSpeak(text) {
 
   const chunks = splitSpeechChunks(clean, 400);
   const fetchChunk = chunk =>
-    fetch("/Query/SpeakSuper/speak-super?text=" + encodeURIComponent(chunk) + selectedAiVoice(), {
+  fetch("/Query/SpeakSuper/speak-super?text=" + encodeURIComponent(chunk) + selectedAiVoice(chunk), {
       headers: superAdminToken ? { "X-Super-Admin-Token": superAdminToken } : {},
       signal: control.signal,
     }).then(res => {
