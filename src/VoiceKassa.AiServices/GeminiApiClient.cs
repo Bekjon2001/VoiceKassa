@@ -8,9 +8,10 @@ public class GeminiApiOptions
 {
     public string ApiKey { get; set; } = string.Empty;
 
-    // "gemini-2.0-flash" - Google AI Studio'ning bepul tarifida ishlaydigan
-    // tezkor model. Kerak bo'lsa appsettings.json orqali almashtiriladi.
-    public string Model { get; set; } = "gemini-2.0-flash";
+    // Boshlang'ich model. Auto-detect har doim ishlaydi (ListModels'dan
+    // eng yaxshi flash modelni topadi), shuning uchun bu yerda aniq model
+    // ko'rsatish shart emas — bo'sh qoldirish ham mumkin.
+    public string Model { get; set; } = "";
     public string BaseUrl { get; set; } = "https://generativelanguage.googleapis.com/v1beta/models";
 }
 
@@ -33,39 +34,42 @@ public class GeminiApiClient
 
     public async Task<string> CompleteAsync(string systemPrompt, string userMessage, int maxTokens = 1000, CancellationToken ct = default)
     {
-                // 1) Belgilangan model ro'yxati bo'yicha urinamiz.
-        //    Takrorlanuvchi modellarni olib tashlaymiz: appsettings Developmentda
-        //    Model = "gemini-2.5-flash" va ro'yxatda "gemini-2.5-flash" ham bor —
-        //    bu model sekin/throttlingda, har bir urinish 100s (HttpClient default)
-        //    ketadi, shu sababli 4–5 daqiqalik kechikish hosil bo'lardi. Distinct
-        //    + 30s/maket (quyida) orqali tezkor va aniq javobga erishamiz.
-        var models = new List<string> { _options.Model, "gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash" }
+        // Avval ListModels orqali ishlaydigan modelni topamiz — birinchi urinishda
+        // to'g'ri model bilan ishlaydi, 22s+ kechikish bo'lmaydi. ListModels
+        // ishlamasa — fallback sifatida qo'lda ko'rsatilgan modelni sinaymiz.
+        var auto = await TryAutoModelAsync(systemPrompt, userMessage, maxTokens, ct);
+        if (auto != null) return auto;
+
+        // Fallback: qo'lda ko'rsatilgan model yoki ishonchli defaultlar.
+        var models = new List<string?>
+            {
+                _options.Model,
+                "gemini-2.5-flash",
+                "gemini-2.0-flash",
+                "gemini-1.5-flash",
+                "gemini-3-flash",
+                "gemini-3.5-flash-lite",
+            }
             .Where(m => !string.IsNullOrWhiteSpace(m))
             .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Cast<string>()
             .ToList();
 
-        string? lastError = null;
         foreach (var model in models)
         {
             var text = await TryModelAsync(model, systemPrompt, userMessage, maxTokens, ct);
             if (text != null) return text;
-            // TryModelAsync xatolik haqida xabar qaytarmaydi — 404/400'da next.
         }
 
-        // 2) Hech biri ishlamasa — Google'ning ListModels API'sidan
-        //    generateContent qo'llab-quvvatlanadigan modelni dinamik topamiz.
-        var auto = await TryAutoModelAsync(systemPrompt, userMessage, maxTokens, ct);
-        if (auto != null) return auto;
-
-        throw new HttpRequestException($"Gemini so'rovi bajarilmadi: barcha modellar mavjud emas yoki ruxsat etilmagan. {lastError ?? ""}");
+        throw new HttpRequestException("Gemini so'rovi bajarilmadi: barcha modellar mavjud emas yoki ruxsat etilmagan.");
     }
 
-    // Bitta modelga so'rov uchun maksimal kutish muddati. Gemini ning ba'zi modellari
-    // (gemini-2.5-flash) Development kaliti uchun sekin yoki throttling qiladi;
-    // HttpClient'ning 100slik default timeouti "bir urinish = 100s"ga teng bo'lib,
-    // model takrorlanishi sababli 4–5 daqiqalik kechikishga olib bormoqda. 30s
-    // chetka — sekin urinishlar tezkor o'tadi, keyingi modelga o'tiladi.
-    private static readonly TimeSpan PerAttemptTimeout = TimeSpan.FromSeconds(30);
+    // Bitta modelga so'rov uchun maksimal kutish muddati. 8 soniya — sekin
+    // modellarni tez skip qilish uchun yetarli (Gemini flash modellari odatda
+    // 2-5s ichida javob beradi). 30s timeout ba'zi modellarda (masalan,
+    // gemini-3.5-flash-lite) 20+ sekund cho'ziladi va foydalanuvchi kutib
+    // qoladi — bu yerda uzunroq timeout foydasiz.
+    private static readonly TimeSpan PerAttemptTimeout = TimeSpan.FromSeconds(8);
 
     /// <summary>Berilgan modelga urinadi; muvaffaqiyat bo'lsa matn, aks holda null qaytaradi.</summary>
     private async Task<string?> TryModelAsync(string model, string systemPrompt, string userMessage, int maxTokens, CancellationToken ct)
@@ -114,20 +118,26 @@ public class GeminiApiClient
                     }
                     if (!supports || string.IsNullOrEmpty(name)) continue;
 
-                    // Model ichidan "models/" prefiksi va turi:
                     var shortName = name.Contains('/') ? name.Substring(name.LastIndexOf('/') + 1) : name;
-                    if (shortName.Contains("thinking")) continue; // faqat tezkor javob modellarini xohlaymiz
+                    var lower = shortName.ToLowerInvariant();
+                    // Faqat tezkor (flash) va yengil (lite) modellarni olamiz —
+                    // "pro" modellari sekin va pullik, "thinking" — sekin.
+                    if (lower.Contains("thinking")) continue;
+                    if (lower.Contains("pro")) continue;
+                    if (lower.Contains("embedding")) continue;
+                    if (lower.Contains("imagen")) continue;
+                    if (lower.Contains("nano")) continue;
+                    if (!lower.Contains("flash") && !lower.Contains("lite")) continue;
                     candidates.Add(shortName);
                 }
             }
 
-            // Eng yaxshi tanlovlar: flaflash/light tarafdagi modellarni oldinga chiqaramiz.
+            // Eng yaxshi tanlovlar: 2.x va 3.x flash modellarni birinchi o'ringa.
             candidates.Sort((a, b) => ScoreModel(a).CompareTo(ScoreModel(b)));
 
-                        // Avtomatik topilgan modellar ro'yxatini cheklaymiz: eng yaxshi 4tasi
-            // yetarli (asosan flash-model). Barchasini urish 5+ daqiqalik kechikishga
-            // sabab bo'lishi mumkin, chunki har biri 30s'ga qadar kutishi mumkin.
-            foreach (var candidate in candidates.Take(4))
+            // Eng yaxshi 3tasini sinaymiz — ko'proq urinish sekin modelga tushib
+            // qolishi mumkin.
+            foreach (var candidate in candidates.Take(3))
             {
                 var text = await TryModelAsync(candidate, systemPrompt, userMessage, maxTokens, ct);
                 if (text != null) return text;
@@ -139,10 +149,13 @@ public class GeminiApiClient
 
     private static int ScoreModel(string name)
     {
-        // Kichikroq = yaxshiroq tanlov (tezkor flash modellarni birinchi o'ringa).
-        if (name.Contains("flash")) return 0;
-        if (name.Contains("lite")) return 1;
-        return 2;
+        // Kichikroq = yaxshiroq tanlov. 2.x flash — eng ishonchli, tezkor.
+        var lower = name.ToLowerInvariant();
+        if (lower.Contains("2.") && lower.Contains("flash")) return 0;
+        if (lower.Contains("3.") && lower.Contains("flash")) return 1;
+        if (lower.Contains("lite")) return 2;
+        if (lower.Contains("flash")) return 3;
+        return 4;
     }
 
     private static GeminiRequest BuildPayload(string systemPrompt, string userMessage, int maxTokens)

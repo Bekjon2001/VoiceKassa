@@ -642,18 +642,41 @@ function mdDisplayClean(text) {
     .trim();
 }
 
-// Salvodagi sun'iy intellekt javobini chatga qo'shish
-function aiAddMessage(who, text) {
+// Vaqt matnini formatlash: 234 ms → "234 ms", 1500 ms → "1.5 s", 65000 ms → "1:05"
+function fmtDuration(ms) {
+  if (ms < 1000) return ms + " ms";
+  if (ms < 60000) return (ms / 1000).toFixed(1).replace(/\.0$/, "") + " s";
+  const m = Math.floor(ms / 60000);
+  const s = Math.floor((ms % 60000) / 1000);
+  return m + ":" + String(s).padStart(2, "0");
+}
+
+// Salvodagi sun'iy intellekt javobini chatga qo'shish.
+// meta = { askMs, speakMs } — vaqt ko'rsatkichlari (faqat bot xabarlarida).
+function aiAddMessage(who, text, meta) {
   const box = $("sa-ai-messages");
   if (!box) return;
   const div = document.createElement("div");
   div.className = "ai-msg " + (who === "user" ? "ai-msg--user" : "ai-msg--bot");
+  const head = document.createElement("div");
+  head.className = "ai-msg__head";
   const label = document.createElement("span");
+  label.className = "ai-msg__label";
   label.textContent = who === "user" ? "Siz" : "AI";
+  head.appendChild(label);
+  if (meta) {
+    const stats = document.createElement("span");
+    stats.className = "ai-msg__stats";
+    const parts = [];
+    if (typeof meta.askMs === "number") parts.push("javob: " + fmtDuration(meta.askMs));
+    if (typeof meta.speakMs === "number") parts.push("ovoz: " + fmtDuration(meta.speakMs));
+    stats.textContent = parts.join(" · ");
+    head.appendChild(stats);
+  }
   const body = document.createElement("div");
   if (who === "user") body.textContent = text;
   else appendRichAiText(body, text);
-  div.appendChild(label);
+  div.appendChild(head);
   div.appendChild(body);
   box.appendChild(div);
   box.scrollTop = box.scrollHeight;
@@ -788,32 +811,25 @@ function splitSpeechChunks(text, max) {
 let aiAudioEl = null;      // yagona audio pleer
 let aiSpeakAbort = null;   // joriy ovozni to'xtatish (yangi savol berilsa)
 
-// Brauzer audio kontekstni suspend qilmasligi uchun tab faol bo'lganda
-// audio.play() ni qayta chaqiramiz. Bu Chrome/Firefox'ning playback bloki
-// (tab inactive) muammosini hal qiladi.
-document.addEventListener("visibilitychange", () => {
-  if (!document.hidden && aiAudioEl && aiAudioEl.paused) {
-    const p = aiAudioEl.play();
-    if (p && typeof p.then === "function") p.catch(() => { /* ignore */ });
-  }
-});
-
 function playAudioBlob(blob, signal) {
   return new Promise((resolve, reject) => {
     if (!aiAudioEl) aiAudioEl = new Audio();
     const url = URL.createObjectURL(blob);
     const audio = aiAudioEl;
     let settled = false;
+    let timer = null;
     const cleanup = () => {
       URL.revokeObjectURL(url);
       audio.onended = null;
       audio.onerror = null;
       audio.onloadeddata = null;
+      if (timer) { clearTimeout(timer); timer = null; }
     };
     const finish = (err) => {
       if (settled) return;
       settled = true;
       cleanup();
+      signal.removeEventListener("abort", onAbort);
       if (err) reject(err); else resolve();
     };
     const onAbort = () => {
@@ -823,25 +839,19 @@ function playAudioBlob(blob, signal) {
     signal.addEventListener("abort", onAbort, { once: true });
     audio.onended = () => finish();
     audio.onerror = () => finish(new Error("audio playback"));
-    // Eski source'ni tozalab, yangisini o'rnatamiz.
-    audio.src = "";
+    // Har yangi bo'lakdan oldin eski listenerlarni tozalab, yangi url o'rnatamiz.
+    audio.pause();
+    audio.removeAttribute("src");
     audio.load();
     audio.src = url;
+    audio.load();
     const start = () => {
-      audio.currentTime = 0;
+      try { audio.currentTime = 0; } catch { /* ignore */ }
       const p = audio.play();
       if (p && typeof p.then === "function") {
-        p.catch(() => {
-          if (settled) return;
-          // Autoplay bloklangan bo'lishi mumkin (NotAllowedError) — yumshoq
-          // urinish: audio'ni vaqtincha muted qilib, keyin ovozni yoqamiz.
-          // Bu Chrome/Firefox'ning autoplay siyosatini chetlab o'tadi.
-          audio.muted = true;
-          audio.play().then(() => {
-            setTimeout(() => { audio.muted = false; }, 80);
-          }).catch(err => finish(err));
-        });
+        p.catch(err => finish(err));
       }
+      timer = setTimeout(() => finish(), 30000);
     };
     if (audio.readyState >= 2) start();
     else audio.onloadeddata = start;
@@ -936,23 +946,41 @@ async function aiAsk(question) {
   }
   aiAddMessage("user", q);
   if (aiMsgEl) setMsg(aiMsgEl, "AI javob kutilmoqda...", "");
+  const askStart = performance.now();
+  let meta = null;
   try {
     const res = await postJson(
       "/Query/AskSuperAdmin/ask-super",
       { question: q },
       { "X-Super-Admin-Token": superAdminToken }
     );
+    const askMs = Math.round(performance.now() - askStart);
     if (aiMsgEl) setMsg(aiMsgEl, "", "");
     const answer = res && res.answer ? String(res.answer).trim() : "";
     if (answer) {
-      aiAddMessage("bot", answer);
-      aiSpeak(answer);
+      // Ovoz vaqtini o'lchash: aiSpeak tugagach meta ni to'ldiramiz va
+      // xabarni yangilaymiz.
+      meta = { askMs, speakMs: null };
+      aiAddMessage("bot", answer, meta);
+      const lastBox = $("sa-ai-messages").lastElementChild;
+      const lastStats = lastBox ? lastBox.querySelector(".ai-msg__stats") : null;
+      const speakStart = performance.now();
+      aiSpeak(answer).then(() => {
+        const speakMs = Math.round(performance.now() - speakStart);
+        if (lastStats) {
+          meta.speakMs = speakMs;
+          lastStats.textContent =
+            "javob: " + fmtDuration(meta.askMs) + " · ovoz: " + fmtDuration(meta.speakMs);
+        }
+      }).catch(() => { /* ovoz xatosi — vaqt ko'rsatilmaydi */ });
     } else {
-      aiAddMessage("bot", "AI javob bermadi. Serverda AI xizmati (Gemini) sozlanmagan bo‘lishi mumkin.");
+      aiAddMessage("bot", "AI javob bermadi. Serverda AI xizmati (Gemini) sozlanmagan bo‘lishi mumkin.",
+        { askMs });
     }
   } catch (error) {
     if (aiMsgEl) setMsg(aiMsgEl, "", "");
-    aiAddMessage("bot", "Xatolik: " + error.message);
+    const askMs = Math.round(performance.now() - askStart);
+    aiAddMessage("bot", "Xatolik: " + error.message, { askMs });
   }
 }
 

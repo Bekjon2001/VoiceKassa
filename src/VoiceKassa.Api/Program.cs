@@ -79,4 +79,33 @@ app.UseCors();
 app.UseAuthorization();
 app.MapControllers();
 
+// === So'rov vaqti va marshrutini log qilish ===
+// Har bir HTTP so'rov uchun: method, path, controller/action, status, vaqt.
+// Log: "[12:54:30] GET /Query/SpeakSuper/speak-super → 200 (1.23 s)"
+app.Use(async (ctx, next) =>
+{
+    var sw = System.Diagnostics.Stopwatch.StartNew();
+    await next();
+    sw.Stop();
+
+    var endpoint = ctx.GetEndpoint();
+    var route = endpoint?.DisplayName ?? "(unknown)";
+    // DisplayName "VoiceKassa.Api.Controllers.QueryController.SpeakSuper (VoiceKassa.Api)" kabi —
+    // qisqartiramiz: faqat Controller.Action.
+    var shortRoute = route.Split(' ').FirstOrDefault() ?? route;
+    // So'rov ID (token) — tokenning birinchi 6 belgisi, foydalanuvchini kuzatish uchun
+    var token = ctx.Request.Headers["X-Super-Admin-Token"].FirstOrDefault();
+    var tokenShort = string.IsNullOrEmpty(token) ? "-" : (token.Length > 6 ? token[..6] + "…" : token);
+
+    app.Logger.LogInformation(
+        "[{Time}] {Method} {Path} → {Status} ({Ms:0.00} s) [token={Token}] {Route}",
+        DateTime.Now.ToString("HH:mm:ss.fff"),
+        ctx.Request.Method,
+        ctx.Request.Path.Value,
+        ctx.Response.StatusCode,
+        sw.Elapsed.TotalSeconds,
+        tokenShort,
+        shortRoute);
+});
+
 app.Run();
