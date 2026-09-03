@@ -825,14 +825,23 @@ async function aiSpeak(text) {
   if (aiAudioEl) { try { aiAudioEl.pause(); } catch { /* ignore */ } }
 
   const chunks = splitSpeechChunks(clean, 400);
-  const fetchChunk = chunk =>
-  fetch("/Query/SpeakSuper/speak-super?text=" + encodeURIComponent(chunk) + selectedAiVoice(chunk), {
-      headers: superAdminToken ? { "X-Super-Admin-Token": superAdminToken } : {},
-      signal: control.signal,
-    }).then(res => {
-      if (!res.ok) throw new Error("tts-status-" + res.status);
-      return res.blob();
-    });
+  const fetchChunk = async chunk => {
+    const doFetch = () =>
+    fetch("/Query/SpeakSuper/speak-super?text=" + encodeURIComponent(chunk) + selectedAiVoice(chunk), {
+        headers: superAdminToken ? { "X-Super-Admin-Token": superAdminToken } : {},
+        signal: control.signal,
+      }).then(res => {
+        if (!res.ok) throw new Error("tts-status-" + res.status);
+        return res.blob();
+      });
+    try {
+      return await doFetch();
+    } catch (err) {
+      if (control.signal.aborted) throw err;
+      // Server/Bing vaqtincha ishlamasa — bir marta qayta urinamiz
+      return await doFetch();
+    }
+  };
   try {
     // Birinchi bo'lakni yuklaymiz; keyingisini hozirgi ovoz chalinayotgan
     // paytda oldindan yuklaymiz — bo'laklar orasida pauza qolmaydi.

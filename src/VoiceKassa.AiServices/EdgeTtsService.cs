@@ -54,6 +54,24 @@ public sealed class EdgeTtsService
 
         if (text.Length > 1500) text = text[..1500];
 
+        // Bing ba'zan birinchi urinishda javob bermaydi (so'rov 45-60s cho'ziladi
+        // yoki vaqtincha xato beradi) — aynan shu sababli ovoz ba'zan chiqmaydi.
+        // Bir marta qayta urinamiz.
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                                return await SynthesizeOnceAsync(text, voice!, ct);
+            }
+            catch (Exception) when (attempt < 2 && !ct.IsCancellationRequested)
+            {
+                // Birinchi urinish muvaffaqiyatsiz — qayta urinamiz
+            }
+        }
+    }
+
+    private async Task<byte[]> SynthesizeOnceAsync(string text, string voice, CancellationToken ct)
+    {
         var url = BuildUrl();
         var ws = new ClientWebSocket();
         try
@@ -62,7 +80,7 @@ public sealed class EdgeTtsService
             ApplyHeaders(ws);
 
             using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            linked.CancelAfter(TimeSpan.FromSeconds(45));
+            linked.CancelAfter(TimeSpan.FromSeconds(60));
 
             await ws.ConnectAsync(new Uri(url), linked.Token);
             await SendTextAsync(ws, BuildSpeechConfig(), linked.Token);
