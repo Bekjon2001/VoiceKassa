@@ -9,20 +9,25 @@ namespace VoiceKassa.Api.Controllers;
 public class BusinessController : ControllerBase
 {
     private readonly BusinessService _businessService;
+    private readonly AuthService _authService;
 
-    public BusinessController(BusinessService businessService) => _businessService = businessService;
+    public BusinessController(BusinessService businessService, AuthService authService)
+    {
+        _businessService = businessService;
+        _authService = authService;
+    }
 
     [HttpPost("super-admin/first")]
     public async Task<IActionResult> CreateFirstSuperAdmin([FromBody] CreateSuperAdminRequest request, CancellationToken ct)
     {
-        var (success, error, account) = await _businessService.CreateFirstSuperAdminAsync(request, ct);
+        var (success, error, account) = await _authService.CreateFirstSuperAdminAsync(request, ct);
         return success ? Ok(account) : BadRequest(new { error });
     }
 
     [HttpPost("super-admin/login")]
-    public async Task<IActionResult> LoginSuperAdmin([FromBody] SuperAdminLoginRequest request, CancellationToken ct)
+    public async Task<IActionResult> LoginSuperAdmin([FromBody] LoginRequest request, CancellationToken ct)
     {
-        var (success, error, account) = await _businessService.LoginSuperAdminAsync(request, ct);
+        var (success, error, account) = await _authService.SuperAdminLoginAsync(request, ct);
         return success ? Ok(account) : Unauthorized(new { error });
     }
 

@@ -34,19 +34,20 @@ public class AuthService
     }
 
     /// <summary>Faqat tizimda hali hech qanday Super Admin bo'lmagandagina ishlaydi.</summary>
-    public async Task<(bool Success, string? Error)> CreateFirstSuperAdminAsync(
+    public async Task<(bool Success, string? Error, SuperAdminLoginResponse? Result)> CreateFirstSuperAdminAsync(
         CreateSuperAdminRequest request, CancellationToken ct = default)
     {
         if (await _authRepo.AnySuperAdminExistsAsync(ct))
-            return (false, "Super Admin allaqachon mavjud. Iltimos, kirish (login) qiling.");
+            return (false, "Super Admin allaqachon mavjud. Iltimos, kirish (login) qiling.", null);
 
         if (string.IsNullOrWhiteSpace(request.Login) || string.IsNullOrWhiteSpace(request.Password))
-            return (false, "Login va parol bo'sh bo'lishi mumkin emas.");
+            return (false, "Login va parol bo'sh bo'lishi mumkin emas.", null);
 
         var existing = await _authRepo.GetUserAccountByLoginAsync(request.Login, ct);
         if (existing is not null)
-            return (false, "Bu login band.");
+            return (false, "Bu login band.", null);
 
+        var token = GenerateToken();
         var account = new UserAccount
         {
             FullName = request.FullName,
@@ -55,10 +56,16 @@ public class AuthService
             PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
             IsSuperAdmin = true,
             IsActive = true,
+            AccessToken = token,
         };
 
         await _authRepo.CreateUserAccountAsync(account, ct);
-        return (true, null);
+        return (true, null, new SuperAdminLoginResponse
+        {
+            AccessToken = token,
+            FullName = account.FullName,
+            IsSuperAdmin = true,
+        });
     }
 
     public async Task<(bool Success, string? Error, SuperAdminLoginResponse? Result)> SuperAdminLoginAsync(
@@ -74,7 +81,7 @@ public class AuthService
         var token = GenerateToken();
         await _authRepo.UpdateUserAccessTokenAsync(account.Id, token, ct);
 
-        return (true, null, new SuperAdminLoginResponse { AccessToken = token, FullName = account.FullName });
+        return (true, null, new SuperAdminLoginResponse { AccessToken = token, FullName = account.FullName, IsSuperAdmin = true });
     }
 
     public async Task<UserAccount?> ValidateSuperAdminTokenAsync(string token, CancellationToken ct = default)

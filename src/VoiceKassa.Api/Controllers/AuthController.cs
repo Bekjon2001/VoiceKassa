@@ -25,8 +25,8 @@ public class AuthController : ControllerBase
     [HttpPost("super-admin/create-first")]
     public async Task<IActionResult> CreateFirstSuperAdmin([FromBody] CreateSuperAdminRequest request, CancellationToken ct)
     {
-        var (success, error) = await _authService.CreateFirstSuperAdminAsync(request, ct);
-        return success ? Ok(new { message = "Super Admin yaratildi." }) : BadRequest(new { error });
+        var (success, error, result) = await _authService.CreateFirstSuperAdminAsync(request, ct);
+        return success ? Ok(result) : BadRequest(new { error });
     }
 
     [HttpPost("super-admin/login")]
