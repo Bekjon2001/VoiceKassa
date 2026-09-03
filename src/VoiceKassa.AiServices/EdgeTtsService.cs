@@ -87,7 +87,11 @@ public sealed class EdgeTtsService
             ApplyHeaders(ws);
 
             using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            linked.CancelAfter(TimeSpan.FromSeconds(30));
+            // 12 soniya — Edge TTS odatda 2-5s ichida audio qaytaradi. 12s
+            // dan oshsa, Bing yomon holadgan; foydalanuvchini 30s kutirish
+            // befoyda. Tezroq xato qaytaramiz, frontend zaxira speechSynthesis'ga
+            // o'tadi yoki foydalanuvchi qayta urinish qiladi.
+            linked.CancelAfter(TimeSpan.FromSeconds(12));
 
             await ws.ConnectAsync(new Uri(url), linked.Token);
             await SendTextAsync(ws, BuildSpeechConfig(), linked.Token);

@@ -910,29 +910,26 @@ async function aiSpeak(text) {
     if (error && error.name === "AbortError") return;
     console.warn("AI ovoz yordamchi xatosi:", error);
     if (aiMsgEl) setMsg(aiMsgEl, "Ovoz xizmati javob bera olmadi. Qayta urinib ko'ring.", "err");
-    // Zaxira: brauzer ovozi. Faqat o'zbek ovozi mavjud bo'lsa ishlatamiz —
-    // aks holda noto'g'ri talaffuz beradi va foydalanuvchini chalg'itadi.
-    // Eslatma: aiAudioEl'ning ovozi endi chiqmasligi uchun to'xtatamiz.
-    if (canSpeak && hasLocalUzbekVoice()) {
+    // Zaxira: brauzer ovozi (eng oddiy speechSynthesis). Edge TTS ishlamasa,
+    // foydalanuvchi hech bo'lmaganda brauzer ovozida eshitsin — ovoz sifati
+    // pastroq, lekin yaxshiroq hech narsa yo'q.
+    if (canSpeak) {
       try {
         if (aiAudioEl) { try { aiAudioEl.pause(); } catch { /* ignore */ } }
         const utter = new SpeechSynthesisUtterance(clean || "Javob topilmadi.");
         utter.lang = "uz-UZ";
         if (aiVoice) utter.voice = aiVoice;
+        else {
+          // Avval ayol/ru/uz ovozini topamiz — sifat yaxshiroq bo'ladi.
+          const voices = window.speechSynthesis.getVoices() || [];
+          utter.voice = voices.find(v => /(uz|ru)/i.test(v.lang || "")) || null;
+        }
         utter.rate = 0.95;
         utter.pitch = 1;
         window.speechSynthesis.speak(utter);
       } catch { /* ignore */ }
     }
   }
-}
-
-// Brauzerda o'zbekcha (uz-UZ) yoki ruscha (ru-RU) ovoz mavjudligini tekshiradi.
-// Edge TTS ishlamay qolgan taşırdir, noto'g'ri til ovozini ishlatmaslik uchun.
-function hasLocalUzbekVoice() {
-  if (!canSpeak) return false;
-  const voices = window.speechSynthesis.getVoices() || [];
-  return voices.some(v => /^(uz|ru)/i.test(v.lang || ""));
 }
 
 // Savolni backendga yuborish va javobni ko'rsatish
