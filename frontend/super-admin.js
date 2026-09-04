@@ -7,6 +7,26 @@ const API_BASE = location.protocol.startsWith("http")
   ? `${location.protocol}//${location.host}`
   : "http://localhost:55983";
 const SESSION_KEY = "vk_super_session";
+const JARVIS_KEY = "vk_jarvis_enabled"; // Jarvis (AI buyruqlar) switch holati — localStorage
+
+// JARVIS rejimi: buyruq faqat switch yoqilgan VA matnda "AI"/"Jarvis" so'zi (vaqf so'z) bo'lsa bajariladi.
+function isJarvisOn() { const el = $("jarvis-toggle"); return !!el && el.checked; }
+function hasJarvisWake(text) { return /\b(jarvis|ai)\b/i.test(String(text || "")); }
+function jarvisShouldRun(text) { return isJarvisOn() && hasJarvisWake(text); }
+
+// Jarvis switch holatini tiklash (sahifa yangilansa ham saqlanadi) va saqlash
+(function () {
+  const wrap = document.getElementById("jarvis-wrap");
+  const el = document.getElementById("jarvis-toggle");
+  if (!el) return;
+  try { el.checked = localStorage.getItem(JARVIS_KEY) === "1"; } catch { /* ignore */ }
+  const apply = () => { if (wrap) wrap.classList.toggle("jarvis-toggle--on", el.checked); };
+  apply();
+  el.addEventListener("change", () => {
+    try { localStorage.setItem(JARVIS_KEY, el.checked ? "1" : "0"); } catch { /* ignore */ }
+    apply();
+  });
+})();
 
 const VIEW_TITLES = {
   restaurants: ["Restoranlar", "Restoranlar va obunalarni boshqaring."],
@@ -618,6 +638,222 @@ $("market-toggle-status").addEventListener("click", async () => {
   }
 });
 
+// ======================= Ovozli buyruqlar (Super Admin) =======================
+function normalizeVoiceText(text) {
+  return String(text || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .replace(/["']/g, "")
+    .replace(/[.,!?]+$/g, "")
+    .replace(/\brestoranlar\b/g, "restoran")
+    .replace(/\bpechlar\b/g, "restoran")
+    .replace(/\bpech\b/g, "restoran")
+    .replace(/\bmagazin\b/g, "supermarket")
+    .replace(/\bmarket\b/g, "supermarket");
+}
+
+function findRestaurantByVoice(text) {
+  const clean = normalizeVoiceText(text);
+  const idMatch = clean.match(/restoran\s*(\d+)/i);
+  if (idMatch) {
+    const id = Number(idMatch[1]);
+    const found = restaurantsCache.find(r => Number(r.id) === id);
+    if (found) return found;
+  }
+
+  const phrase = clean.replace(/^(restoran|supermarket)\s+/, "").trim();
+  if (!phrase) return restaurantsCache[0] || null;
+
+  const byName = restaurantsCache
+    .filter(r => typeof r.name === "string")
+    .sort((a, b) => b.name.length - a.name.length)
+    .find(r => r.name.toLowerCase().includes(phrase) || phrase.includes(r.name.toLowerCase()));
+  if (byName) return byName;
+
+  const byText = restaurantsCache.find(r => [r.name, r.address, r.phoneNumber].join(" ").toLowerCase().includes(phrase));
+  return byText || null;
+}
+
+function findMarketByVoice(text) {
+  const clean = normalizeVoiceText(text);
+  const idMatch = clean.match(/supermarket\s*(\d+)/i);
+  if (idMatch) {
+    const id = Number(idMatch[1]);
+    const found = marketsCache.find(m => Number(m.id) === id);
+    if (found) return found;
+  }
+
+  const phrase = clean.replace(/^supermarket\s+/, "").trim();
+  if (!phrase) return marketsCache[0] || null;
+
+  const byName = marketsCache
+    .filter(m => typeof m.name === "string")
+    .sort((a, b) => b.name.length - a.name.length)
+    .find(m => m.name.toLowerCase().includes(phrase) || phrase.includes(m.name.toLowerCase()));
+  if (byName) return byName;
+
+  return marketsCache.find(m => [m.name, m.address, m.phoneNumber].join(" ").toLowerCase().includes(phrase)) || null;
+}
+
+async function performVoiceCommand(rawText) {
+  const text = normalizeVoiceText(rawText);
+  if (!text) return false;
+
+  if (/(restoran|ro'yxat|royxat|pechlar|pech)/.test(text) && /(och|ko'rsat|show|ro'yxat|royxat)/.test(text)) {
+    setView("restaurants");
+    if (!restaurantsCache.length) await loadRestaurants();
+    const first = restaurantsCache[0];
+    if (first) {
+      const row = document.querySelector(`#restaurant-list tr[data-business="${first.id}"]`);
+      if (row) selectRestaurant(first, row);
+    }
+    aiSpeak("Restoranlar ro‘yxati ochildi.");
+    return true;
+  }
+
+  if (/(restoran|pech)/.test(text) && /(qo'sh|yarat|qosh|yangi|create|add)/.test(text)) {
+    setView("create");
+    aiSpeak("Restoran yaratish formasi ochildi.");
+    return true;
+  }
+
+  if (/(supermarket|market).*(qo'sh|yarat|yangi|create|add)/.test(text)) {
+    setView("market-create");
+    aiSpeak("Supermarket yaratish formasi ochildi.");
+    return true;
+  }
+
+  if (/(supermarket|market).*(och|ko'rsat|show|ro'yxat|royxat)/.test(text)) {
+    setView("markets");
+    if (!marketsCache.length) await loadMarkets();
+    const first = marketsCache[0];
+    if (first) {
+      const row = document.querySelector(`#market-list tr[data-business="${first.id}"]`);
+      if (row) selectMarket(first, row);
+    }
+    aiSpeak("Supermarketlar ro‘yxati ochildi.");
+    return true;
+  }
+
+  if (/(supermarket|market)\s*\d+|restoran\s*\d+/.test(text)) {
+    const restaurant = findRestaurantByVoice(text);
+    const market = findMarketByVoice(text);
+    const target = restaurant || market;
+    if (restaurant && !market) {
+      setView("restaurants");
+      await loadRestaurants();
+      const row = document.querySelector(`#restaurant-list tr[data-business="${restaurant.id}"]`);
+      if (row) selectRestaurant(restaurant, row);
+      aiSpeak(`${restaurant.name} restorani tanlandi.`);
+      return true;
+    }
+    if (market) {
+      setView("markets");
+      await loadMarkets();
+      const row = document.querySelector(`#market-list tr[data-business="${market.id}"]`);
+      if (row) selectMarket(market, row);
+      aiSpeak(`${market.name} supermarketi tanlandi.`);
+      return true;
+    }
+    if (target) {
+      setView("restaurants");
+      aiSpeak(`${target.name} tanlandi.`);
+      return true;
+    }
+  }
+
+  if (/(restoran|supermarket|pech|magazin).*(faollashtir|yoq|aktivlashtir|enable|activate)/.test(text)) {
+    if (!selectedRestaurant && restaurantsCache.length) {
+      const restaurant = findRestaurantByVoice(text) || restaurantsCache[0];
+      if (restaurant) {
+        const row = document.querySelector(`#restaurant-list tr[data-business="${restaurant.id}"]`);
+        if (row) selectRestaurant(restaurant, row);
+      }
+    }
+    if (!selectedRestaurant) {
+      aiSpeak("Faollashtirish uchun avval restoran tanlang.");
+      return true;
+    }
+    const owner = selectedRestaurant._owner;
+    if (!owner) {
+      aiSpeak("Tanlangan restoran ma’lumotlari yuklanmagan. Qayta urinib ko‘ring.");
+      return true;
+    }
+    if (owner.isActive === false) {
+      const selectedRow = document.querySelector("#restaurant-list .row-selected");
+      const updated = await putJson("/Business/UpdateOwnerStatus", {
+        businessId: Number(selectedRestaurant.id),
+        isActive: true,
+      });
+      selectedRestaurant._owner = updated;
+      renderRestaurantRows();
+      updateSuperStats();
+      if (selectedRow) selectRestaurant(selectedRestaurant, selectedRow);
+      aiSpeak(`${selectedRestaurant.name} restorani faollashtirdim.`);
+      return true;
+    }
+    aiSpeak(`${selectedRestaurant.name} restorani allaqachon faol.`);
+    return true;
+  }
+
+  if (/(restoran|supermarket|pech|magazin).*(passiv|o'chir|yop|deactivate|disable)/.test(text)) {
+    if (!selectedRestaurant && restaurantsCache.length) {
+      const restaurant = findRestaurantByVoice(text) || restaurantsCache[0];
+      if (restaurant) {
+        const row = document.querySelector(`#restaurant-list tr[data-business="${restaurant.id}"]`);
+        if (row) selectRestaurant(restaurant, row);
+      }
+    }
+    if (!selectedRestaurant) {
+      aiSpeak("Passiv qilish uchun avval restoran tanlang.");
+      return true;
+    }
+    const owner = selectedRestaurant._owner;
+    if (!owner) {
+      aiSpeak("Tanlangan restoran ma’lumotlari yuklanmagan.");
+      return true;
+    }
+    if (owner.isActive !== false) {
+      const selectedRow = document.querySelector("#restaurant-list .row-selected");
+      const updated = await putJson("/Business/UpdateOwnerStatus", {
+        businessId: Number(selectedRestaurant.id),
+        isActive: false,
+      });
+      selectedRestaurant._owner = updated;
+      renderRestaurantRows();
+      updateSuperStats();
+      if (selectedRow) selectRestaurant(selectedRestaurant, selectedRow);
+      aiSpeak(`${selectedRestaurant.name} restorani passiv qildim.`);
+      return true;
+    }
+    aiSpeak(`${selectedRestaurant.name} restorani allaqachon passiv.`);
+    return true;
+  }
+
+  if (/(qaysi|nimani|what).*(restoran|pech|supermarket)|((restoran|supermarket).*\?)/.test(text)) {
+    const restaurant = selectedRestaurant || restaurantsCache[0];
+    const market = selectedMarket || marketsCache[0];
+    if (restaurant) {
+      aiSpeak(`Tanlangan restoran: ${restaurant.name}.`);
+      return true;
+    }
+    if (market) {
+      aiSpeak(`Tanlangan supermarket: ${market.name}.`);
+      return true;
+    }
+    aiSpeak("Hozir hech bir restoran tanlanmagan.");
+    return true;
+  }
+
+  if (/(yordam|help|nima qila olasan|buyruq)/.test(text)) {
+    aiSpeak("Buyruqlar: restoranlar ro‘yxati, restoran qo‘sh, supermarketlar ro‘yxati, supermarket qo‘sh, tanlangan restoranni faollashtirish yoki passiv qilish.");
+    return true;
+  }
+
+  return false;
+}
+
 // ======================= Ovozli AI yordamchi =======================
 const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
 const canMic = typeof SpeechRec !== "undefined";
@@ -942,6 +1178,18 @@ async function aiAsk(question) {
     return;
   }
   aiAddMessage("user", q);
+
+  // JARVIS rejimi: switch yoqilgan VA matnda "AI"/"Jarvis" so'zi bo'lsa — buyruq bajariladi.
+  // Aks holda (oddiy savol) quyidagi backend AI javobiga o'tiladi — eski xatti-harakat buzilmaydi.
+  if (jarvisShouldRun(q)) {
+    const handled = await performVoiceCommand(q);
+    if (handled) {
+      if (aiMsgEl) setMsg(aiMsgEl, "", "");
+      aiAddMessage("bot", "✅ Buyruq bajarildi.");
+      return;
+    }
+  }
+
   if (aiMsgEl) setMsg(aiMsgEl, "AI javob kutilmoqda...", "");
   const askStart = performance.now();
   let meta = null;
@@ -996,10 +1244,16 @@ $("sa-ai-mic").addEventListener("click", () => {
   aiRecognition.interimResults = false;
   aiRecognition.maxAlternatives = 1;
   aiRecognition.onstart = () => { aiListening = true; lockMicUi(true); };
-  aiRecognition.onresult = event => {
+  aiRecognition.onresult = async event => {
     const text = event.results[0][0].transcript.trim();
     const input = $("sa-ai-input");
     if (input) { input.value = text; input.focus(); }
+    // Mikrofon: JARVIS yoqilgan + "AI"/"Jarvis" so'zi bo'lsa — buyruq bajariladi,
+    // aks holda oddiy AI savoli sifatida yuboriladi.
+    if (jarvisShouldRun(text)) {
+      const done = await performVoiceCommand(text);
+      if (done) return; // tasdiq ovozini performVoiceCommand o'zi aytadi
+    }
     aiAsk(text);
   };
   aiRecognition.onerror = () => {

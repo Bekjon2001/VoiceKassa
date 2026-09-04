@@ -211,6 +211,20 @@ button{font-family:inherit}
 .ai-voice-toggle input{accent-color:var(--green);cursor:pointer}
 @keyframes aiFade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
 
+/* ---------- JARVIS AI switch (pastki o'ng burchak) ---------- */
+.jarvis-toggle{position:fixed;right:18px;bottom:18px;z-index:1200;display:inline-flex;align-items:center;gap:9px;background:var(--panel);border:1px solid var(--line);border-radius:999px;box-shadow:0 8px 24px -8px rgba(23,36,31,.28);padding:8px 14px;cursor:pointer;user-select:none;transition:border-color .18s,background .18s}
+.jarvis-toggle input{position:absolute;opacity:0;width:0;height:0;overflow:hidden}
+.jarvis-toggle__knob{position:relative;width:38px;height:20px;border-radius:20px;background:#c9d0cc;flex:0 0 auto;transition:background .2s}
+.jarvis-toggle__knob::after{content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;transition:transform .2s;box-shadow:0 1px 3px rgba(23,36,31,.3)}
+.jarvis-toggle input:checked + .jarvis-toggle__knob{background:var(--green)}
+.jarvis-toggle input:checked + .jarvis-toggle__knob::after{transform:translateX(18px)}
+.jarvis-toggle__label{display:flex;flex-direction:column;line-height:1.1;font-size:12.5px}
+.jarvis-toggle__label strong{font-weight:700;color:var(--green-dark)}
+.jarvis-toggle__label small{color:var(--muted);font-size:10.5px}
+.jarvis-toggle--on{background:var(--green);border-color:var(--green-dark);color:#fff}
+.jarvis-toggle--on .jarvis-toggle__label strong{color:#fff}
+.jarvis-toggle--on .jarvis-toggle__label small{color:rgba(255,255,255,.85)}
+
 .placeholder{background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--green);border-radius:var(--radius);box-shadow:var(--shadow);padding:26px}
 .placeholder h2{margin:4px 0 6px;font-size:19px}
 .placeholder p{margin:0;color:var(--muted);font-size:14px;max-width:560px}

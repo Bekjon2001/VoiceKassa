@@ -247,7 +247,7 @@
               <div>
                 <span class="step-label">OVOZLI AI YORDAMCHI</span>
                 <h3>AI bilan suhbat</h3>
-                <p class="sub">Mikrofon orqali gapiring yoki yozib so‘rang — AI platformadagi real ma'lumotlar asosida javob beradi.</p>
+                <p class="sub">Mikrofon orqali gapiring yoki yozib so‘rang. Pastki o‘ng burchakdagi <strong>Jarvis</strong> yoqilganida “AI” yoki “Jarvis” deb boshlangan buyruqlar (masalan: “AI, restoranlar ro‘yxatini och”) avtomatik bajariladi. Oddiy savollar esa avvalgidek javob oladi.</p>
               </div>
               <label class="ai-voice-toggle" title="Javobni ovoz bilan o‘qish">
                 <input type="checkbox" id="ai-voice-toggle" checked />
@@ -267,6 +267,14 @@
     </div>
   </div>
 </main>
+
+<!-- ======================= JARVIS AI switch (pastki o'ng burchak) ======================= -->
+<label id="jarvis-wrap" class="jarvis-toggle" title="Jarvisni yoqing va 'AI' yoki 'Jarvis' deb boshlangan buyruq bering (masalan: 'AI, restoranlar ro‘yxatini och') — buyruqlar avtomatik bajariladi">
+  <input type="checkbox" id="jarvis-toggle" role="switch" aria-label="Jarvis AI buyruqlarni yoqish" />
+  <span class="jarvis-toggle__knob" aria-hidden="true"></span>
+  <span class="jarvis-toggle__label"><strong>Jarvis</strong><small>AI buyruqlar</small></span>
+</label>
+
 <script src="super-admin.js"></script>
 </body>
 </html>
