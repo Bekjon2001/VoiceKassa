@@ -867,6 +867,51 @@ async function performVoiceCommand(rawText) {
     return true;
   }
 
+  if (/^\d+$/.test(text)) {
+    const idx = parseInt(text, 10) - 1;
+    const view = getCurrentView();
+    if (view === "restaurants" && restaurantsCache.length && idx >= 0 && idx < restaurantsCache.length) {
+      const r = restaurantsCache[idx];
+      const row = document.querySelector(`#restaurant-list tr[data-business="${r.id}"]`);
+      if (row) selectRestaurant(r, row);
+      aiSpeak(`${r.name} restorani tanlandi.`);
+      return true;
+    }
+    if (view === "markets" && marketsCache.length && idx >= 0 && idx < marketsCache.length) {
+      const m = marketsCache[idx];
+      const row = document.querySelector(`#market-list tr[data-business="${m.id}"]`);
+      if (row) selectMarket(m, row);
+      aiSpeak(`${m.name} supermarketi tanlandi.`);
+      return true;
+    }
+    aiSpeak("Bunday raqamda element topilmadi.");
+    return true;
+  }
+
+  if (text.length >= 2) {
+    const view = getCurrentView();
+    if (view === "restaurants") {
+      const r = findRestaurantByVoice(text);
+      if (r) {
+        await loadRestaurants();
+        const row = document.querySelector(`#restaurant-list tr[data-business="${r.id}"]`);
+        if (row) selectRestaurant(r, row);
+        aiSpeak(`${r.name} restorani tanlandi.`);
+        return true;
+      }
+    }
+    if (view === "markets") {
+      const m = findMarketByVoice(text);
+      if (m) {
+        await loadMarkets();
+        const row = document.querySelector(`#market-list tr[data-business="${m.id}"]`);
+        if (row) selectMarket(m, row);
+        aiSpeak(`${m.name} supermarketi tanlandi.`);
+        return true;
+      }
+    }
+  }
+
   return false;
 }
 
