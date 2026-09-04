@@ -923,6 +923,20 @@ const aiMsgEl = $("sa-ai-message");
 
 let aiRecognition = null;
 let aiListening = false;
+// Mikrofon tan olish tili (uz-UZ / ru-RU) — sahifa yangilanganda saqlanadi
+let aiRecLang = localStorage.getItem("vk_ai_rec_lang") || "uz-UZ";
+let aiNoSpeechRetried = false;
+const aiLangBtn = $("sa-ai-lang");
+function aiLangLabel() { return aiRecLang.toLowerCase().startsWith("ru") ? "ru" : "uz"; }
+if (aiLangBtn) {
+  aiLangBtn.textContent = aiLangLabel();
+  aiLangBtn.addEventListener("click", () => {
+    aiRecLang = aiLangLabel() === "uz" ? "ru-RU" : "uz-UZ";
+    localStorage.setItem("vk_ai_rec_lang", aiRecLang);
+    aiLangBtn.textContent = aiLangLabel();
+    if (aiMsgEl) setMsg(aiMsgEl, "Mikrofon tili: " + (aiLangLabel() === "uz" ? "o‘zbekcha (uz)" : "ruscha (ru)"), "");
+  });
+}
 
 // Chatda ko'rsatish uchun markdown belgilarni tozalash (qatorlar saqlanadi)
 function mdDisplayClean(text) {
@@ -1300,38 +1314,79 @@ $("sa-ai-mic").addEventListener("click", () => {
     if (aiMsgEl) setMsg(aiMsgEl, "", "");
     return;
   }
+  aiNoSpeechRetried = false; // yangi urinish — qayta-urinish huquqi qayta beriladi
+  startAiRecognition(false);
+});
+
+function startAiRecognition(isRetry) {
   aiRecognition = new SpeechRec();
-  aiRecognition.lang = "uz-UZ";
-  aiRecognition.interimResults = false;
+  aiRecognition.lang = aiRecLang;
+  aiRecognition.interimResults = true; // jonli ko'rsatkich: brauzer nima eshitayotganini darhol ko'rsatadi
+  aiRecognition.continuous = false;
   aiRecognition.maxAlternatives = 1;
-  aiRecognition.onstart = () => { aiListening = true; lockMicUi(true); };
+  aiRecognition.onstart = () => {
+    aiListening = true; lockMicUi(true);
+    if (aiMsgEl) setMsg(aiMsgEl, "🔴 Eshtyapti... gapiring (til: " + aiLangLabel() + ")", "");
+  };
   aiRecognition.onresult = async event => {
-    const text = event.results[0][0].transcript.trim();
+    let finalText = "", interimText = "";
+    for (let i = 0; i < event.results.length; i++) {
+      const r = event.results[i];
+      if (r.isFinal) finalText += r[0].transcript;
+      else interimText += r[0].transcript;
+    }
     const input = $("sa-ai-input");
-    if (input) { input.value = text; input.focus(); }
+    // Oraliq natija — foydalanuvchiga "meni eshityapti" degan jonli belgi
+    if (!finalText.trim()) {
+      if (input && interimText.trim()) input.value = interimText.trim();
+      if (aiMsgEl && interimText.trim()) setMsg(aiMsgEl, "🔴 Eshtyapti: " + interimText.trim(), "");
+      return;
+    }
+    finalText = finalText.trim();
+    if (input) { input.value = finalText; input.focus(); }
     // Mikrofon: JARVIS yoqilgan + "AI"/"Jarvis" so'zi bo'lsa — buyruq bajariladi,
     // aks holda oddiy AI savoli sifatida yuboriladi.
-    if (jarvisShouldRun(text)) {
-      const done = await performVoiceCommand(text);
+    if (jarvisShouldRun(finalText)) {
+      const done = await performVoiceCommand(finalText);
       if (done) return; // tasdiq ovozini performVoiceCommand o'zi aytadi
     }
-    aiAsk(text);
+    aiAsk(finalText);
   };
   aiRecognition.onerror = (event) => {
     aiListening = false; lockMicUi(false);
     const code = event && event.error ? String(event.error) : "";
+    // Til qo'llanmasa — avtomatik rus tiliga o'tib qayta boshlash
+    if (/language-not-supported/i.test(code) && aiLangLabel() !== "ru") {
+      aiRecLang = "ru-RU";
+      localStorage.setItem("vk_ai_rec_lang", aiRecLang);
+      if (aiLangBtn) aiLangBtn.textContent = aiLangLabel();
+      if (aiMsgEl) setMsg(aiMsgEl, "uz-UZ tili qo‘llanmadi — ruscha (ru) tanlandi. Yana gapiring.", "err");
+      startAiRecognition(true);
+      return;
+    }
+    // Ovoz eshitilmadi — bir marta avtomatik qayta urinish
+    if (/no-speech/i.test(code) && !isRetry && !aiNoSpeechRetried) {
+      aiNoSpeechRetried = true;
+      if (aiMsgEl) setMsg(aiMsgEl, "Ovoz eshitilmadi — yana eshitishga urinilyapti, gapiring...", "err");
+      startAiRecognition(true);
+      return;
+    }
     let msg = "Mikrofon ishlamadi. Qaytadan urinib ko‘ring.";
     if (/not-allowed|permission|denied/i.test(code))
       msg = "Mikrofonga ruxsat berilmagan. Brauzer manzil qatoridagi qulf belgisini bosib, 'Mikrofon → Ruxsat berish'ni tanlang, so‘ng qayta gapiring.";
-    else if (/no-speech|speech/i.test(code))
-      msg = "Ovoz eshitilmadi. Mikrofon yoniq ekanini tekshirib, yana gapiring.";
+    else if (/no-speech/i.test(code))
+      msg = "Ovoz eshitilmadi. 1) 🎤 tugmasini bosib DARHOL gapira boshlang. 2) Windows: Sozlamalar → Tizim → Ovoz → Kirish (Input) bo‘limida to‘g‘ri mikrofon tanlanganini va ovoz darajasi yuqori ekanini tekshiring (siz gapirayotgan mikrofon standart bo‘lishi kerak). 3) Klaviatura orqali yozib ham so‘rashingiz mumkin.";
+    else if (/audio-capture/i.test(code))
+      msg = "Mikrofon qurilmasi topilmadi. Kompyuterga mikrofon ulanganini tekshiring.";
+    else if (/language-not-supported/i.test(code))
+      msg = "Tanlangan mikrofon tili qo‘llanmaydi. 🎤 yonidagi uz/ru tugmasi bilan tilni o‘zgartiring.";
     else if (/audio|service|network/i.test(code))
-      msg = "Ovoz xizmati vaqtincha ishlamayapti. Qayta urinib ko‘ring.";
+      msg = "Ovoz xizmati vaqtincha ishlamayapti (mikrofon tan olish uchun internet kerak). Qayta urinib ko‘ring.";
     if (aiMsgEl) setMsg(aiMsgEl, msg, "err");
   };
   aiRecognition.onend = () => { aiListening = false; lockMicUi(false); };
   try { aiRecognition.start(); } catch { /* ignore */ }
-});
+}
 
 function lockMicUi(listening) {
   const mic = $("sa-ai-mic");
