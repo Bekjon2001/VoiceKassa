@@ -7,6 +7,7 @@ const API_BASE = location.protocol.startsWith("http")
   ? `${location.protocol}//${location.host}`
   : "http://localhost:55983";
 const SESSION_KEY = "vk_super_session";
+
 const JARVIS_KEY = "vk_jarvis_enabled"; // Jarvis (AI buyruqlar) switch holati — localStorage
 
 // JARVIS rejimi: buyruq faqat switch yoqilgan VA matnda "AI"/"Jarvis" so'zi (vaqf so'z) bo'lsa bajariladi.
@@ -650,7 +651,22 @@ function normalizeVoiceText(text) {
     .replace(/\bpechlar\b/g, "restoran")
     .replace(/\bpech\b/g, "restoran")
     .replace(/\bmagazin\b/g, "supermarket")
-    .replace(/\bmarket\b/g, "supermarket");
+    .replace(/\bmarket\b/g, "supermarket")
+    // Ovoz (mikrofon) orqali kirgan keng tarqalgan imlo xatolari — Jarvis buyruqlari ularni ham taniydi:) Restoranlar/royxat turlari
+    .replace(/\brestornlarni\b/g, "restoran")
+    .replace(/\brestornlari\b/g, "restoran")
+    .replace(/\brestarnlar\b/g, "restoran")
+    .replace(/\brestranlar\b/g, "restoran")
+    .replace(/\brestornni\b/g, "restoran")
+    .replace(/\brestorni\b/g, "restoran")
+    .replace(/\brestarnni\b/g, "restoran")
+    .replace(/\brestarni\b/g, "restoran")
+    .replace(/\brestarn\b/g, "restoran")
+    // "restorani" / "restoranni" — e'tiborsiz qolgan shakllar
+    .replace(/\brestoranni\b/g, "restoran")
+    .replace(/\brestorani\b/g, "restoran")
+    // "ro'yxat"ning ovoz orqali buzilgan shakllari (suffikslar bilan ham: royxati, ruyxatini, ...)
+    .replace(/\b(?:r[uo]yxat|ryyxat|rxxat|ro[uy]hat)[a-z]*\b/g, "ro'yxat");
 }
 
 function findRestaurantByVoice(text) {
@@ -1256,9 +1272,17 @@ $("sa-ai-mic").addEventListener("click", () => {
     }
     aiAsk(text);
   };
-  aiRecognition.onerror = () => {
+  aiRecognition.onerror = (event) => {
     aiListening = false; lockMicUi(false);
-    if (aiMsgEl) setMsg(aiMsgEl, "Mikrofon ishlamadi. Qaytadan urinib ko‘ring.", "err");
+    const code = event && event.error ? String(event.error) : "";
+    let msg = "Mikrofon ishlamadi. Qaytadan urinib ko‘ring.";
+    if (/not-allowed|permission|denied/i.test(code))
+      msg = "Mikrofonga ruxsat berilmagan. Brauzer manzil qatoridagi qulf belgisini bosib, 'Mikrofon → Ruxsat berish'ni tanlang, so‘ng qayta gapiring.";
+    else if (/no-speech|speech/i.test(code))
+      msg = "Ovoz eshitilmadi. Mikrofon yoniq ekanini tekshirib, yana gapiring.";
+    else if (/audio|service|network/i.test(code))
+      msg = "Ovoz xizmati vaqtincha ishlamayapti. Qayta urinib ko‘ring.";
+    if (aiMsgEl) setMsg(aiMsgEl, msg, "err");
   };
   aiRecognition.onend = () => { aiListening = false; lockMicUi(false); };
   try { aiRecognition.start(); } catch { /* ignore */ }
