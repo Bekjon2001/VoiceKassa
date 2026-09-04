@@ -12,7 +12,11 @@ const JARVIS_KEY = "vk_jarvis_enabled"; // Jarvis (AI buyruqlar) switch holati �
 
 // JARVIS rejimi: buyruq faqat switch yoqilgan VA matnda "AI"/"Jarvis" so'zi (vaqf so'z) bo'lsa bajariladi.
 function isJarvisOn() { const el = $("jarvis-toggle"); return !!el && el.checked; }
-function hasJarvisWake(text) { return /\b(jarvis|ai)\b/i.test(String(text || "")); }
+// Vaqf so'z: "AI"/"Jarvis" (latin) + ovozda kirillcha eshitilgan variantlar (джарвис/джарвес)
+function hasJarvisWake(text) {
+  const t = String(text || "").toLowerCase();
+  return /\b(jarvis|jarves|jayvis|ai)\b/.test(t) || /джарвис|джарвес|джарвиз/.test(t);
+}
 function jarvisShouldRun(text) { return isJarvisOn() && hasJarvisWake(text); }
 
 // Jarvis switch holatini tiklash (sahifa yangilansa ham saqlanadi) va saqlash
@@ -26,6 +30,8 @@ function jarvisShouldRun(text) { return isJarvisOn() && hasJarvisWake(text); }
   el.addEventListener("change", () => {
     try { localStorage.setItem(JARVIS_KEY, el.checked ? "1" : "0"); } catch { /* ignore */ }
     apply();
+    // Switch yoqilganda Jarvis doimiy eshitishni boshlaydi, o'chirilganda to'xtatadi
+    if (el.checked) startAlwaysListen(); else stopAlwaysListen();
   });
 })();
 
@@ -862,8 +868,22 @@ async function performVoiceCommand(rawText) {
     return true;
   }
 
-  if (/(yordam|help|nima qila olasan|buyruq)/.test(text)) {
-    aiSpeak("Buyruqlar: restoranlar ro‘yxati, restoran qo‘sh, supermarketlar ro‘yxati, supermarket qo‘sh, tanlangan restoranni faollashtirish yoki passiv qilish.");
+  if (/\byordam\b|help|nima qila olasan|buyruq/.test(text)) {
+    aiSpeak("Buyruqlar: restoranlar ro‘yxati, restoran qo‘sh, supermarketlar ro‘yxati, supermarket qo‘sh, tanlangan restoranni faollashtirish yoki passiv qilish, buni tugat, orqaga qaytish.");
+    return true;
+  }
+
+  // "AI, buni tugat / yop / orqaga qayt" — asosiy ro'yxatga qaytish
+  if (/(tugat|yop\b|orqaga)/.test(text)) {
+    setView("restaurants");
+    aiSpeak("Asosiy ro‘yxatga qaytdim. Buyruq bering.");
+    return true;
+  }
+
+  // "AI, yordamchini och" — AI chat bo'limini ochish
+  if (/yordamchi/.test(text) && /(och|ko'rsat|korsat|show)/.test(text)) {
+    setView("ai");
+    aiSpeak("AI yordamchi ochildi.");
     return true;
   }
 
@@ -935,8 +955,104 @@ if (aiLangBtn) {
     localStorage.setItem("vk_ai_rec_lang", aiRecLang);
     aiLangBtn.textContent = aiLangLabel();
     if (aiMsgEl) setMsg(aiMsgEl, "Mikrofon tili: " + (aiLangLabel() === "uz" ? "o‘zbekcha (uz)" : "ruscha (ru)"), "");
+    // Jarvis doimiy eshitish yoqil bo'lsa — yangi til bilan qayta ishga tushiramiz
+    if (aiAlwaysListen && aiRecognition) { try { aiRecognition.stop(); } catch { /* onend qayta ishga tushiradi */ } }
   });
 }
+
+// ======================= Jarvis doimiy eshitish rejimi =======================
+// Jarvis switch yoqilganda mikrofon doim ochiq turadi. Foydalanuvchi 🎤 bosmasdan
+// "AI, ..." yoki "Jarvis, ..." deb gapirsa — buyruq darhol bajariladi.
+// Vaqf so'zisiz gaplar e'tiborga olinmaydi. Jarvis o'zi gapirayotganda mikrofon
+// to'xtatiladi (o'z ovozini eshitib qolmasligi uchun).
+let aiAlwaysListen = false; // Jarvis switch yoqilganmi (doimiy eshitish)
+let aiSpeakingNow = false;  // Jarvis hozir ovoz chiqaryaptimi
+let aiAlwaysErrors = 0;     // ketma-ket xatolar (cheksiz loop bo'lmasligi uchun)
+
+function updateJarvisUi() {
+  const wrap = document.getElementById("jarvis-wrap");
+  if (!wrap) return;
+  const small = wrap.querySelector(".jarvis-toggle__label small");
+  if (small) small.textContent = aiAlwaysListen ? (aiListening ? "eshityapti 🔴" : "ulanmoqda...") : "AI buyruqlar";
+  wrap.classList.toggle("jarvis-toggle--listening", aiAlwaysListen && aiListening);
+}
+
+function startAlwaysListen() {
+  if (!canMic || aiAlwaysListen) return;
+  aiAlwaysListen = true;
+  updateJarvisUi();
+  startAlwaysRecognition();
+}
+
+function stopAlwaysListen() {
+  aiAlwaysListen = false;
+  aiAlwaysErrors = 0;
+  if (aiRecognition) { try { aiRecognition.onend = null; aiRecognition.stop(); } catch { /* ignore */ } }
+  aiRecognition = null;
+  aiListening = false;
+  updateJarvisUi();
+}
+
+function startAlwaysRecognition() {
+  if (!aiAlwaysListen || !canMic || aiListening) return;
+  aiRecognition = new SpeechRec();
+  aiRecognition.lang = aiRecLang;
+  aiRecognition.continuous = true;      // uzluksiz eshitish
+  aiRecognition.interimResults = true;
+  aiRecognition.maxAlternatives = 1;
+  aiRecognition.onstart = () => { aiListening = true; aiAlwaysErrors = 0; updateJarvisUi(); };
+  aiRecognition.onresult = event => {
+    let finalText = "";
+    for (let i = 0; i < event.results.length; i++) {
+      const r = event.results[i];
+      if (r.isFinal) finalText += r[0].transcript + " ";
+    }
+    finalText = finalText.trim();
+    if (!finalText || aiSpeakingNow) return;
+    handleAlwaysHeard(finalText);
+  };
+  aiRecognition.onerror = event => {
+    const code = event && event.error ? String(event.error) : "";
+    if (/language-not-supported/i.test(code)) {
+      aiRecLang = "ru-RU";
+      try { localStorage.setItem("vk_ai_rec_lang", aiRecLang); } catch { /* ignore */ }
+      if (aiLangBtn) aiLangBtn.textContent = aiLangLabel();
+      return; // onend qayta ishga tushiradi
+    }
+    if (/not-allowed|permission|denied|audio-capture|service-not-allowed/i.test(code)) {
+      aiAlwaysErrors++;
+      if (aiAlwaysErrors >= 2) {
+        stopAlwaysListen();
+        if (aiMsgEl) setMsg(aiMsgEl, "Doimiy eshitish to‘xtatildi: mikrofonga ruxsat yo‘q yoki mikrofon topilmadi. 🎤 tugmasi bilan bir martalik eshitish va matn yozish ishlaydi.", "err");
+        return;
+      }
+    }
+    // no-speech / network — jim o'tadi, onend qayta ishga tushiradi
+  };
+  aiRecognition.onend = () => {
+    aiListening = false;
+    updateJarvisUi();
+    if (aiAlwaysListen && !aiSpeakingNow) {
+      setTimeout(() => { if (aiAlwaysListen && !aiListening && !aiSpeakingNow) startAlwaysRecognition(); }, 350);
+    }
+  };
+  try { aiRecognition.start(); } catch { setTimeout(() => { if (aiAlwaysListen && !aiListening && !aiSpeakingNow) startAlwaysRecognition(); }, 500); }
+}
+
+async function handleAlwaysHeard(text) {
+  if (jarvisShouldRun(text)) {
+    aiAddMessage("user", text);
+    const done = await performVoiceCommand(text);
+    if (done) { aiAddMessage("bot", "✅ Buyruq bajarildi."); return; }
+    // Vaqf so'zi bor, lekin UI buyrug'i emas — AI savol sifatida javob beradi
+    await askBackend(text);
+  } else if (aiMsgEl) {
+    setMsg(aiMsgEl, "🔴 Eshitildi: “" + text + "” — buyruq bo‘lishi uchun ‘AI’ yoki ‘Jarvis’ bilan boshlang.", "");
+  }
+}
+
+// Sahifa yukilganda switch yoqil bo'lsa — eshitishni boshlashga urinamiz
+if (isJarvisOn()) startAlwaysListen();
 
 // Chatda ko'rsatish uchun markdown belgilarni tozalash (qatorlar saqlanadi)
 function mdDisplayClean(text) {
@@ -1185,6 +1301,13 @@ async function aiSpeak(text) {
 
   const clean = speechClean(text);
   if (!clean) return;
+  // Jarvis o'z ovozini eshitib qolmasligi uchun — gapirayotganda mikrofonni to'xtatamiz
+  aiSpeakingNow = true;
+  if (aiAlwaysListen && aiRecognition) {
+    try { aiRecognition.onend = null; aiRecognition.stop(); } catch { /* ignore */ }
+    aiListening = false;
+    updateJarvisUi();
+  }
   if (canSpeak) { try { window.speechSynthesis.cancel(); } catch { /* ignore */ } }
   if (aiAudioEl) { try { aiAudioEl.pause(); } catch { /* ignore */ } }
 
@@ -1240,6 +1363,10 @@ async function aiSpeak(text) {
         window.speechSynthesis.speak(utter);
       } catch { /* ignore */ }
     }
+  } finally {
+    // Ovoz tugadi — doimiy eshitishni qayta yoqamiz
+    aiSpeakingNow = false;
+    if (aiAlwaysListen) setTimeout(() => { if (aiAlwaysListen && !aiListening && !aiSpeakingNow) startAlwaysRecognition(); }, 400);
   }
 }
 
@@ -1265,6 +1392,12 @@ async function aiAsk(question) {
     }
   }
 
+  await askBackend(q);
+}
+
+// Backend AI javobi (foydalanuvchi xabari chatga allaqachon qo'shilgan bo'ladi).
+// Jarvis doimiy eshitish rejimida ham shu funksiya ishlatiladi (user xabari takrorlanmaydi).
+async function askBackend(q) {
   if (aiMsgEl) setMsg(aiMsgEl, "AI javob kutilmoqda...", "");
   const askStart = performance.now();
   let meta = null;
@@ -1307,6 +1440,11 @@ async function aiAsk(question) {
 // Mikrofon tugmasi
 $("sa-ai-mic").addEventListener("click", () => {
   if (!canMic) return;
+  if (aiAlwaysListen) {
+    // Doimiy eshitish yoqil — qo'shimcha 🎤 bosish shart emas
+    if (aiMsgEl) setMsg(aiMsgEl, "Jarvis doimiy eshityapti — 🎤 bosmasdan shunchaki ‘AI, ...’ deb gapiring.", "");
+    return;
+  }
   if (aiListening) {
     if (aiRecognition) aiRecognition.stop();
     aiListening = false;

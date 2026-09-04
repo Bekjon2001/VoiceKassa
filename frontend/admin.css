@@ -224,6 +224,8 @@ button{font-family:inherit}
 .jarvis-toggle--on{background:var(--green);border-color:var(--green-dark);color:#fff}
 .jarvis-toggle--on .jarvis-toggle__label strong{color:#fff}
 .jarvis-toggle--on .jarvis-toggle__label small{color:rgba(255,255,255,.85)}
+.jarvis-toggle--listening .jarvis-toggle__knob{animation:jarvisPulse 1.2s ease-in-out infinite}
+@keyframes jarvisPulse{0%,100%{box-shadow:0 0 0 0 rgba(46,204,113,.45)}50%{box-shadow:0 0 0 6px rgba(46,204,113,0)}}
 
 .placeholder{background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--green);border-radius:var(--radius);box-shadow:var(--shadow);padding:26px}
 .placeholder h2{margin:4px 0 6px;font-size:19px}
