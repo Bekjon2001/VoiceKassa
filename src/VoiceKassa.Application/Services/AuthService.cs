@@ -53,7 +53,7 @@ public class AuthService
             FullName = request.FullName,
             PhoneNumber = request.PhoneNumber,
             Login = request.Login,
-            PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
+            PasswordHash = PasswordHasher.Hash(request.Password),
             IsSuperAdmin = true,
             IsActive = true,
             AccessToken = token,
@@ -75,7 +75,7 @@ public class AuthService
         if (account is null || !account.IsSuperAdmin || !account.IsActive)
             return (false, "Login yoki parol noto'g'ri.", null);
 
-        if (!BCrypt.Net.BCrypt.Verify(request.Password, account.PasswordHash))
+        if (!PasswordHasher.Verify(request.Password, account.PasswordHash))
             return (false, "Login yoki parol noto'g'ri.", null);
 
         var token = GenerateToken();
@@ -119,7 +119,7 @@ public class AuthService
             FullName = request.OwnerFullName,
             PhoneNumber = request.OwnerPhoneNumber,
             Login = request.Login,
-            PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
+            PasswordHash = PasswordHasher.Hash(request.Password),
             SubscriptionAmount = request.SubscriptionAmount,
             PaymentPaidAt = request.PaymentPaidAt,
             SubscriptionMonths = request.SubscriptionMonths,
@@ -145,7 +145,7 @@ public class AuthService
         if (owner is null || !owner.IsActive)
             return (false, "Login yoki parol noto'g'ri.", null);
 
-        if (!BCrypt.Net.BCrypt.Verify(request.Password, owner.PasswordHash))
+        if (!PasswordHasher.Verify(request.Password, owner.PasswordHash))
             return (false, "Login yoki parol noto'g'ri.", null);
 
         var business = await _businessRepo.GetBusinessByIdAsync(owner.BusinessId, ct);

@@ -195,20 +195,9 @@ public class BusinessService
         return (true, null, await GetOwnerAdminAsync(request.BusinessId, ct));
     }
 
-    private static string HashPassword(string password)
-    {
-        var salt = RandomNumberGenerator.GetBytes(16);
-        var hash = Rfc2898DeriveBytes.Pbkdf2(password, salt, 120_000, HashAlgorithmName.SHA256, 32);
-        return $"{Convert.ToBase64String(salt)}.{Convert.ToBase64String(hash)}";
-    }
+    private static string HashPassword(string password) => PasswordHasher.Hash(password);
 
-    private static bool VerifyPassword(string password, string stored)
-    {
-        var parts = stored.Split('.', 2);
-        if (parts.Length != 2) return false;
-        var hash = Rfc2898DeriveBytes.Pbkdf2(password, Convert.FromBase64String(parts[0]), 120_000, HashAlgorithmName.SHA256, 32);
-        return CryptographicOperations.FixedTimeEquals(hash, Convert.FromBase64String(parts[1]));
-    }
+    private static bool VerifyPassword(string password, string stored) => PasswordHasher.Verify(password, stored);
 
     private static OwnerLoginResponse ToOwnerResponse(RestaurantOwner owner, Business business) => new()
     {
