@@ -658,6 +658,7 @@ function normalizeVoiceText(text) {
     // Ovoz (mikrofon) orqali kirgan keng tarqalgan imlo xatolari — Jarvis buyruqlari ularni ham taniydi:) Restoranlar/royxat turlari
     .replace(/\brestornlarni\b/g, "restoran")
     .replace(/\brestornlari\b/g, "restoran")
+    .replace(/\brestornlar\b/g, "restoran")
     .replace(/\brestarnlar\b/g, "restoran")
     .replace(/\brestranlar\b/g, "restoran")
     .replace(/\brestornni\b/g, "restoran")
@@ -719,7 +720,62 @@ async function performVoiceCommand(rawText) {
   const text = normalizeVoiceText(rawText);
   if (!text) return false;
 
-  if (/(restoran|ro'yxat|royxat|pechlar|pech)/.test(text) && /(och|ko'rsat|show|ro'yxat|royxat)/.test(text)) {
+  // 0) SAVOL himoyasi: savol so'zlari ishtirok etgan gap buyruq EMAS —
+  //    AI javob beradi ("restoran haqida gapir", "qancha to'lov qildi").
+  if (/(haqida|qancha|nechta|qanday|nima|kim\b|qayer|nega|qachon|ma'lumot|malumot|ayt\b|gapir|tushuntir|\?)/.test(text))
+    return false;
+
+  // 1) YARATISH buyruqlari — ro'yxat ochishdan OLDIN tekshiriladi.
+  if (/(restoran|pech)/.test(text) && /(qo'sh|qosh|yarat|yangi|create|add)/.test(text)) {
+    setView("create");
+    aiSpeak("Restoran yaratish formasi ochildi.");
+    return true;
+  }
+  if (/(supermarket|market|magazin)/.test(text) && /(qo'sh|qosh|yarat|yangi|create|add)/.test(text)) {
+    setView("market-create");
+    aiSpeak("Supermarket yaratish formasi ochildi.");
+    return true;
+  }
+
+  // 2) ANIQ TANLASH — restoran/supermarket nomi yoki raqami aytilgan bo'lsa
+  //    ("restoran baxorni och", "baxor", "restoran 2") aynan o'shani tanlaymiz.
+  //    Bu UMUMIY "ro'yxat och" dan oldin turadi, aks holda nom yo'qoladi va
+  //    har safar birinchi qator ochilib qolardi.
+  const hasActionVerb = /(faollashtir|passiv|o'chir|yop\b|tugat|orqaga|qo'sh|qosh|yarat|yangi)/.test(text);
+  if (!hasActionVerb && !/^\d+$/.test(text)) {
+    const mentionsBusiness = /(restoran|supermarket|market|magazin|pech)/.test(text);
+    const wordCount = text.split(" ").filter(Boolean).length;
+    const shortText = wordCount <= 3;
+    if (mentionsBusiness || shortText) {
+      if (!restaurantsCache.length && (mentionsBusiness || getCurrentView() === "restaurants")) {
+        try { await loadRestaurants(); } catch { /* kesh bo'sh qoladi */ }
+      }
+      if (!marketsCache.length && (/(supermarket|market|magazin)/.test(text) || getCurrentView() === "markets")) {
+        try { await loadMarkets(); } catch { /* kesh bo'sh qoladi */ }
+      }
+      const restaurant = findRestaurantByVoice(text);
+      const market = findMarketByVoice(text);
+      const target = restaurant || market;
+      if (target) {
+        if (market && !restaurant) {
+          setView("markets");
+          const row = document.querySelector(`#market-list tr[data-business="${market.id}"]`);
+          if (row) selectMarket(market, row);
+          aiSpeak(`${market.name} supermarketi tanlandi.`);
+        } else {
+          setView("restaurants");
+          const row = document.querySelector(`#restaurant-list tr[data-business="${restaurant.id}"]`);
+          if (row) selectRestaurant(restaurant, row);
+          aiSpeak(`${restaurant.name} restorani tanlandi.`);
+        }
+        return true;
+      }
+    }
+  }
+
+  // 3) UMUMIY RO'YXAT OCHISH — faqat aniq nom/raqam aytilmagan bo'lsa.
+  //    "och" boshqa so'z ichida tasodifan mos bo'lmasligi uchun \b bilan.
+  if (/(restoran|pech)/.test(text) && /\b(?:och|ochish|ko'rsat|korsat|show|ro'yxat|royxat)\b/.test(text)) {
     setView("restaurants");
     if (!restaurantsCache.length) await loadRestaurants();
     const first = restaurantsCache[0];
@@ -731,19 +787,7 @@ async function performVoiceCommand(rawText) {
     return true;
   }
 
-  if (/(restoran|pech)/.test(text) && /(qo'sh|yarat|qosh|yangi|create|add)/.test(text)) {
-    setView("create");
-    aiSpeak("Restoran yaratish formasi ochildi.");
-    return true;
-  }
-
-  if (/(supermarket|market).*(qo'sh|yarat|yangi|create|add)/.test(text)) {
-    setView("market-create");
-    aiSpeak("Supermarket yaratish formasi ochildi.");
-    return true;
-  }
-
-  if (/(supermarket|market).*(och|ko'rsat|show|ro'yxat|royxat)/.test(text)) {
+  if (/(supermarket|market|magazin)/.test(text) && /\b(?:och|ochish|ko'rsat|korsat|show|ro'yxat|royxat)\b/.test(text)) {
     setView("markets");
     if (!marketsCache.length) await loadMarkets();
     const first = marketsCache[0];
@@ -753,33 +797,6 @@ async function performVoiceCommand(rawText) {
     }
     aiSpeak("Supermarketlar ro‘yxati ochildi.");
     return true;
-  }
-
-  if (/(supermarket|market)\s*\d+|restoran\s*\d+/.test(text)) {
-    const restaurant = findRestaurantByVoice(text);
-    const market = findMarketByVoice(text);
-    const target = restaurant || market;
-    if (restaurant && !market) {
-      setView("restaurants");
-      await loadRestaurants();
-      const row = document.querySelector(`#restaurant-list tr[data-business="${restaurant.id}"]`);
-      if (row) selectRestaurant(restaurant, row);
-      aiSpeak(`${restaurant.name} restorani tanlandi.`);
-      return true;
-    }
-    if (market) {
-      setView("markets");
-      await loadMarkets();
-      const row = document.querySelector(`#market-list tr[data-business="${market.id}"]`);
-      if (row) selectMarket(market, row);
-      aiSpeak(`${market.name} supermarketi tanlandi.`);
-      return true;
-    }
-    if (target) {
-      setView("restaurants");
-      aiSpeak(`${target.name} tanlandi.`);
-      return true;
-    }
   }
 
   if (/(restoran|supermarket|pech|magazin).*(faollashtir|yoq|aktivlashtir|enable|activate)/.test(text)) {
