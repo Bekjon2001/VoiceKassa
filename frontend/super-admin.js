@@ -968,6 +968,29 @@ if (aiLangBtn) {
 let aiAlwaysListen = false; // Jarvis switch yoqilganmi (doimiy eshitish)
 let aiSpeakingNow = false;  // Jarvis hozir ovoz chiqaryaptimi
 let aiAlwaysErrors = 0;     // ketma-ket xatolar (cheksiz loop bo'lmasligi uchun)
+let aiLastHeardCmd = "";    // so'nggi bajarilgan buyruq (takrorlanishni oldini olish)
+let aiLastHeardAt = 0;      // so'nggi buyruq vaqti
+
+// Mikrofonga ruxsatni aniq so'raymiz (SpeechRecognition ishga tushishi uchun
+// brauzer aynan foydalanuvchi ish-harakatidan so'ng ruxsat olishi kerak).
+// true — ruxsat bor; string — xato xabari.
+async function requestMicPermission() {
+  try {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return true;
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    stream.getTracks().forEach(t => t.stop());
+    return true;
+  } catch (err) {
+    const name = err && err.name ? String(err.name) : "";
+    if (/NotAllowed|Permission|denied|security/i.test(name))
+      return "Mikrofonga ruxsat berilmagan. Brauzer manzil qatoridagi qulf belgisini bosib → 'Mikrofon' → 'Ruxsat' ni tanlang, keyin Ctrl+F5 bilan sahifani yangilang.";
+    if (/NotFound|Devices?|source/i.test(name))
+      return "Mikrofon qurilmasi topilmadi. Mikrofon ulanganini va Windows Sozlamalar → Tizim → Ovoz → Kirish bo‘limida standart qilib tanlanganini tekshiring.";
+    if (/NotReadable|in.use/i.test(name))
+      return "Mikrofon boshqa dasturda ishlatilyapti (masalan Zoom). Uni yoping va qayta urinib ko‘ring.";
+    return "Mikrofonga ulanishda xatolik: " + (name || "noma'lum") + ". Qayta urinib ko‘ring.";
+  }
+}
 
 function updateJarvisUi() {
   const wrap = document.getElementById("jarvis-wrap");
@@ -977,8 +1000,17 @@ function updateJarvisUi() {
   wrap.classList.toggle("jarvis-toggle--listening", aiAlwaysListen && aiListening);
 }
 
-function startAlwaysListen() {
-  if (!canMic || aiAlwaysListen) return;
+async function startAlwaysListen() {
+  if (!canMic) {
+    if (aiMsgEl) setMsg(aiMsgEl, "Bu brauzer mikrofonni qo‘llab-quvvatlamaydi. Chrome yoki Edge’dan foydalaning.", "err");
+    return;
+  }
+  if (aiAlwaysListen) return;
+  const perm = await requestMicPermission();
+  if (perm !== true) {
+    if (aiMsgEl) setMsg(aiMsgEl, "Jarvis eshita olmaydi: " + perm, "err");
+    return;
+  }
   aiAlwaysListen = true;
   updateJarvisUi();
   startAlwaysRecognition();
@@ -993,27 +1025,53 @@ function stopAlwaysListen() {
   updateJarvisUi();
 }
 
+// DIQQAT: Chrome’da `continuous = true` rejimda final (yakuniy) natijalar
+// ishonchli yetib kelmaydi — gaplar interim holatda qotib qoladi. Shuning uchun
+// biz `continuous = false` dan foydalanamiz (gap tugagach final natija keladi va
+// onend yuz beradi), keyin Jarvis o'zini qayta ishga tushiradi. Bu — ishonchli usul.
 function startAlwaysRecognition() {
   if (!aiAlwaysListen || !canMic || aiListening) return;
   aiRecognition = new SpeechRec();
   aiRecognition.lang = aiRecLang;
-  aiRecognition.continuous = true;      // uzluksiz eshitish
-  aiRecognition.interimResults = true;
+  aiRecognition.continuous = false;     // qat'iy rejim — ishonchli eshitish
+  aiRecognition.interimResults = true;  // jonli ko'rsatkich uchun
   aiRecognition.maxAlternatives = 1;
-  aiRecognition.onstart = () => { aiListening = true; aiAlwaysErrors = 0; updateJarvisUi(); };
+
+  aiRecognition.onstart = () => {
+    aiListening = true;
+    aiAlwaysErrors = 0;
+    updateJarvisUi();
+  };
+
   aiRecognition.onresult = event => {
     let finalText = "";
+    let interimText = "";
     for (let i = 0; i < event.results.length; i++) {
       const r = event.results[i];
       if (r.isFinal) finalText += r[0].transcript + " ";
+      else interimText += r[0].transcript;
     }
     finalText = finalText.trim();
+
+    // Jonli ko'rsatkich: brauzer nima eshitayotganini darhol ko'rsatamiz
+    if (!finalText && interimText.trim() && !aiSpeakingNow) {
+      if (aiMsgEl) setMsg(aiMsgEl, "🔴 Eshtyapti: “" + interimText.trim() + "”", "");
+      return;
+    }
     if (!finalText || aiSpeakingNow) return;
+
+    // Bir xil buyruqning takrorlanmasligi (qisqa vaqt ichida ikki marta)
+    const now = Date.now();
+    if (finalText === aiLastHeardCmd && now - aiLastHeardAt < 4000) return;
+    aiLastHeardCmd = finalText;
+    aiLastHeardAt = now;
+
     handleAlwaysHeard(finalText);
   };
+
   aiRecognition.onerror = event => {
     const code = event && event.error ? String(event.error) : "";
-    if (/language-not-supported/i.test(code)) {
+    if (/language-not-supported/i.test(code) && aiLangLabel() !== "ru") {
       aiRecLang = "ru-RU";
       try { localStorage.setItem("vk_ai_rec_lang", aiRecLang); } catch { /* ignore */ }
       if (aiLangBtn) aiLangBtn.textContent = aiLangLabel();
@@ -1029,14 +1087,17 @@ function startAlwaysRecognition() {
     }
     // no-speech / network — jim o'tadi, onend qayta ishga tushiradi
   };
+
   aiRecognition.onend = () => {
     aiListening = false;
     updateJarvisUi();
     if (aiAlwaysListen && !aiSpeakingNow) {
-      setTimeout(() => { if (aiAlwaysListen && !aiListening && !aiSpeakingNow) startAlwaysRecognition(); }, 350);
+      setTimeout(() => { if (aiAlwaysListen && !aiListening && !aiSpeakingNow) startAlwaysRecognition(); }, 250);
     }
   };
-  try { aiRecognition.start(); } catch { setTimeout(() => { if (aiAlwaysListen && !aiListening && !aiSpeakingNow) startAlwaysRecognition(); }, 500); }
+
+  try { aiRecognition.start(); }
+  catch { setTimeout(() => { if (aiAlwaysListen && !aiListening && !aiSpeakingNow) startAlwaysRecognition(); }, 400); }
 }
 
 async function handleAlwaysHeard(text) {
@@ -1051,8 +1112,20 @@ async function handleAlwaysHeard(text) {
   }
 }
 
-// Sahifa yukilganda switch yoqil bo'lsa — eshitishni boshlashga urinamiz
-if (isJarvisOn()) startAlwaysListen();
+// Sahifa yukilganda switch yoqil bo'lsa — Jarvisni ishga tushiramiz.
+// DIQQAT: brauzer mikrofonga ruxsatni faqat foydalanuvchi ish-harakatidan keyin
+// beradi, avtostart esa bloklanadi. Shuning uchun birinchi bosish/teginishda
+// boshlaymiz.
+if (isJarvisOn()) {
+  const beginJarvis = () => {
+    window.removeEventListener("pointerdown", beginJarvis);
+    window.removeEventListener("keydown", beginJarvis);
+    startAlwaysListen();
+  };
+  window.addEventListener("pointerdown", beginJarvis);
+  window.addEventListener("keydown", beginJarvis);
+  if (aiMsgEl) setMsg(aiMsgEl, "Jarvis yoqilgan — ishga tushishi uchun sahifani bir marta bosing (yoki istalgan tugmani bosing), keyin ‘AI, ...’ deb gapiring.", "");
+}
 
 // Chatda ko'rsatish uchun markdown belgilarni tozalash (qatorlar saqlanadi)
 function mdDisplayClean(text) {
@@ -1456,7 +1529,15 @@ $("sa-ai-mic").addEventListener("click", () => {
   startAiRecognition(false);
 });
 
-function startAiRecognition(isRetry) {
+async function startAiRecognition(isRetry) {
+  if (!isRetry) {
+    const perm = await requestMicPermission();
+    if (perm !== true) {
+      lockMicUi(false);
+      if (aiMsgEl) setMsg(aiMsgEl, perm, "err");
+      return;
+    }
+  }
   aiRecognition = new SpeechRec();
   aiRecognition.lang = aiRecLang;
   aiRecognition.interimResults = true; // jonli ko'rsatkich: brauzer nima eshitayotganini darhol ko'rsatadi
