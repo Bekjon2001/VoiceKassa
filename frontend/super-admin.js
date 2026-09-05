@@ -10,14 +10,11 @@ const SESSION_KEY = "vk_super_session";
 
 const JARVIS_KEY = "vk_jarvis_enabled"; // Jarvis (AI buyruqlar) switch holati — localStorage
 
-// JARVIS rejimi: buyruq faqat switch yoqilgan VA matnda "AI"/"Jarvis" so'zi (vaqf so'z) bo'lsa bajariladi.
+// JARVIS rejimi (ERKIN): switch yoqilgan bo'lsa — "AI"/"Jarvis" vaqf so'zi
+// shart EMAS. Har qanday yozilgan/aytilgan matn avval buyruq sifatida
+// tekshiriladi; tanilmagan matn oddiy AI savoliga aylanadi.
 function isJarvisOn() { const el = $("jarvis-toggle"); return !!el && el.checked; }
-// Vaqf so'z: "AI"/"Jarvis" (latin) + ovozda kirillcha eshitilgan variantlar (джарвис/джарвес)
-function hasJarvisWake(text) {
-  const t = String(text || "").toLowerCase();
-  return /\b(jarvis|jarves|jayvis|ai)\b/.test(t) || /джарвис|джарвес|джарвиз/.test(t);
-}
-function jarvisShouldRun(text) { return isJarvisOn() && hasJarvisWake(text); }
+function jarvisShouldRun() { return isJarvisOn(); }
 
 // Jarvis switch holatini tiklash (sahifa yangilansa ham saqlanadi) va saqlash
 (function () {
@@ -1101,31 +1098,20 @@ function startAlwaysRecognition() {
 }
 
 async function handleAlwaysHeard(text) {
-  if (jarvisShouldRun(text)) {
+  if (jarvisShouldRun()) {
     aiAddMessage("user", text);
     const done = await performVoiceCommand(text);
     if (done) { aiAddMessage("bot", "✅ Buyruq bajarildi."); return; }
-    // Vaqf so'zi bor, lekin UI buyrug'i emas — AI savol sifatida javob beradi
+    // Buyruq tanilmadi — AI savol sifatida javob beradi
     await askBackend(text);
   } else if (aiMsgEl) {
-    setMsg(aiMsgEl, "🔴 Eshitildi: “" + text + "” — buyruq bo‘lishi uchun ‘AI’ yoki ‘Jarvis’ bilan boshlang.", "");
+    setMsg(aiMsgEl, "Jarvis o‘chiq — pastki o‘ng burchakdagi ‘Jarvis’ tugmasini yoqing.", "");
   }
 }
 
-// Sahifa yukilganda switch yoqil bo'lsa — Jarvisni ishga tushiramiz.
-// DIQQAT: brauzer mikrofonga ruxsatni faqat foydalanuvchi ish-harakatidan keyin
-// beradi, avtostart esa bloklanadi. Shuning uchun birinchi bosish/teginishda
-// boshlaymiz.
-if (isJarvisOn()) {
-  const beginJarvis = () => {
-    window.removeEventListener("pointerdown", beginJarvis);
-    window.removeEventListener("keydown", beginJarvis);
-    startAlwaysListen();
-  };
-  window.addEventListener("pointerdown", beginJarvis);
-  window.addEventListener("keydown", beginJarvis);
-  if (aiMsgEl) setMsg(aiMsgEl, "Jarvis yoqilgan — ishga tushishi uchun sahifani bir marta bosing (yoki istalgan tugmani bosing), keyin ‘AI, ...’ deb gapiring.", "");
-}
+// Sahifa yuki vaqti Jarvisni AVTOMATIK ishga tushirmaymiz — brauzer mikrofonga
+// ruxsat olmagan bo'lishi mumkin va foydalanuvchi o'zi yoqishni xohlaydi.
+// Jarvis faqat pastki o'ng burchakdagi switch qo'lda yoqilganda boshlanadi.
 
 // Chatda ko'rsatish uchun markdown belgilarni tozalash (qatorlar saqlanadi)
 function mdDisplayClean(text) {
@@ -1454,9 +1440,9 @@ async function aiAsk(question) {
   }
   aiAddMessage("user", q);
 
-  // JARVIS rejimi: switch yoqilgan VA matnda "AI"/"Jarvis" so'zi bo'lsa — buyruq bajariladi.
-  // Aks holda (oddiy savol) quyidagi backend AI javobiga o'tiladi — eski xatti-harakat buzilmaydi.
-  if (jarvisShouldRun(q)) {
+  // JARVIS rejimi (ERKIN): switch yoqilgan bo'lsa — "AI"/"Jarvis" so'zi shart emas.
+  // Har qanday matn avval buyruq sifatida tekshiriladi; tanilmagan bo'lsa backend AI javob beradi.
+  if (jarvisShouldRun()) {
     const handled = await performVoiceCommand(q);
     if (handled) {
       if (aiMsgEl) setMsg(aiMsgEl, "", "");
@@ -1563,9 +1549,9 @@ async function startAiRecognition(isRetry) {
     }
     finalText = finalText.trim();
     if (input) { input.value = finalText; input.focus(); }
-    // Mikrofon: JARVIS yoqilgan + "AI"/"Jarvis" so'zi bo'lsa — buyruq bajariladi,
-    // aks holda oddiy AI savoli sifatida yuboriladi.
-    if (jarvisShouldRun(finalText)) {
+    // Mikrofon: Jarvis yoqilgan bo'lsa — matn avval buyruq sifatida tekshiriladi,
+    // tanilmagan bo'lsa oddiy AI savoli sifatida yuboriladi.
+    if (jarvisShouldRun()) {
       const done = await performVoiceCommand(finalText);
       if (done) return; // tasdiq ovozini performVoiceCommand o'zi aytadi
     }
