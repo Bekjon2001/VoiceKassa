@@ -648,7 +648,11 @@ function normalizeVoiceText(text) {
     .trim()
     .toLowerCase()
     .replace(/\s+/g, " ")
-    .replace(/["']/g, "")
+    // Ovoz tanib olish (SpeechRecognition) o'zbekcha so'zlarni ko'pincha
+    // ʻ (U+02BB), ʼ (U+02BC) yoki ' ' (U+2018/2019) belgilari bilan qaytaradi
+    // ("roʻyxatini", "oʻchir"). Ular qoidalarga mos kelmasligi uchun hamma
+    // apostrof-navbatlarini olib tashlaymiz.
+    .replace(/["'\u02BB\u02BC\u2018\u2019\u2032]/g, "")
     .replace(/[.,!?]+$/g, "")
     .replace(/\brestoranlar\b/g, "restoran")
     .replace(/\bpechlar\b/g, "restoran")
@@ -667,6 +671,8 @@ function normalizeVoiceText(text) {
     .replace(/\brestarni\b/g, "restoran")
     .replace(/\brestarn\b/g, "restoran")
     // "restorani" / "restoranni" — e'tiborsiz qolgan shakllar
+    .replace(/\brestoranini\b/g, "restoran")
+    .replace(/\brestoranlarni\b/g, "restoran")
     .replace(/\brestoranni\b/g, "restoran")
     .replace(/\brestorani\b/g, "restoran")
     // "ro'yxat"ning ovoz orqali buzilgan shakllari (suffikslar bilan ham: royxati, ruyxatini, ...)
@@ -685,13 +691,18 @@ function findRestaurantByVoice(text) {
   const phrase = clean.replace(/^(restoran|supermarket)\s+/, "").trim();
   if (!phrase) return restaurantsCache[0] || null;
 
+  // Ovozda "baxor" ko'pincha "bahor" (yoki aksincha) deb eshitiladi —
+  // h/x almashtirilgan variantlarni ham sinab ko'ramiz.
+  const variants = [...new Set([phrase, phrase.replace(/x/g, "h"), phrase.replace(/h/g, "x")])];
+  const matches = (name) => variants.some(v => name.includes(v) || v.includes(name));
+
   const byName = restaurantsCache
     .filter(r => typeof r.name === "string")
     .sort((a, b) => b.name.length - a.name.length)
-    .find(r => r.name.toLowerCase().includes(phrase) || phrase.includes(r.name.toLowerCase()));
+    .find(r => matches(r.name.toLowerCase()));
   if (byName) return byName;
 
-  const byText = restaurantsCache.find(r => [r.name, r.address, r.phoneNumber].join(" ").toLowerCase().includes(phrase));
+  const byText = restaurantsCache.find(r => matches([r.name, r.address, r.phoneNumber].join(" ").toLowerCase()));
   return byText || null;
 }
 
@@ -707,13 +718,16 @@ function findMarketByVoice(text) {
   const phrase = clean.replace(/^supermarket\s+/, "").trim();
   if (!phrase) return marketsCache[0] || null;
 
+  const variants = [...new Set([phrase, phrase.replace(/x/g, "h"), phrase.replace(/h/g, "x")])];
+  const matches = (name) => variants.some(v => name.includes(v) || v.includes(name));
+
   const byName = marketsCache
     .filter(m => typeof m.name === "string")
     .sort((a, b) => b.name.length - a.name.length)
-    .find(m => m.name.toLowerCase().includes(phrase) || phrase.includes(m.name.toLowerCase()));
+    .find(m => matches(m.name.toLowerCase()));
   if (byName) return byName;
 
-  return marketsCache.find(m => [m.name, m.address, m.phoneNumber].join(" ").toLowerCase().includes(phrase)) || null;
+  return marketsCache.find(m => matches([m.name, m.address, m.phoneNumber].join(" ").toLowerCase())) || null;
 }
 
 async function performVoiceCommand(rawText) {
@@ -774,10 +788,20 @@ async function performVoiceCommand(rawText) {
   }
 
   // 3) UMUMIY RO'YXAT OCHISH — faqat aniq nom/raqam aytilmagan bo'lsa.
-  //    "och" boshqa so'z ichida tasodifan mos bo'lmasligi uchun \b bilan.
-  if (/(restoran|pech)/.test(text) && /\b(?:och|ochish|ko'rsat|korsat|show|ro'yxat|royxat)\b/.test(text)) {
+  //    "ochib", "oching" kabi qo'shimchalar ham tan olinadi (och[a-z]*).
+  const openWords = /\b(?:och[a-z]*|korsat[a-z]*|ko'rsat[a-z]*|show|ro'yxat[a-z]*|royxat[a-z]*)\b/;
+  if (/(restoran|pech)/.test(text) && openWords.test(text)) {
     setView("restaurants");
     if (!restaurantsCache.length) await loadRestaurants();
+    // Gapda aniq restoran nomi aytilgan bo'lsa ("restoran bahorni och") —
+    // umumiy ro'yxat o'rniga o'sha restoran tanlanadi.
+    const specific = findRestaurantByVoice(text);
+    if (specific) {
+      const srow = document.querySelector(`#restaurant-list tr[data-business="${specific.id}"]`);
+      if (srow) selectRestaurant(specific, srow);
+      aiSpeak(`${specific.name} restorani tanlandi.`);
+      return true;
+    }
     const first = restaurantsCache[0];
     if (first) {
       const row = document.querySelector(`#restaurant-list tr[data-business="${first.id}"]`);
@@ -787,9 +811,16 @@ async function performVoiceCommand(rawText) {
     return true;
   }
 
-  if (/(supermarket|market|magazin)/.test(text) && /\b(?:och|ochish|ko'rsat|korsat|show|ro'yxat|royxat)\b/.test(text)) {
+  if (/(supermarket|market|magazin)/.test(text) && openWords.test(text)) {
     setView("markets");
     if (!marketsCache.length) await loadMarkets();
+    const specific = findMarketByVoice(text);
+    if (specific) {
+      const srow = document.querySelector(`#market-list tr[data-business="${specific.id}"]`);
+      if (srow) selectMarket(specific, srow);
+      aiSpeak(`${specific.name} supermarketi tanlandi.`);
+      return true;
+    }
     const first = marketsCache[0];
     if (first) {
       const row = document.querySelector(`#market-list tr[data-business="${first.id}"]`);
@@ -1114,15 +1145,39 @@ function startAlwaysRecognition() {
   catch { setTimeout(() => { if (aiAlwaysListen && !aiListening && !aiSpeakingNow) startAlwaysRecognition(); }, 400); }
 }
 
+// Jarvis javoblari har qanday bo'limda ko'rinishi uchun suzuvchi xabar (toast).
+// AI bo'limidan tashqarida buyruq bajarilsa, chat ko'rinmasligi mumkin —
+// shu sababli tasdiq/xatolik ekranning pastki o'rtasida ham ko'rsatiladi.
+let jarvisToastTimer = null;
+function jarvisToast(text, isError) {
+  if (typeof getCurrentView === "function" && getCurrentView() === "ai") return; // AI chatda allaqachon ko'rinadi
+  let el = document.getElementById("jarvis-toast");
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "jarvis-toast";
+    document.body.appendChild(el);
+  }
+  el.textContent = text;
+  el.className = "jarvis-toast" + (isError ? " jarvis-toast--err" : "");
+  clearTimeout(jarvisToastTimer);
+  jarvisToastTimer = setTimeout(() => { el.style.display = "none"; }, 4500);
+}
+
 async function handleAlwaysHeard(text) {
-  if (jarvisShouldRun()) {
+  if (!jarvisShouldRun()) {
+    if (aiMsgEl) setMsg(aiMsgEl, "Jarvis o‘chiq — pastki o‘ng burchakdagi ‘Jarvis’ tugmasini yoqing.", "");
+    return;
+  }
+  try {
     aiAddMessage("user", text);
     const done = await performVoiceCommand(text);
     if (done) { aiAddMessage("bot", "✅ Buyruq bajarildi."); return; }
     // Buyruq tanilmadi — AI savol sifatida javob beradi
     await askBackend(text);
-  } else if (aiMsgEl) {
-    setMsg(aiMsgEl, "Jarvis o‘chiq — pastki o‘ng burchakdagi ‘Jarvis’ tugmasini yoqing.", "");
+  } catch (error) {
+    const msg = "Jarvis xatosi: " + (error && error.message ? error.message : error);
+    jarvisToast(msg, true);
+    aiAddMessage("bot", msg);
   }
 }
 
@@ -1369,6 +1424,8 @@ function selectedAiVoice(text) {
 // Javobni o'qish: birinchi navbatda Edge TTS (backend proxy) — haqiqiy o'zbekcha
 // nervli ovoz (uz-UZ-MadinaNeural); ishlamasa brauzerning speechSynthesis ovozi zaxira sifatida.
 async function aiSpeak(text) {
+  // Vizual tasdiq: AI bo'limidan boshqa bo'limda bo'lsa ham ko'rinadi
+  try { jarvisToast(String(text || "").trim()); } catch { /* ignore */ }
   const toggle = $("ai-voice-toggle");
   if (toggle && !toggle.checked) return;
   if (aiSpeakAbort) aiSpeakAbort.abort(); // oldingi ovozni to'xtatamiz
@@ -1569,7 +1626,11 @@ async function startAiRecognition(isRetry) {
     // Mikrofon: Jarvis yoqilgan bo'lsa — matn avval buyruq sifatida tekshiriladi,
     // tanilmagan bo'lsa oddiy AI savoli sifatida yuboriladi.
     if (jarvisShouldRun()) {
-      const done = await performVoiceCommand(finalText);
+      let done = false;
+      try { done = await performVoiceCommand(finalText); }
+      catch (error) {
+        jarvisToast("Jarvis xatosi: " + (error && error.message ? error.message : error), true);
+      }
       if (done) return; // tasdiq ovozini performVoiceCommand o'zi aytadi
     }
     aiAsk(finalText);
