@@ -1168,12 +1168,25 @@ async function handleAlwaysHeard(text) {
     if (aiMsgEl) setMsg(aiMsgEl, "Jarvis o‘chiq — pastki o‘ng burchakdagi ‘Jarvis’ tugmasini yoqing.", "");
     return;
   }
+  // Bir vaqtda bitta jarayon: AI band bo'lsa yangi eshitilgan gapni tashlab
+  // yuboramiz — aks holda so'rovlar to'planib, panel "eshitmayapti" holatiga tushadi.
+  if (jarvisBusy) {
+    jarvisToast("Jarvis band — oldingi javob kelgach gapiring.", false);
+    return;
+  }
   try {
     aiAddMessage("user", text);
     const done = await performVoiceCommand(text);
     if (done) { aiAddMessage("bot", "✅ Buyruq bajarildi."); return; }
-    // Buyruq tanilmadi — AI savol sifatida javob beradi
-    await askBackend(text);
+    // Lokal buyruq tanilmadi — AI'ga yuboramiz: buyruq bo'lsa bajaradi,
+    // savol bo'lsa o'zi javob beradi (function calling). Ishlamasa — eski yo'l.
+    jarvisBusy = true;
+    try {
+      if (await aiJarvisSmart(text)) return;
+      await askBackend(text);
+    } finally {
+      jarvisBusy = false;
+    }
   } catch (error) {
     const msg = "Jarvis xatosi: " + (error && error.message ? error.message : error);
     jarvisToast(msg, true);
@@ -1515,7 +1528,9 @@ async function aiAsk(question) {
   aiAddMessage("user", q);
 
   // JARVIS rejimi (ERKIN): switch yoqilgan bo'lsa — "AI"/"Jarvis" so'zi shart emas.
-  // Har qanday matn avval buyruq sifatida tekshiriladi; tanilmagan bo'lsa backend AI javob beradi.
+  // 1) Tez lokal buyruqlar (regex) tekshiriladi; 2) taniolmasa — matn backend
+  // AI'ga yuboriladi (function calling): buyruq bo'lsa bajariladi, savol
+  // bo'lsa AI o'zi javob beradi.
   if (jarvisShouldRun()) {
     const handled = await performVoiceCommand(q);
     if (handled) {
@@ -1523,6 +1538,7 @@ async function aiAsk(question) {
       aiAddMessage("bot", "✅ Buyruq bajarildi.");
       return;
     }
+    if (!jarvisBusy && await aiJarvisSmart(q)) return;
   }
 
   await askBackend(q);
@@ -1533,32 +1549,28 @@ async function aiAsk(question) {
 async function askBackend(q) {
   if (aiMsgEl) setMsg(aiMsgEl, "AI javob kutilmoqda...", "");
   const askStart = performance.now();
-  let meta = null;
   try {
-    const res = await postJson(
-      "/Query/AskSuperAdmin/ask-super",
-      { question: q },
-      { "X-Super-Admin-Token": superAdminToken }
-    );
+    // 20s timeout: AI sekin ishlaganda ham panel uzoq kutib qolmaydi.
+    const ctrl = typeof AbortController !== "undefined" ? new AbortController() : null;
+    const timer = ctrl ? setTimeout(() => ctrl.abort(), 20000) : null;
+    let res = null;
+    try {
+      const response = await fetch(`${API_BASE}/Query/AskSuperAdmin/ask-super`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Super-Admin-Token": superAdminToken },
+        body: JSON.stringify({ question: q }),
+        signal: ctrl ? ctrl.signal : undefined,
+      });
+      if (response.ok) res = await response.json();
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
     const askMs = Math.round(performance.now() - askStart);
     if (aiMsgEl) setMsg(aiMsgEl, "", "");
     const answer = res && res.answer ? String(res.answer).trim() : "";
     if (answer) {
-      // Ovoz vaqtini o'lchash: aiSpeak tugagach meta ni to'ldiramiz va
-      // xabarni yangilaymiz.
-      meta = { askMs, speakMs: null };
-      aiAddMessage("bot", answer, meta);
-      const lastBox = $("sa-ai-messages").lastElementChild;
-      const lastStats = lastBox ? lastBox.querySelector(".ai-msg__stats") : null;
-      const speakStart = performance.now();
-      aiSpeak(answer).then(() => {
-        const speakMs = Math.round(performance.now() - speakStart);
-        if (lastStats) {
-          meta.speakMs = speakMs;
-          lastStats.textContent =
-            "javob: " + fmtDuration(meta.askMs) + " · ovoz: " + fmtDuration(meta.speakMs);
-        }
-      }).catch(() => { /* ovoz xatosi — vaqt ko'rsatilmaydi */ });
+      // Chatga chiqarish va ovozlash — displayAiAnswer'da (Jarvis oqimi ham shuni ishlatadi).
+      await displayAiAnswer(answer, askMs);
     } else {
       aiAddMessage("bot", "AI javob bermadi. Serverda AI xizmati (Gemini) sozlanmagan bo‘lishi mumkin.",
         { askMs });
@@ -1568,6 +1580,148 @@ async function askBackend(q) {
     const askMs = Math.round(performance.now() - askStart);
     aiAddMessage("bot", "Xatolik: " + error.message, { askMs });
   }
+}
+
+// ======================= Jarvis: AI buyruq tushunish (function calling) =======================
+// Lokal regex buyruqlar taniolmagan matn backend AI'ga yuboriladi. Backend
+// Gemini'ga panel amallari (tools) bilan yuboradi va javob qaytaradi:
+//   { kind: "action", action: "navigate", view: "restaurants" }
+//   { kind: "action", action: "activate_business", businessId: 3 }
+//   { kind: "answer", answer: "Bugungi savdo ..." }
+const JARVIS_VIEWS = ["restaurants", "markets", "create", "market-create", "system", "ai"];
+// AI javobi 12s ichida kelmasa — so'rov bekor qilinadi va eski ask-super yo'liga
+// qaytiladi: panel hech qachon uzoq "eshitmayapti" holatida qotib qolmaydi.
+const JARVIS_SMART_TIMEOUT_MS = 12000;
+// Bir vaqtda bitta AI jarayoni (always-listen so'rovlari to'planib ketmasligi uchun).
+let jarvisBusy = false;
+
+// AI javobini chatga chiqarish va ovoz bilan o'qish (askBackend va Jarvis
+// oqimlari uchun umumiy).
+async function displayAiAnswer(answer, askMs) {
+  const meta = { askMs, speakMs: null };
+  aiAddMessage("bot", answer, meta);
+  const lastBox = $("sa-ai-messages").lastElementChild;
+  const lastStats = lastBox ? lastBox.querySelector(".ai-msg__stats") : null;
+  const speakStart = performance.now();
+  aiSpeak(answer).then(() => {
+    const speakMs = Math.round(performance.now() - speakStart);
+    if (lastStats) {
+      meta.speakMs = speakMs;
+      lastStats.textContent =
+        "javob: " + fmtDuration(meta.askMs) + " · ovoz: " + fmtDuration(meta.speakMs);
+    }
+  }).catch(() => { /* ovoz xatosi — vaqt ko'rsatilmaydi */ });
+}
+
+// Matnni AI'ga yuboradi: buyruq bo'lsa bajaradi (true), savol bo'lsa o'zi
+// javob beradi (true), taniolmasa yoki xatolik/timeout bo'lsa false —
+// chaqiruvchi eski askBackend yo'liga qaytadi.
+async function aiJarvisSmart(text) {
+  if (aiMsgEl) setMsg(aiMsgEl, "Jarvis tahlil qilmoqda...", "");
+  const askStart = performance.now();
+  let res = null;
+  try {
+    const ctrl = typeof AbortController !== "undefined" ? new AbortController() : null;
+    const timer = ctrl ? setTimeout(() => ctrl.abort(), JARVIS_SMART_TIMEOUT_MS) : null;
+    try {
+      const response = await fetch(`${API_BASE}/Query/JarvisCommand/jarvis`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Super-Admin-Token": superAdminToken },
+        body: JSON.stringify({ text }),
+        signal: ctrl ? ctrl.signal : undefined,
+      });
+      if (response.ok) res = await response.json();
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  } catch {
+    res = null; // timeout yoki xato — eski ask-super yo'liga qaytamiz
+  }
+  const askMs = Math.round(performance.now() - askStart);
+  if (aiMsgEl) setMsg(aiMsgEl, "", "");
+  if (res && res.kind === "action") {
+    try {
+      await executeJarvisAction(res);
+      aiAddMessage("bot", "✅ Buyruq bajarildi.", { askMs });
+    } catch (error) {
+      const msg = "Jarvis xatosi: " + (error && error.message ? error.message : error);
+      jarvisToast(msg, true);
+      aiAddMessage("bot", msg, { askMs });
+    }
+    return true;
+  }
+  const answer = res && res.answer ? String(res.answer).trim() : "";
+  if (answer) {
+    await displayAiAnswer(answer, askMs);
+    return true;
+  }
+  return false;
+}
+
+// AI qaytargan amalni bajaradi: bo'lim ochish, biznes tanlash,
+// faollashtirish/passiv qilish (UpdateOwnerStatus).
+async function executeJarvisAction(res) {
+  const action = String(res.action || "");
+  if (action === "navigate") {
+    const view = JARVIS_VIEWS.includes(String(res.view || "")) ? String(res.view) : "restaurants";
+    setView(view);
+    if (view === "restaurants" && !restaurantsCache.length) { try { await loadRestaurants(); } catch { /* ignore */ } }
+    if (view === "markets" && !marketsCache.length) { try { await loadMarkets(); } catch { /* ignore */ } }
+    aiSpeak((VIEW_TITLES[view] ? VIEW_TITLES[view][0] : "Bo‘lim") + " ochildi.");
+    return;
+  }
+
+  const businessId = Number(res.businessId || 0);
+  if (!businessId) throw new Error("AI biznesni aniqlay olmadi.");
+
+  // Keshdan topamiz; topilmasa ro'yxatlarni yuklab qayta qidiradi.
+  let target = restaurantsCache.find(r => Number(r.id) === businessId) || null;
+  let isMarket = false;
+  if (!target) target = marketsCache.find(m => Number(m.id) === businessId) || null;
+  if (target) isMarket = marketsCache.indexOf(target) !== -1;
+  if (!target) {
+    if (!restaurantsCache.length) { try { await loadRestaurants(); } catch { /* ignore */ } }
+    if (!marketsCache.length) { try { await loadMarkets(); } catch { /* ignore */ } }
+    target = restaurantsCache.find(r => Number(r.id) === businessId) || null;
+    if (!target) target = marketsCache.find(m => Number(m.id) === businessId) || null;
+    if (target) isMarket = marketsCache.indexOf(target) !== -1;
+  }
+  if (!target) throw new Error("Biznes topilmadi (id=" + businessId + ").");
+
+  const listId = isMarket ? "market-list" : "restaurant-list";
+  setView(isMarket ? "markets" : "restaurants");
+  const row = document.querySelector(`#${listId} tr[data-business="${businessId}"]`);
+  if (row) { if (isMarket) await selectMarket(target, row); else await selectRestaurant(target, row); }
+
+  if (action === "select_business") {
+    aiSpeak(`${target.name} ${isMarket ? "supermarketi" : "restorani"} tanlandi.`);
+    return;
+  }
+
+  if (action === "activate_business" || action === "deactivate_business") {
+    const owner = target._owner;
+    if (!owner) throw new Error("Biznes egasi ma’lumotlari yuklanmagan.");
+    const isActive = action === "activate_business";
+    // Allaqachon kerakli holatda bo'lsa — ortiqcha so'rov yubormaymiz.
+    if (isActive && owner.isActive !== false) {
+      aiSpeak(`${target.name} ${isMarket ? "supermarketi" : "restorani"} allaqachon faol.`);
+      return;
+    }
+    if (!isActive && owner.isActive === false) {
+      aiSpeak(`${target.name} ${isMarket ? "supermarketi" : "restorani"} allaqachon passiv.`);
+      return;
+    }
+    const updated = await putJson("/Business/UpdateOwnerStatus", { businessId, isActive });
+    target._owner = updated;
+    if (isMarket) renderMarketRows(); else renderRestaurantRows();
+    updateSuperStats();
+    const newRow = document.querySelector(`#${listId} tr[data-business="${businessId}"]`);
+    if (newRow) { if (isMarket) await selectMarket(target, newRow); else await selectRestaurant(target, newRow); }
+    aiSpeak(`${target.name} ${isMarket ? "supermarketi" : "restorani"} ${isActive ? "faollashtirildi." : "passiv qilindi."}`);
+    return;
+  }
+
+  throw new Error("Noma’lum Jarvis amali: " + action);
 }
 
 // Mikrofon tugmasi

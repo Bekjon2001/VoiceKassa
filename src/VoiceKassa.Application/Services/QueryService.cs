@@ -70,6 +70,24 @@ public class QueryService
     /// </summary>
     public async Task<AskQuestionResponse> AskSuperAdminAsync(string question, CancellationToken ct = default)
     {
+        var contextJson = await BuildPlatformContextJsonAsync(ct);
+        var answer = await _aiQuery.AnswerPlatformAsync(question, contextJson, ct);
+        return new AskQuestionResponse { Answer = answer };
+    }
+
+    /// <summary>
+    /// Jarvis (Super Admin ovozli yordamchi) buyruq/savolini AI orqali tahlil
+    /// qiladi: buyruq bo'lsa amal (action), savol bo'lsa matn javobi qaytadi.
+    /// </summary>
+    public async Task<JarvisCommandResponse> JarvisCommandAsync(string text, CancellationToken ct = default)
+    {
+        var contextJson = await BuildPlatformContextJsonAsync(ct);
+        return await _aiQuery.InterpretJarvisAsync(text, contextJson, ct);
+    }
+
+    /// <summary>Platformadagi barcha bizneslar va obunalar kontekstini JSON qilib tayyorlaydi.</summary>
+    private async Task<string> BuildPlatformContextJsonAsync(CancellationToken ct)
+    {
         var businesses = await _businessRepo.GetAllBusinessesAsync(ct);
         var now = DateTime.UtcNow;
 
@@ -104,8 +122,6 @@ public class QueryService
             Businesses = payloadItems,
         };
 
-        var contextJson = JsonSerializer.Serialize(context);
-        var answer = await _aiQuery.AnswerPlatformAsync(question, contextJson, ct);
-        return new AskQuestionResponse { Answer = answer };
+        return JsonSerializer.Serialize(context);
     }
 }

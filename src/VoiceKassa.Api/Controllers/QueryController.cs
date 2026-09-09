@@ -51,6 +51,24 @@ public class QueryController : ControllerBase
     }
 
     /// <summary>
+    /// Super Admin Jarvis (ovozli yordamchi) uchun: matnni AI tahlil qiladi —
+    /// buyruq bo'lsa bajariladigan amal (action) qaytadi (uni frontend bajaradi),
+    /// savol bo'lsa matn javobi qaytadi. Gemini function calling ishlatiladi.
+    /// </summary>
+    [HttpPost("jarvis")]
+    public async Task<IActionResult> JarvisCommand([FromBody] JarvisCommandRequest request, CancellationToken ct)
+    {
+        if (!await IsSuperAdmin(ct))
+            return Unauthorized(new { error = "Super Admin sifatida kiring." });
+
+        if (string.IsNullOrWhiteSpace(request.Text))
+            return BadRequest(new { error = "Matn bo'sh bo'lishi mumkin emas." });
+
+        var response = await _queryService.JarvisCommandAsync(request.Text.Trim(), ct);
+        return Ok(response);
+    }
+
+    /// <summary>
     /// Super Admin AI yordamchi javobini o'zbekcha tabiiy ovoz (TTS) bilan o'qish.
     /// Microsoft Edge read-aloud (Bing) nervli ovozi ishlatiladi — bepul, kalitsiz:
     ///   uz-UZ-MadinaNeural (ayol), uz-UZ-SardorNeural (erkak).
