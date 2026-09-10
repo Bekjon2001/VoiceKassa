@@ -5,6 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#f2f4f7" />
   <title>VoiceKassa | Admin panel</title>
+  <script>
+    // Temani sahifa chizilishidan oldin qo'llash (miltillashishning oldini olish uchun)
+    try { document.documentElement.dataset.theme = localStorage.getItem("vk_theme") === "dark" ? "dark" : "light"; } catch (e) {}
+  </script>
   <link rel="stylesheet" href="admin.css" />
 </head>
 <body class="app-bg">
@@ -85,6 +89,7 @@
             <p class="topbar-sub" id="owner-view-subtitle">Stollar, menyutaomlar va xodimlar boshqaruvi.</p>
           </div>
           <span class="flash" id="workspace-flash" hidden></span>
+          <button class="btn btn-ghost btn-sm" id="theme-toggle" type="button" title="Kun/Tun rejimlarini almashtirish">☀️</button>
         </header>
 
         <section class="stats-row" data-owner-panel="tables meals meals-food meals-drink meals-fruit meals-dessert table-detail">

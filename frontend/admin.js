@@ -6,6 +6,25 @@ const SESSION_KEY = "vk_owner_session";
 const VIEW_STORAGE_KEY = "vk_owner_view";
 const fallbackTableImage = "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=500&q=80";
 const fallbackFoodImage = "https://images.unsplash.com/photo-1547592180-85f173990554?auto=format&fit=crop&w=700&q=80";
+/* ---------- Kun/Tun rejimi ---------- */
+function applyTheme(theme) {
+  document.documentElement.dataset.theme = theme === "dark" ? "dark" : "light";
+  try { localStorage.setItem("vk_theme", theme === "dark" ? "dark" : "light"); } catch { /* ignore */ }
+  const btn = document.getElementById("theme-toggle");
+  if (btn) {
+    btn.textContent = theme === "dark" ? "🌙" : "☀️";
+    btn.title = theme === "dark" ? "Kun (yorugʻ) rejimga o‘tish" : "Tun (qorongʻi) rejimga o‘tish";
+  }
+}
+applyTheme(document.documentElement.dataset.theme);
+const themeToggleBtn = document.getElementById("theme-toggle");
+if (themeToggleBtn) {
+  themeToggleBtn.addEventListener("click", () => {
+    applyTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark");
+  });
+}
+
+// Sahifa qaysi manzildan ochildi — API ham shu joyga ulanadi.
 
 const VIEW_TITLES = {
   staff: ["Xodimlar", "Xodimlar ro‘yxati, profili va maosh tarixi."],
