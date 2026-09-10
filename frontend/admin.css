@@ -299,3 +299,47 @@ button{font-family:inherit}
   .content{padding:20px 16px 34px}
 }
 @media(max-width:640px){.form-grid{grid-template-columns:1fr}.topbar h1{font-size:20px}.auth-main{padding:26px 20px}.filter-chips{width:100%;justify-content:stretch}.filter-chips .chip{flex:1;padding:7px 8px}.ctl--sm{flex:1 1 100%;min-width:0}}
+
+/* ---------- Pagination ---------- */
+.pagination-bar{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:12px}
+.pagination-bar .pg-btn,.pagination-bar .pg-num{min-width:36px;height:30px;padding:0 10px;border:1px solid var(--line);background:#fff;border-radius:8px;font:inherit;font-size:12.5px;cursor:pointer;color:var(--ink)}
+.pagination-bar .pg-num.pg-current{background:var(--green);border-color:var(--green);color:#fff}
+.pagination-bar .pg-btn:disabled{opacity:.45;cursor:default}
+.pagination-bar .pg-ell{color:var(--muted)}
+.pagination-bar .pg-info{font-size:12px;color:var(--muted)}
+.pagination-bar .pg-size{height:30px;border:1px solid var(--line);border-radius:8px;font:inherit;font-size:12.5px;background:#fff;color:var(--ink)}
+
+
+/* ---------- Kun/Tun (light/dark) rejim ---------- */
+html[data-theme='dark']{color-scheme:dark}
+html[data-theme='dark']{
+  --bg:#0f1216; --panel:#171b21; --line:#2a3038; --ink:#e6e9ee; --muted:#98a2b3;
+  --green:#2f9e6f; --green-dark:#3fbc86; --green-soft:#1f3a2e;
+  --coral:#e08a6e; --coral-soft:#3a2620;
+  --amber:#d19a4b; --amber-soft:#3a2f1c;
+  --red:#e0625a; --red-soft:#3a2224;
+  --shadow:0 1px 2px rgba(0,0,0,.35), 0 10px 28px -18px rgba(0,0,0,.6);
+}
+html[data-theme='dark'] body.app-bg{background:var(--bg);color:var(--ink)}
+html[data-theme='dark'] .ctl,html[data-theme='dark'] select,html[data-theme='dark'] textarea{background:#1d232b;border-color:var(--line);color:var(--ink)}
+html[data-theme='dark'] .ctl::placeholder{color:#6b7482}
+html[data-theme='dark'] .btn-ghost{background:var(--panel);border-color:var(--line);color:var(--ink)}
+html[data-theme='dark'] .mode-tabs,html[data-theme='dark'] .filter-chips{background:#222a33}
+html[data-theme='dark'] .mode-tab.active,html[data-theme='dark'] .chip.active{background:var(--panel);color:var(--ink)}
+html[data-theme='dark'] .nav-item:hover{background:#222a33;color:var(--ink)}
+html[data-theme='dark'] .icon-chip{background:#222a33;color:#b9c0ca}
+html[data-theme='dark'] .nav-item.active .icon-chip{background:var(--panel)}
+html[data-theme='dark'] .pill--off{background:#222a33}
+html[data-theme='dark'] .flash{border-color:#2f7a4c}
+html[data-theme='dark'] .flash.err{border-color:#7c2f2f}
+html[data-theme='dark'] .jarvis-toggle__knob{background:#3b434c}
+html[data-theme='dark'] .jarvis-toggle__knob::after{background:#d7dde4}
+html[data-theme='dark'] .pagination-bar .pg-btn,html[data-theme='dark'] .pagination-bar .pg-num{background:var(--panel);border-color:var(--line);color:var(--ink)}
+html[data-theme='dark'] .pagination-bar .pg-size{background:#1d232b;border-color:var(--line);color:var(--ink)}
+html[data-theme='dark'] ::-webkit-scrollbar-thumb{background:#3a4350}
+html[data-theme='dark'] .panel-form{background:#1d232b;border-color:#2c333d}
+html[data-theme='dark'] .ai-voice-toggle{background:#222a33}
+html[data-theme='dark'] .data-table tbody tr.rowlink:hover{background:#20262e}
+html[data-theme='dark'] .data-table tbody tr.row-selected{background:#1f3a2e}
+html[data-theme='dark'] .jarvis-toast{background:#14341f;border-color:#2f7a4c;color:#d8ffe4}
+

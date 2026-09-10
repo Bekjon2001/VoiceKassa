@@ -49,9 +49,33 @@ let selectedMarketId = null;
 let selectedMarket = null;
 let marketsCache = [];
 let currentMarketFilter = "";
+// Bir vaqtda bitta AI jarayoni (always-listen so'rovlari to'planib ketmasligi uchun).
+// Fayl boshida e'lon qilinadi — fayl yuklanishining istalgan joyidagi runtime xato
+// ham Jarvis ishlashini buzmaganligi uchun.
+let jarvisBusy = false;
 
 // ---------- Yordamchi funksiyalar ----------
 function $(id) { return document.getElementById(id); }
+
+// ---------- Kun/Tun (light/dark) rejim ----------
+function applyTheme(theme) {
+  document.documentElement.dataset.theme = theme === "dark" ? "dark" : "light";
+  try { localStorage.setItem("vk_theme", theme === "dark" ? "dark" : "light"); } catch { /* ignore */ }
+  const btn = $("theme-toggle");
+  if (btn) {
+    btn.textContent = theme === "dark" ? "🌙" : "☀️";
+    btn.title = theme === "dark" ? "Kun (yorugʻ) rejimga o‘tish" : "Tun (qorongʻi) rejimga o‘tish";
+  }
+}
+// Sahifa ochilganda head'dagi inline skript qoʻllagan rejimni tugmaga aks ettiramiz
+applyTheme(document.documentElement.dataset.theme);
+
+const themeToggleBtn = $("theme-toggle");
+if (themeToggleBtn) {
+  themeToggleBtn.addEventListener("click", () => {
+    applyTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark");
+  });
+}
 
 function esc(value) {
   return String(value ?? "").replace(/[&<>"']/g, ch => ({
@@ -134,6 +158,17 @@ function setView(view) {
   const pair = VIEW_TITLES[view] || [view, ""];
   $("sa-view-title").textContent = pair[0];
   $("sa-view-subtitle").textContent = pair[1];
+}
+
+// Hozirgi ochiq bo'limni qaytaradi: nav-item.active dan olinadi,
+// topilmasa birinchi ko'rinib turgan paneldan aniqlanadi.
+function getCurrentView() {
+  const nav = document.querySelector(".nav-item[data-view].active");
+  if (nav && nav.dataset.view) return nav.dataset.view;
+
+  const visible = [...document.querySelectorAll("[data-view-panel]")]
+    .find(panel => !panel.hidden);
+  return visible ? visible.dataset.viewPanel : "restaurants";
 }
 
 document.querySelectorAll(".nav-item[data-view]").forEach(item =>
@@ -261,14 +296,63 @@ function ownerCellsHtml(restaurant) {
   const owner = restaurant._owner;
   if (!owner) {
     return '<td class="cell-owner"><span class="cell-loading">...</span></td>'
-      + '<td>-</td><td>-</td><td>-</td>'
+      + '<td>-</td><td>-</td><td>-</td><td>-</td>'
       + '<td class="cell-status"><span class="cell-loading">...</span></td>';
   }
   return `<td class="cell-owner">${esc(owner.ownerFullName || "-")}</td>`
+    + `<td>${esc(owner.ownerPhoneNumber || restaurant.phoneNumber || "-")}</td>`
     + `<td>${fmtSum(owner.subscriptionAmount)} so‘m</td>`
     + `<td>${formatDate(owner.paymentPaidAt)}</td>`
     + `<td>${owner.subscriptionMonths || 0} oy</td>`
     + `<td class="cell-status">${statusPillHtml(owner)}</td>`;
+}
+
+// ---------- Sahifalash (pagination) ----------
+const PAGE_SIZES = [10, 50, 100, 150, 200];
+const restaurantPaging = { page: 1, size: 50 };
+const marketPaging = { page: 1, size: 50 };
+
+// Pagination panelini hasil qiladi va tugmalarini bog'laydi.
+function renderPagination(containerId, state, total, onChanged) {
+  const el = $(containerId);
+  if (!el) return;
+  const size = state.size;
+  const maxPage = Math.max(1, Math.ceil(total / size));
+  if (state.page > maxPage) state.page = maxPage;
+  const page = state.page;
+  const from = total ? (page - 1) * size + 1 : 0;
+  const to = Math.min(total, page * size);
+  const start = Math.max(1, page - 2);
+  const end = Math.min(maxPage, page + 2);
+
+  const parts = [];
+  parts.push(`<button class="pg-btn" data-pg="prev" ${page <= 1 ? "disabled" : ""}>◀ Oldingi</button>`);
+  if (start > 1) parts.push('<span class="pg-ell">…</span>');
+  for (let i = start; i <= end; i++) {
+    parts.push(`<button class="pg-num${i === page ? " pg-current" : ""}" data-pg="${i}">${i}</button>`);
+  }
+  if (end < maxPage) parts.push('<span class="pg-ell">…</span>');
+  parts.push(`<button class="pg-btn" data-pg="next" ${page >= maxPage ? "disabled" : ""}>Keyingi ▶</button>`);
+  parts.push(`<span class="pg-info">Jami ${total} ta · ${from}–${to}</span>`);
+  parts.push('<select class="pg-size" data-pg-size>'
+    + PAGE_SIZES.map(s => `<option value="${s}" ${s === size ? "selected" : ""}>${s} ta</option>`).join("")
+    + "</select>");
+  el.innerHTML = parts.join("");
+
+  el.querySelectorAll("[data-pg]").forEach(btn => btn.addEventListener("click", () => {
+    if (btn.disabled) return;
+    const v = btn.dataset.pg;
+    if (v === "prev") state.page = Math.max(1, page - 1);
+    else if (v === "next") state.page = Math.min(maxPage, page + 1);
+    else state.page = Number(v);
+    onChanged();
+  }));
+  const sel = el.querySelector("[data-pg-size]");
+  if (sel) sel.addEventListener("change", () => {
+    state.size = Number(sel.value);
+    state.page = 1;
+    onChanged();
+  });
 }
 
 function renderRestaurantRows() {
@@ -281,11 +365,18 @@ function renderRestaurantRows() {
     tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--muted)">'
       + (restaurantsCache.length ? "Mos restoran topilmadi." : "Restoranlar hali yo‘q.")
       + "</td></tr>";
+    renderPagination("restaurant-pagination", restaurantPaging, 0, renderRestaurantRows);
     return;
   }
 
+  const size = restaurantPaging.size;
+  const maxPage = Math.ceil(visible.length / size);
+  if (restaurantPaging.page > maxPage) restaurantPaging.page = maxPage;
+  const page = restaurantPaging.page;
+  const slice = visible.slice((page - 1) * size, page * size);
+
   tbody.innerHTML = "";
-  visible.forEach(restaurant => {
+  slice.forEach(restaurant => {
     const row = document.createElement("tr");
     row.className = "rowlink";
     row.dataset.business = restaurant.id;
@@ -293,11 +384,12 @@ function renderRestaurantRows() {
     row.innerHTML =
       `<td>${restaurant.id}</td>`
       + `<td><strong>${esc(restaurant.name)}</strong><small>${esc(restaurant.address || "Manzil kiritilmagan")}</small></td>`
-      + `<td>${esc(restaurant.phoneNumber || "-")}</td>` + ownerCellsHtml(restaurant)
+      + ownerCellsHtml(restaurant)
       + '<td><button class="btn btn-ghost btn-sm row-action" type="button">Ko‘rish</button></td>';
     row.addEventListener("click", () => selectRestaurant(restaurant, row));
     tbody.appendChild(row);
   });
+  renderPagination("restaurant-pagination", restaurantPaging, visible.length, renderRestaurantRows);
 }
 // ---------- Restoranlarni yuklash va boyitish ----------
 async function loadRestaurants() {
@@ -406,10 +498,11 @@ function marketOwnerCellsHtml(market) {
   const owner = market._owner;
   if (!owner) {
     return '<td class="cell-owner"><span class="cell-loading">...</span></td>'
-      + '<td>-</td><td>-</td><td>-</td>'
+      + '<td>-</td><td>-</td><td>-</td><td>-</td>'
       + '<td class="cell-status"><span class="cell-loading">...</span></td>';
   }
   return `<td class="cell-owner">${esc(owner.ownerFullName || "-")}</td>`
+    + `<td>${esc(owner.ownerPhoneNumber || market.phoneNumber || "-")}</td>`
     + `<td>${fmtSum(owner.subscriptionAmount)} so‘m</td>`
     + `<td>${formatDate(owner.paymentPaidAt)}</td>`
     + `<td>${owner.subscriptionMonths || 0} oy</td>`
@@ -426,11 +519,18 @@ function renderMarketRows() {
     tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--muted)">'
       + (marketsCache.length ? "Mos supermarket topilmadi." : "Supermarketlar hali yo‘q.")
       + "</td></tr>";
+    renderPagination("market-pagination", marketPaging, 0, renderMarketRows);
     return;
   }
 
+  const size = marketPaging.size;
+  const maxPage = Math.ceil(visible.length / size);
+  if (marketPaging.page > maxPage) marketPaging.page = maxPage;
+  const page = marketPaging.page;
+  const slice = visible.slice((page - 1) * size, page * size);
+
   tbody.innerHTML = "";
-  visible.forEach(market => {
+  slice.forEach(market => {
     const row = document.createElement("tr");
     row.className = "rowlink";
     row.dataset.business = market.id;
@@ -438,11 +538,12 @@ function renderMarketRows() {
     row.innerHTML =
       `<td>${market.id}</td>`
       + `<td><strong>${esc(market.name)}</strong><small>${esc(market.address || "Manzil kiritilmagan")}</small></td>`
-      + `<td>${esc(market.phoneNumber || "-")}</td>` + marketOwnerCellsHtml(market)
+      + marketOwnerCellsHtml(market)
       + '<td><button class="btn btn-ghost btn-sm row-action" type="button">Ko‘rish</button></td>';
     row.addEventListener("click", () => selectMarket(market, row));
     tbody.appendChild(row);
   });
+  renderPagination("market-pagination", marketPaging, visible.length, renderMarketRows);
 }
 
 // ---------- Restoran tanlash (batafsil panel) ----------
@@ -522,11 +623,13 @@ async function selectMarket(market, row) {
 // ---------- Qidiruv ----------
 $("restaurant-search").addEventListener("input", event => {
   currentFilter = event.target.value;
+  restaurantPaging.page = 1;
   renderRestaurantRows();
 });
 
 $("market-search").addEventListener("input", event => {
   currentMarketFilter = event.target.value;
+  marketPaging.page = 1;
   renderMarketRows();
 });
 
@@ -1592,8 +1695,6 @@ const JARVIS_VIEWS = ["restaurants", "markets", "create", "market-create", "syst
 // AI javobi 12s ichida kelmasa — so'rov bekor qilinadi va eski ask-super yo'liga
 // qaytiladi: panel hech qachon uzoq "eshitmayapti" holatida qotib qolmaydi.
 const JARVIS_SMART_TIMEOUT_MS = 12000;
-// Bir vaqtda bitta AI jarayoni (always-listen so'rovlari to'planib ketmasligi uchun).
-let jarvisBusy = false;
 
 // AI javobini chatga chiqarish va ovoz bilan o'qish (askBackend va Jarvis
 // oqimlari uchun umumiy).
