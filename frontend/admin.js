@@ -51,6 +51,7 @@ let staffStatusFilter = "all";
 let staffSortKey = "name-asc";
 let selectedStaffId = null;
 let selectedRestaurantSub = "tables";
+let selectedMealsSub = "meals-food";
 let selectedTableId = null;
 
 // ---------- Yordamchi funksiyalar ----------
@@ -321,27 +322,49 @@ document.querySelectorAll(".nav-item[data-owner-view]").forEach(item => {
   item.addEventListener("click", () => setOwnerView(item.dataset.ownerView));
 });
 
-// "Restoran" — yon tomonga ochiladigan flyout: bosilganda ochiladi/yopiladi
+// Ichki bo'limlar bosilganda — oxirgi ochilgan sahifani yodda saqlaymiz
+document.querySelectorAll(".nav-item.sub[data-owner-view]").forEach(item => {
+  item.addEventListener("click", () => {
+    const view = item.dataset.ownerView;
+    if (view.startsWith("meals")) selectedMealsSub = view;
+    selectedRestaurantSub = view;
+    setOwnerView(view);
+  });
+});
+
+// Desktop/mobil ajratish: ≤900px da sidebar gorizontal bo'ladi va flyout pastga ochiladi
+const NAV_DESKTOP = window.matchMedia("(min-width: 901px)");
+
+// "Restoran"/"Ovqatlar" tugmasi bosilganda — ICHGA KIRILADI (oxirgi ochilgan bo'lim),
+// faqat mobilda pastga ochiladigan ro'yxat sifatida ishlaydi.
 document.querySelectorAll("[data-owner-toggle]").forEach(btn => {
   btn.addEventListener("click", event => {
     event.stopPropagation();
     const group = btn.closest(".nav-group");
-    group.classList.toggle("open", !group.classList.contains("open"));
+    if (!NAV_DESKTOP.matches) {
+      // Mobil: ro'yxatni ochish/yopish
+      group.classList.toggle("open", !group.classList.contains("open"));
+      return;
+    }
+    // Desktop: to'g'ridan-to'g'ri bo'limga kiriladi
+    const key = group.dataset.ownerGroup;
+    const target = key === "meals" ? selectedMealsSub : selectedRestaurantSub;
+    setOwnerView(target);
   });
 });
+
+// Desktopda flyout hover bilan ochilib, chiqib ketganda yopiladi (tanlash uchun qulay)
+if (NAV_DESKTOP.matches) {
+  document.querySelectorAll(".nav-group[data-owner-group]").forEach(group => {
+    group.addEventListener("mouseenter", () => group.classList.add("open"));
+    group.addEventListener("mouseleave", () => group.classList.remove("open"));
+  });
+}
 
 // Flyout tashqarisiga bosilsa — yopiladi
 document.addEventListener("click", event => {
   document.querySelectorAll(".nav-group.open").forEach(group => {
     if (!group.contains(event.target)) group.classList.remove("open");
-  });
-});
-
-// Flyoutdagi Xodimlar/Stollar/Ovqatlar — qaysi biri bosilsa, shu bo'limga kiriladi
-document.querySelectorAll(".nav-item.sub[data-owner-view]").forEach(item => {
-  item.addEventListener("click", () => {
-    selectedRestaurantSub = item.dataset.ownerView;
-    setOwnerView(selectedRestaurantSub);
   });
 });
 

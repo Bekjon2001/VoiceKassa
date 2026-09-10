@@ -34,8 +34,10 @@ function jarvisShouldRun() { return isJarvisOn(); }
 
 const VIEW_TITLES = {
   restaurants: ["Restoranlar", "Restoranlar va obunalarni boshqaring."],
+  "restaurant-detail": ["Restoran ma’lumoti", "Tanlangan restoran batafsil ma’lumoti."],
   create: ["Yangi restoran", "Yangi restoran va uning egasini ro‘yxatdan o‘tkazing."],
   markets: ["Supermarketlar", "Supermarketlar va obunalarni boshqaring."],
+  "market-detail": ["Supermarket ma’lumoti", "Tanlangan supermarket batafsil ma’lumoti."],
   "market-create": ["Yangi supermarket", "Yangi supermarket va uning egasini ro‘yxatdan o‘tkazing."],
   system: ["Tizim sozlamalari", "Platforma darajasidagi sozlamalar."],
   ai: ["AI yordamchi", "Ovozli AI yordamchi — platforma haqida savol bering."],
@@ -178,6 +180,12 @@ $("show-create-view").addEventListener("click", () => setView("create"));
 
 $("show-create-market-view").addEventListener("click", () => setView("market-create"));
 
+// Alohida ma'lumot sahifalaridan orqaga qaytish — tepada va pastdagi tugmalar
+$("restaurant-detail-back").addEventListener("click", () => setView("restaurants"));
+$("restaurant-detail-back-foot").addEventListener("click", () => setView("restaurants"));
+$("market-detail-back").addEventListener("click", () => setView("markets"));
+$("market-detail-back-foot").addEventListener("click", () => setView("markets"));
+
 $("sa-logout-button").addEventListener("click", () => {
   saveToken("");
   location.reload();
@@ -309,8 +317,8 @@ function ownerCellsHtml(restaurant) {
 
 // ---------- Sahifalash (pagination) ----------
 const PAGE_SIZES = [10, 50, 100, 150, 200];
-const restaurantPaging = { page: 1, size: 50 };
-const marketPaging = { page: 1, size: 50 };
+const restaurantPaging = { page: 1, size: 10 };
+const marketPaging = { page: 1, size: 10 };
 
 // Pagination panelini hasil qiladi va tugmalarini bog'laydi.
 function renderPagination(containerId, state, total, onChanged) {
@@ -581,6 +589,8 @@ async function selectRestaurant(restaurant, row) {
   } catch (error) {
     details.innerHTML = `<p class="empty" style="margin-top:0">${esc(error.message)}</p>`;
   }
+  // "Ko'rish" bosilganda — ma'lumot ALOHIDA SAHIFADA ochiladi
+  setView("restaurant-detail");
 }
 
 // ---------- Supermarket tanlash (batafsil panel) ----------
@@ -618,6 +628,8 @@ async function selectMarket(market, row) {
   } catch (error) {
     details.innerHTML = `<p class="empty" style="margin-top:0">${esc(error.message)}</p>`;
   }
+  // "Ko'rish" bosilganda — ma'lumot ALOHIDA SAHIFADA ochiladi
+  setView("market-detail");
 }
 
 // ---------- Qidiruv ----------

@@ -127,15 +127,23 @@
             <div class="pagination-bar" id="restaurant-pagination"></div>
           </article>
 
+        </section>
+
+        <!-- ======================= RESTORAN MA'LUMOTI — ALOHIDA SAHIFA ======================= -->
+        <section data-view-panel="restaurant-detail" hidden style="display:flex;flex-direction:column;gap:18px">
           <article class="card" id="restaurant-details">
+            <div class="detail-topbar">
+              <button class="btn btn-ghost btn-sm" id="restaurant-detail-back" type="button">← Orqaga qaytish</button>
+              <span class="step-label">RESTORAN MA’LUMOTI</span>
+            </div>
             <div class="card-head">
-              <div><span class="step-label">RESTORAN MA’LUMOTI</span><h3 id="selected-restaurant">Restoran tanlang</h3></div>
+              <div><h3 id="selected-restaurant">Restoran tanlang</h3></div>
               <div style="display:flex;gap:8px;flex-wrap:wrap" id="owner-actions" hidden>
                 <button class="btn btn-ghost btn-sm" id="toggle-owner-status" type="button">Passiv qilish</button>
                 <button class="btn btn-ghost btn-sm" id="show-reset-form" type="button">🔑 Login/parolni tiklash</button>
               </div>
             </div>
-            <div id="payment-details"><p class="empty" style="margin-top:0">Chap ro‘yxatdan restoran tanlansa, batafsil ma’lumot shu yerda chiqadi.</p></div>
+            <div id="payment-details"><p class="empty" style="margin-top:0">Restoran tanlansangiz, batafsil ma’lumot shu yerda chiqadi.</p></div>
             <form id="reset-credentials-form" hidden novalidate>
               <div class="form-grid" style="margin-top:14px">
                 <div class="field"><label for="new-owner-login">Yangi login (o‘zgarmasa bo‘sh qoldiring)</label><input class="ctl" id="new-owner-login" autocomplete="off" /></div>
@@ -148,6 +156,9 @@
               <p class="form-message" id="reset-credentials-message"></p>
             </form>
           </article>
+          <div class="detail-page-foot">
+            <button class="btn btn-ghost btn-block" id="restaurant-detail-back-foot" type="button">← Orqaga qaytish</button>
+          </div>
         </section>
 <section data-view-panel="markets" hidden style="display:flex;flex-direction:column;gap:18px">
           <div class="stats-row">
@@ -177,16 +188,23 @@
             </div>
             <div class="pagination-bar" id="market-pagination"></div>
           </article>
+        </section>
 
+        <!-- ======================= SUPERMARKET MA'LUMOTI — ALOHIDA SAHIFA ======================= -->
+        <section data-view-panel="market-detail" hidden style="display:flex;flex-direction:column;gap:18px">
           <article class="card" id="market-details">
+            <div class="detail-topbar">
+              <button class="btn btn-ghost btn-sm" id="market-detail-back" type="button">← Orqaga qaytish</button>
+              <span class="step-label">SUPERMARKET MA’LUMOTI</span>
+            </div>
             <div class="card-head">
-              <div><span class="step-label">SUPERMARKET MA’LUMOTI</span><h3 id="selected-market">Supermarket tanlang</h3></div>
+              <div><h3 id="selected-market">Supermarket tanlang</h3></div>
               <div style="display:flex;gap:8px;flex-wrap:wrap" id="market-owner-actions" hidden>
                 <button class="btn btn-ghost btn-sm" id="market-toggle-status" type="button">Passiv qilish</button>
                 <button class="btn btn-ghost btn-sm" id="market-show-reset-form" type="button">🔑 Login/parolni tiklash</button>
               </div>
             </div>
-            <div id="market-payment-details"><p class="empty" style="margin-top:0">Chap ro‘yxatdan supermarket tanlansa, batafsil ma’lumot shu yerda chiqadi.</p></div>
+            <div id="market-payment-details"><p class="empty" style="margin-top:0">Supermarket tanlansangiz, batafsil ma’lumot shu yerda chiqadi.</p></div>
             <form id="market-reset-credentials-form" hidden novalidate>
               <div class="form-grid" style="margin-top:14px">
                 <div class="field"><label for="new-market-login">Yangi login (o‘zgarmasa bo‘sh qoldiring)</label><input class="ctl" id="new-market-login" autocomplete="off" /></div>
@@ -199,6 +217,9 @@
               <p class="form-message" id="market-reset-message"></p>
             </form>
           </article>
+          <div class="detail-page-foot">
+            <button class="btn btn-ghost btn-block" id="market-detail-back-foot" type="button">← Orqaga qaytish</button>
+          </div>
         </section>
 
         <section class="cards-grid" data-view-panel="create" hidden>

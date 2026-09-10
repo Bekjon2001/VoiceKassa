@@ -342,4 +342,21 @@ html[data-theme='dark'] .ai-voice-toggle{background:#222a33}
 html[data-theme='dark'] .data-table tbody tr.rowlink:hover{background:#20262e}
 html[data-theme='dark'] .data-table tbody tr.row-selected{background:#1f3a2e}
 html[data-theme='dark'] .jarvis-toast{background:#14341f;border-color:#2f7a4c;color:#d8ffe4}
+/* Tun rejimida oq qolib ketgan joylar: Restoran ma'lumoti kartasi, ro'yxatlar, AI (Jarvis) chat */
+html[data-theme='dark'] .detail-item,
+html[data-theme='dark'] .item,
+html[data-theme='dark'] .empty,
+html[data-theme='dark'] .thumb-preview,
+html[data-theme='dark'] .panel-form{background:#1d232b;border-color:#2c333d;color:var(--ink)}
+html[data-theme='dark'] .item-thumb,
+html[data-theme='dark'] .table-detail-cover{background:#222a33;border-color:#2c333d}
+html[data-theme='dark'] .data-table th{background:#1d232b;color:#9aa5b1;border-bottom-color:#2c333d}
+html[data-theme='dark'] .staff-empty__icon{background:var(--green-soft)}
+html[data-theme='dark'] .ai-chat{background:#12161b;border-color:#2c333d}
+html[data-theme='dark'] .ai-msg>div:not(.ai-msg__head){background:#1d232b;border-color:#2c333d;color:var(--ink)}
+html[data-theme='dark'] .ai-msg--user>div:not(.ai-msg__head){background:var(--green);border-color:var(--green);color:#fff}
+html[data-theme='dark'] .ai-msg--bot>div:not(.ai-msg__head){background:#1d232b}
+html[data-theme='dark'] .ai-msg__stats{background:#222a33;color:#9aa5b1}
+html[data-theme='dark'] .ai-composer .ctl{background:#1d232b}
+html[data-theme='dark'] .ai-table th{background:#222a33;color:#9aa5b1}
 
