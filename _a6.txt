@@ -1,0 +1,10 @@
+﻿L182: const result = await api("/Business/LoginOwner/owner/login", {
+L217: const list = await api(`/Business/GetTables/${encodeURIComponent(activeBusinessId)}/tables`);
+L229: const list = await api(`/Product/GetByBusiness?businessId=${encodeURIComponent(activeBusinessId
+L256: const list = await api(`/Business/GetStaff/${encodeURIComponent(activeBusinessId)}/staff`, {
+L723: const saved = await api("/Business/CreateTable/tables", {
+L751: await api(`/Business/UpdateTableStatus/tables/${person.id}/status`, {
+L792: const saved = await api("/Product/Create", {
+L902: const saved = await api("/Business/CreateStaff/staff", {
+L964: const updated = await api(`/Business/UpdateStaffSalary/staff/${person.id}/salary`, {
+L991: const updated = await api(`/Business/SetStaffActive/staff/${person.id}/active`, {

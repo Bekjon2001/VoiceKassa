@@ -1,0 +1,2 @@
+﻿S140: public async Task<(bool Success, string? Error, RestaurantOwner? Owner)> AuthorizeOwnerAsync(
+S306: var owner = await AuthorizeOwnerAsync(staff.BusinessId, token, ct);

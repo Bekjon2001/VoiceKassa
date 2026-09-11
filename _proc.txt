@@ -1,0 +1,3 @@
+FINDSTR: Cannot open VoiceKassa
+FINDSTR: Cannot open dotnet\  
+SCRIPT_EXISTS 

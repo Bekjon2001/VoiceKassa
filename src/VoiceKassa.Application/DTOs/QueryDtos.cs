@@ -17,6 +17,16 @@ public class JarvisCommandRequest
 }
 
 /// <summary>
+/// Odiy Admin (biznes egasi) Jarvis buyrug'i: token orqali biznes tekshiriladi,
+/// AI faqat shu biznes konteksti bilan javob beradi.
+/// </summary>
+public class OwnerJarvisCommandRequest
+{
+    public long BusinessId { get; set; }
+    public string Text { get; set; } = string.Empty;
+}
+
+/// <summary>
 /// Jarvis (ovozli yordamchi) tahlili natijasi: Kind == "action" bo'lsa
 /// Action/BusinessId/View to'ldiriladi (frontend bajaradi), Kind == "answer"
 /// bo'lsa Answer to'ldiriladi (AI matn javobi).

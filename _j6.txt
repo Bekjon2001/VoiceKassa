@@ -1,0 +1,10 @@
+d:\project\VoiceKassa\src\VoiceKassa.AiServices\GeminiQueryService.cs:116:    public async Task<JarvisCommandResponse> InterpretJarvisAsync(string text, string dataContextJson, CancellationToken ct = default)
+d:\project\VoiceKassa\src\VoiceKassa.AiServices\GeminiQueryService.cs:127:                return new JarvisCommandResponse
+d:\project\VoiceKassa\src\VoiceKassa.AiServices\GeminiQueryService.cs:147:            return new JarvisCommandResponse
+d:\project\VoiceKassa\src\VoiceKassa.AiServices\GeminiQueryService.cs:170:        return new JarvisCommandResponse
+d:\project\VoiceKassa\src\VoiceKassa.Api\Controllers\QueryController.cs:59:    public async Task<IActionResult> JarvisCommand([FromBody] JarvisCommandRequest request, CancellationToken ct)
+d:\project\VoiceKassa\src\VoiceKassa.Api\Controllers\QueryController.cs:67:        var response = await _queryService.JarvisCommandAsync(request.Text.Trim(), ct);
+d:\project\VoiceKassa\src\VoiceKassa.Application\DTOs\QueryDtos.cs:14:public class JarvisCommandRequest
+d:\project\VoiceKassa\src\VoiceKassa.Application\DTOs\QueryDtos.cs:24:public class JarvisCommandResponse
+d:\project\VoiceKassa\src\VoiceKassa.Application\Interfaces\IAiQueryService.cs:18:    Task<JarvisCommandResponse> InterpretJarvisAsync(string text, string dataContextJson, CancellationToken ct = default);
+d:\project\VoiceKassa\src\VoiceKassa.Application\Services\QueryService.cs:82:    public async Task<JarvisCommandResponse> JarvisCommandAsync(string text, CancellationToken ct = default)

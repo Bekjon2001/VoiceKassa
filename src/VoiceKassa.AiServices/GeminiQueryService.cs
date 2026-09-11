@@ -239,4 +239,142 @@ public class GeminiQueryService : IAiQueryService
                 return true;
         return false;
     }
+
+    // ======================= Owner Jarvis (odiy Admin) =======================
+
+    private const string OwnerJarvisSystemPrompt = """
+        Sen VoiceKassa boshqaruv panelining (restoran/do'kon egasi) Jarvis
+        yordamchisisan. Senga foydalanuvchi matni (ko'pincha ovoz tanib olishdan
+        kelgan — imlo xatolari bo'lishi mumkin) va FAQAT SHU foydalanuvchining
+        biznesi JSON konteksti beriladi. Vazifang — matn BUYRUQmi yoki SAVOLmi
+        aniqlash:
+        1. BUYRUQ bo'lsa (panel bo'limini ochish, forma ochish) — mos funksiyani
+           TO'G'RI parametrlar bilan chaqir:
+           - "stollarni och" → navigate(view=tables), "ovqatlar/menyu" →
+             navigate(view=meals), "xodimlar" → navigate(view=staff).
+           - "yangi stol qo'sh" → open_form(form=table-add), "yangi xodim qo'sh"
+             → open_form(form=staff-add), "yangi taom/ovqat/ichimlik qo'sh" →
+             open_form(form=meals-add).
+           - Senga boshqa bizneslarning id'lari BERMAYDI — hech qachon
+             businessId yozma.
+        2. SAVOL bo'lsa (savdo, buyurtmalar, menyu, xodimlar haqida) — funksiya
+           chaqirmasdan, faqat O'ZBEK TILIDA (lotin yozuvida), qisqa va aniq
+           javob ber. Javob FAQAT kontekstdagi haqiqiy ma'lumotlarga asoslanadi;
+           hisoblash kerak bo'lsa kontekstdan o'zing hisobla, "aniqlashtiring"
+           deb qaytarma. Foydalanuvchi jadval so'rasa MARKDOWN JADVAL ber,
+           jadval kataklarida markdown belgi ishlatma. Kontekstda ma'lumot
+           yo'q bo'lsa (masalan o'tgan oy savdosi berilmagan) — o'zbek tilida
+           aniq shuni ayt.
+        3. Na buyruq, na savol bo'lgan oddiy gap bo'lsa — o'zbek tilida qisqa
+           munosabat bildir yoki nima qilishni so'rang.
+        4. Javob matni HAR DOIM o'zbek tilida (lotin yozuvida) bo'lsin — rus yoki
+           boshqa tillarda hech qachon javob berma.
+        5. Sizda faqat MUAYYAN biznes egasining ma'lumoti bor. Platformaning
+           boshqa restoranlari, obunalar yoki Super Admin amallari (faollashtirish
+           va h.k.) haqida gap kelganda — bunday amal/malumot sizda yo'qligini
+           o'zbek tilida tushuntiring.
+        """;
+
+    private static readonly HashSet<string> OwnerJarvisKnownActions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "navigate", "open_form",
+    };
+
+    public async Task<JarvisCommandResponse> InterpretOwnerJarvisAsync(string text, string dataContextJson, CancellationToken ct = default)
+    {
+        var userMessage = $"Biznes ma'lumotlari (JSON):\n{dataContextJson}\n\nFoydalanuvchi matni: {text}";
+        var result = await _client.CompleteWithToolsAsync(OwnerJarvisSystemPrompt, userMessage, BuildOwnerJarvisTools(), maxTokens: 500, ct);
+
+        if (result.ToolCall != null)
+        {
+            var action = result.ToolCall.Name;
+            if (!OwnerJarvisKnownActions.Contains(action))
+            {
+                return new JarvisCommandResponse
+                {
+                    Kind = "answer",
+                    Answer = "Kechirasiz, bunday buyruqni tushunmadim. Boshqacha ayting.",
+                };
+            }
+
+            string? view = null;
+            try
+            {
+                using var doc = JsonDocument.Parse(result.ToolCall.ArgsJson);
+                if (doc.RootElement.ValueKind == JsonValueKind.Object)
+                {
+                    if (doc.RootElement.TryGetProperty("view", out var viewEl)) view = viewEl.GetString();
+                    else if (doc.RootElement.TryGetProperty("form", out var formEl)) view = formEl.GetString();
+                }
+            }
+            catch { /* args buzilgan — null qoladi, frontend xato beradi */ }
+
+            return new JarvisCommandResponse
+            {
+                Kind = "action",
+                Action = action.ToLowerInvariant(),
+                View = view,
+            };
+        }
+
+        var answer = (result.Text ?? "").Trim();
+        if (!string.IsNullOrWhiteSpace(answer) && HasCyrillic(answer))
+        {
+            var retryMessage = userMessage +
+                "\n\nMUHIM: Oldingi javobing o'zbek tilida emas edi." +
+                " Faqat O'ZBEK TILIDA, LOTIN yozuvida, oddiy matnda javob ber" +
+                " (foydalanuvchi jadval so'ragan bo'lsa — markdown jadval mumkin).";
+            var retry = await _client.CompleteWithToolsAsync(OwnerJarvisSystemPrompt, retryMessage, BuildOwnerJarvisTools(), maxTokens: 500, ct);
+            var retryAnswer = (retry.Text ?? "").Trim();
+            if (!string.IsNullOrWhiteSpace(retryAnswer) && !HasCyrillic(retryAnswer)) answer = retryAnswer;
+        }
+        return new JarvisCommandResponse
+        {
+            Kind = "answer",
+            Answer = string.IsNullOrWhiteSpace(answer) ? "Javob topilmadi." : answer,
+        };
+    }
+
+    // Owner Jarvis amallari: faqat admin panel bo'limlari va qo'shish formalari.
+    private static List<GeminiFunctionDeclaration> BuildOwnerJarvisTools()
+    {
+        var views = new[] { "tables", "meals", "staff" };
+        var forms = new[] { "table-add", "staff-add", "meals-add" };
+
+        var navigateParams = new Dictionary<string, object>
+        {
+            ["type"] = "OBJECT",
+            ["properties"] = new Dictionary<string, object>
+            {
+                ["view"] = new Dictionary<string, object>
+                {
+                    ["type"] = "STRING",
+                    ["enum"] = views,
+                    ["description"] = "Ochiladigan bo'lim: tables (stollar), meals (ovqatlar/menyu), staff (xodimlar)",
+                },
+            },
+            ["required"] = new[] { "view" },
+        };
+
+        var formParams = new Dictionary<string, object>
+        {
+            ["type"] = "OBJECT",
+            ["properties"] = new Dictionary<string, object>
+            {
+                ["form"] = new Dictionary<string, object>
+                {
+                    ["type"] = "STRING",
+                    ["enum"] = forms,
+                    ["description"] = "Ochiladigan qo'shish formasi: table-add (yangi stol), staff-add (yangi xodim), meals-add (yangi taom/ichimlik)",
+                },
+            },
+            ["required"] = new[] { "form" },
+        };
+
+        return new List<GeminiFunctionDeclaration>
+        {
+            new() { Name = "navigate", Description = "Admin paneldagi bo'limni ochish", Parameters = navigateParams },
+            new() { Name = "open_form", Description = "Yangi qo'shish formasi (stol/xodim/taom) ochish", Parameters = formParams },
+        };
+    }
 }

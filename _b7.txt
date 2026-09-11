@@ -1,0 +1,24 @@
+  Determining projects to restore...
+  All projects are up-to-date for restore.
+  VoiceKassa.Domain -> d:\project\VoiceKassa\src\VoiceKassa.Domain\bin\Debug\net8.0\VoiceKassa.Domain.dll
+  VoiceKassa.Application -> d:\project\VoiceKassa\src\VoiceKassa.Application\bin\Debug\net8.0\VoiceKassa.Application.dll
+  VoiceKassa.DataLayer -> d:\project\VoiceKassa\src\VoiceKassa.DataLayer\bin\Debug\net8.0\VoiceKassa.DataLayer.dll
+  VoiceKassa.DataLayer.Repository -> d:\project\VoiceKassa\src\VoiceKassa.DataLayer.Repository\bin\Debug\net8.0\VoiceKassa.DataLayer.Repository.dll
+d:\project\VoiceKassa\src\VoiceKassa.AiServices\EdgeTtsService.cs(43,31): warning CS8602: Dereference of a possibly null reference. [d:\project\VoiceKassa\src\VoiceKassa.AiServices\VoiceKassa.AiServices.csproj]
+d:\project\VoiceKassa\src\VoiceKassa.AiServices\EdgeTtsService.cs(45,32): warning CS8602: Dereference of a possibly null reference. [d:\project\VoiceKassa\src\VoiceKassa.AiServices\VoiceKassa.AiServices.csproj]
+d:\project\VoiceKassa\src\VoiceKassa.AiServices\EdgeTtsService.cs(52,27): warning CS8602: Dereference of a possibly null reference. [d:\project\VoiceKassa\src\VoiceKassa.AiServices\VoiceKassa.AiServices.csproj]
+  VoiceKassa.AiServices -> d:\project\VoiceKassa\src\VoiceKassa.AiServices\bin\Debug\net8.0\VoiceKassa.AiServices.dll
+  VoiceKassa.Api -> d:\project\VoiceKassa\src\VoiceKassa.Api\bin\Debug\net8.0\VoiceKassa.Api.dll
+
+Build succeeded.
+
+d:\project\VoiceKassa\src\VoiceKassa.AiServices\EdgeTtsService.cs(43,31): warning CS8602: Dereference of a possibly null reference. [d:\project\VoiceKassa\src\VoiceKassa.AiServices\VoiceKassa.AiServices.csproj]
+d:\project\VoiceKassa\src\VoiceKassa.AiServices\EdgeTtsService.cs(45,32): warning CS8602: Dereference of a possibly null reference. [d:\project\VoiceKassa\src\VoiceKassa.AiServices\VoiceKassa.AiServices.csproj]
+d:\project\VoiceKassa\src\VoiceKassa.AiServices\EdgeTtsService.cs(52,27): warning CS8602: Dereference of a possibly null reference. [d:\project\VoiceKassa\src\VoiceKassa.AiServices\VoiceKassa.AiServices.csproj]
+    3 Warning(s)
+    0 Error(s)
+
+Time Elapsed 00:00:07.74
+
+Workload updates are available. Run `dotnet workload list` for more information.
+BUILD_EXIT=0 

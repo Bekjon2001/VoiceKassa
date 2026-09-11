@@ -69,6 +69,29 @@ public class QueryController : ControllerBase
     }
 
     /// <summary>
+    /// Odiy Admin (biznes egasi) Jarvis (ovozli yordamchi) uchun: owner token
+    /// bilan biznes tekshiriladi va AI faqat shu biznes konteksti bilan tahlil
+    /// qiladi — buyruq (navigate/open_form) yoki savol javobi qaytadi.
+    /// </summary>
+    [HttpPost("owner-jarvis")]
+    public async Task<IActionResult> OwnerJarvisCommand([FromBody] OwnerJarvisCommandRequest request, CancellationToken ct)
+    {
+        if (request.BusinessId <= 0)
+            return BadRequest(new { error = "BusinessId noto'g'ri." });
+
+        if (string.IsNullOrWhiteSpace(request.Text))
+            return BadRequest(new { error = "Matn bo'sh bo'lishi mumkin emas." });
+
+        var token = Request.Headers["X-Owner-Token"].FirstOrDefault();
+        var access = await _businessService.AuthorizeOwnerAsync(request.BusinessId, token, ct);
+        if (!access.Success)
+            return Unauthorized(new { error = access.Error ?? "Ruxsat yo'q." });
+
+        var response = await _queryService.OwnerJarvisCommandAsync(request.BusinessId, request.Text.Trim(), ct);
+        return Ok(response);
+    }
+
+    /// <summary>
     /// Super Admin AI yordamchi javobini o'zbekcha tabiiy ovoz (TTS) bilan o'qish.
     /// Microsoft Edge read-aloud (Bing) nervli ovozi ishlatiladi — bepul, kalitsiz:
     ///   uz-UZ-MadinaNeural (ayol), uz-UZ-SardorNeural (erkak).
@@ -83,6 +106,30 @@ public class QueryController : ControllerBase
         if (string.IsNullOrWhiteSpace(text))
             return BadRequest(new { error = "Matn bo'sh bo'lishi mumkin emas." });
 
+        return await SpeakInternalAsync(text, voice, ct);
+    }
+
+    /// <summary>
+    /// Odiy Admin (biznes egasi) Jarvis javobini o'zbekcha tabiiy ovoz (TTS)
+    /// bilan o'qish — owner token bilan tekshiriladi.
+    /// </summary>
+    [HttpGet("speak-owner")]
+    public async Task<IActionResult> SpeakOwner([FromQuery] long businessId, [FromQuery] string text, [FromQuery] string? voice, CancellationToken ct)
+    {
+        var token = Request.Headers["X-Owner-Token"].FirstOrDefault();
+        var access = await _businessService.AuthorizeOwnerAsync(businessId, token, ct);
+        if (!access.Success)
+            return Unauthorized(new { error = access.Error ?? "Ruxsat yo'q." });
+
+        if (string.IsNullOrWhiteSpace(text))
+            return BadRequest(new { error = "Matn bo'sh bo'lishi mumkin emas." });
+
+        return await SpeakInternalAsync(text, voice, ct);
+    }
+
+    /// <summary>Edge TTS (Bing) nervli ovozi — bepul, kalitsiz: uz-UZ-MadinaNeural (ayol), uz-UZ-SardorNeural (erkak).</summary>
+    private async Task<IActionResult> SpeakInternalAsync(string text, string? voice, CancellationToken ct)
+    {
         try
         {
             // voice berilmasa — til avtomatik aniqlanadi: kirill matn → ruscha

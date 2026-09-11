@@ -76,6 +76,7 @@
           <button class="nav-item" type="button" data-owner-view="supermarket"><span class="icon-chip">▤</span><span>Supermarket</span><b class="chev">›</b></button>
           <button class="nav-item" type="button" data-owner-view="shop"><span class="icon-chip">▣</span><span>Do‘kon</span><b class="chev">›</b></button>
           <button class="nav-item" type="button" data-owner-view="organization"><span class="icon-chip">☷</span><span>Tashkilot</span><b class="chev">›</b></button>
+          <button class="nav-item" type="button" data-owner-view="ai"><span class="icon-chip">✨</span><span>AI yordamchi</span><b class="chev">›</b></button>
         </nav>
         <span class="side-spacer"></span>
         <button class="btn btn-ghost btn-block" id="logout-button" type="button" style="margin-top:10px">Chiqish</button>
@@ -396,10 +397,42 @@
             </div>
           </article>
         </div>
+
+        <!-- ======================= AI YORDAMCHI (ovozli) ======================= -->
+        <section class="cards-grid" data-owner-panel="ai" hidden>
+          <article class="card card--wide">
+            <div class="card-head">
+              <div>
+                <span class="step-label">OVOZLI AI YORDAMCHI</span>
+                <h3>Jarvis bilan suhbat</h3>
+                <p class="sub">Pastki o‘ng burchakdagi <strong>Jarvis</strong> switchni yoqing — panel <strong>doimiy eshitib turadi</strong>: shunchaki “stollarni och”, “AI, yangi xodim qo‘sh” deb gapiring yoki savol bering: “bugun qancha savdo bo‘ldi?”. Buyruq tanilmasa, gap oddiy AI savoli sifatida javob oladi.</p>
+              </div>
+              <label class="ai-voice-toggle" title="Javobni ovoz bilan o‘qish">
+                <input type="checkbox" id="ai-voice-toggle" checked />
+                <span>🔊 Ovozli javob</span>
+              </label>
+            </div>
+            <div class="ai-chat" id="ai-messages" aria-live="polite"></div>
+            <div class="ai-composer">
+              <input class="ctl" id="ai-input" placeholder="Savolingizni yozing yoki mikrofondan gapiring..." autocomplete="off" />
+              <button class="btn btn-ghost" id="ai-lang" type="button" title="Mikrofon tan olish tili (uz/ru)">uz</button>
+              <button class="btn btn-ghost" id="ai-mic" type="button" title="Mikrofon bilan gapirish">🎤</button>
+              <button class="btn btn-primary" id="ai-send" type="button">Yuborish</button>
+            </div>
+            <p class="form-message" id="ai-message"></p>
+          </article>
+        </section>
       </main>
     </div>
   </div>
 </main>
+
+<!-- ======================= JARVIS AI switch (pastki o'ng burchak) ======================= -->
+<label id="jarvis-wrap" class="jarvis-toggle" title="Jarvisni yoqing — panel doimiy eshitadi. Shunchaki gapiring: 'stollarni och' yoki 'AI, yangi stol qo'sh'. Buyruq tanilmagan gaplar oddiy AI savoli sifatida javob oladi.">
+  <input type="checkbox" id="jarvis-toggle" role="switch" aria-label="Jarvis AI buyruqlarni yoqish" />
+  <span class="jarvis-toggle__knob" aria-hidden="true"></span>
+  <span class="jarvis-toggle__label"><strong>Jarvis</strong><small>AI buyruqlar</small></span>
+</label>
 <script src="admin.js"></script>
 </body>
 </html>

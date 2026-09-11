@@ -1,0 +1,8 @@
+﻿G245: private const string OwnerJarvisSystemPrompt = """
+G283: public async Task<JarvisCommandResponse> InterpretOwnerJarvi
+G286: var result = await _client.CompleteWithToolsAsync(OwnerJarvi
+G327: var retry = await _client.CompleteWithToolsAsync(OwnerJarvis
+G339: private static List<GeminiFunctionDeclaration> BuildOwnerJar
+Q93: public async Task<JarvisCommandResponse> OwnerJarvisCommandA
+D23
+I25

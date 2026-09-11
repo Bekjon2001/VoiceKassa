@@ -1,0 +1,6 @@
+﻿D1069: const small = wrap.querySelector(".jarvis-toggle__label smal
+D1071: wrap.classList.toggle("jarvis-toggle--listening", aiAlwaysLi
+D1147: const toggle = $("jarvis-toggle");
+D1169: const toggle = document.getElementById("jarvis-toggle");
+D1428: document.getElementById("jarvis-toggle").addEventListener("c
+D1537: const jarvisToggleEl = $("jarvis-toggle");

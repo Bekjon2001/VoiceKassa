@@ -1,0 +1,18 @@
+  Determining projects to restore...
+  All projects are up-to-date for restore.
+  VoiceKassa.Domain -> d:\project\VoiceKassa\src\VoiceKassa.Domain\bin\Debug\net8.0\VoiceKassa.Domain.dll
+  VoiceKassa.DataLayer -> d:\project\VoiceKassa\src\VoiceKassa.DataLayer\bin\Debug\net8.0\VoiceKassa.DataLayer.dll
+  VoiceKassa.Application -> d:\project\VoiceKassa\src\VoiceKassa.Application\bin\Debug\net8.0\VoiceKassa.Application.dll
+d:\project\VoiceKassa\src\VoiceKassa.AiServices\GeminiQueryService.cs(283,25): error CS0111: Type 'GeminiQueryService' already defines a member called 'HasCyrillic' with the same parameter types [d:\project\VoiceKassa\src\VoiceKassa.AiServices\VoiceKassa.AiServices.csproj]
+  VoiceKassa.DataLayer.Repository -> d:\project\VoiceKassa\src\VoiceKassa.DataLayer.Repository\bin\Debug\net8.0\VoiceKassa.DataLayer.Repository.dll
+
+Build FAILED.
+
+d:\project\VoiceKassa\src\VoiceKassa.AiServices\GeminiQueryService.cs(283,25): error CS0111: Type 'GeminiQueryService' already defines a member called 'HasCyrillic' with the same parameter types [d:\project\VoiceKassa\src\VoiceKassa.AiServices\VoiceKassa.AiServices.csproj]
+    0 Warning(s)
+    1 Error(s)
+
+Time Elapsed 00:00:27.48
+
+Workload updates are available. Run `dotnet workload list` for more information.
+BUILD_EXIT=0 

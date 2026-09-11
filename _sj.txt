@@ -1,0 +1,1 @@
+﻿L1740: const response = await fetch(`${API_BASE}/Query/JarvisCommand/jarvis`, {

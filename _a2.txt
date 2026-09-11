@@ -1,0 +1,6 @@
+FINDSTR: Cannot open ownerToken
+FINDSTR: Cannot open =
+FINDSTR: Cannot open const
+FINDSTR: Cannot open ownerToken
+FINDSTR: Cannot open let
+FINDSTR: Cannot open ownerToken\ d:\project\VoiceKassa\frontend\admin.js 

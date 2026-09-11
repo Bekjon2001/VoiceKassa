@@ -16,4 +16,11 @@ public interface IAiQueryService
     /// savol bo'lsa — matn javobi qaytaradi.
     /// </summary>
     Task<JarvisCommandResponse> InterpretJarvisAsync(string text, string dataContextJson, CancellationToken ct = default);
+
+    /// <summary>
+    /// Odiy Admin (biznes egasi) Jarvis matnini tahlil qiladi: faqat o'z
+    /// biznesi konteksti va admin paneldagi amallar (navigate/open_form)
+    /// bilan cheklangan.
+    /// </summary>
+    Task<JarvisCommandResponse> InterpretOwnerJarvisAsync(string text, string dataContextJson, CancellationToken ct = default);
 }

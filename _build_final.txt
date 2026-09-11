@@ -1,0 +1,17 @@
+  Determining projects to restore...
+  All projects are up-to-date for restore.
+  VoiceKassa.Domain -> d:\project\VoiceKassa\src\VoiceKassa.Domain\bin\Debug\net8.0\VoiceKassa.Domain.dll
+  VoiceKassa.Application -> d:\project\VoiceKassa\src\VoiceKassa.Application\bin\Debug\net8.0\VoiceKassa.Application.dll
+  VoiceKassa.DataLayer -> d:\project\VoiceKassa\src\VoiceKassa.DataLayer\bin\Debug\net8.0\VoiceKassa.DataLayer.dll
+  VoiceKassa.AiServices -> d:\project\VoiceKassa\src\VoiceKassa.AiServices\bin\Debug\net8.0\VoiceKassa.AiServices.dll
+  VoiceKassa.DataLayer.Repository -> d:\project\VoiceKassa\src\VoiceKassa.DataLayer.Repository\bin\Debug\net8.0\VoiceKassa.DataLayer.Repository.dll
+  VoiceKassa.Api -> d:\project\VoiceKassa\src\VoiceKassa.Api\bin\Debug\net8.0\VoiceKassa.Api.dll
+
+Build succeeded.
+    0 Warning(s)
+    0 Error(s)
+
+Time Elapsed 00:00:07.36
+
+Workload updates are available. Run `dotnet workload list` for more information.
+BUILD_EXIT=0 

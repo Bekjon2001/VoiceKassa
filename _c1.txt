@@ -1,0 +1,40 @@
+﻿C194: .ai-chat{display:flex;flex-direction:column;gap:11px;background:#f7f9f8;border:1
+C195: .ai-msg{max-width:84%;display:flex;flex-direction:column;gap:3px;animation:aiFad
+C196: .ai-msg--user{align-self:flex-end}
+C197: .ai-msg--bot{align-self:flex-start}
+C198: .ai-msg__head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+C199: .ai-msg__label{font-size:11px;font-weight:700;color:var(--muted)}
+C200: .ai-msg__stats{font-size:10.5px;font-weight:600;color:var(--muted);opacity:.85;b
+C201: .ai-msg>div:not(.ai-msg__head){background:#fff;border:1px solid var(--line);bord
+C202: .ai-msg--user>div:not(.ai-msg__head){background:var(--green);border-color:var(--
+C203: .ai-msg--bot>div:not(.ai-msg__head){background:#fff;border-bottom-left-radius:4p
+C207: .ai-composer{display:flex;gap:8px;margin-top:12px}
+C208: .ai-composer .ctl{flex:1;min-width:0}
+C209: .ai-composer .btn{flex:0 0 auto}
+C210: .ai-voice-toggle{display:inline-flex;align-items:center;gap:7px;font-size:13px;f
+C211: .ai-voice-toggle input{accent-color:var(--green);cursor:pointer}
+C215: .jarvis-toggle{position:fixed;right:18px;bottom:18px;z-index:1200;display:inline
+C216: .jarvis-toggle input{position:absolute;opacity:0;width:0;height:0;overflow:hidde
+C217: .jarvis-toggle__knob{position:relative;width:38px;height:20px;border-radius:20px
+C218: .jarvis-toggle__knob::after{content:"";position:absolute;top:2px;left:2px;width:
+C219: .jarvis-toggle input:checked + .jarvis-toggle__knob{background:var(--green)}
+C220: .jarvis-toggle input:checked + .jarvis-toggle__knob::after{transform:translateX(
+C221: .jarvis-toggle__label{display:flex;flex-direction:column;line-height:1.1;font-si
+C222: .jarvis-toggle__label strong{font-weight:700;color:var(--green-dark)}
+C223: .jarvis-toggle__label small{color:var(--muted);font-size:10.5px}
+C224: .jarvis-toggle--on{background:var(--green);border-color:var(--green-dark);color:
+C225: .jarvis-toggle--on .jarvis-toggle__label strong{color:#fff}
+C226: .jarvis-toggle--on .jarvis-toggle__label small{color:rgba(255,255,255,.85)}
+C227: .jarvis-toggle--listening .jarvis-toggle__knob{animation:jarvisPulse 1.2s ease-i
+C231: .jarvis-toast{display:none;position:fixed;left:50%;bottom:84px;transform:transla
+C232: .jarvis-toast--err{background:#3a1518;color:#ffd9dc;border-color:#8a3a42}
+C335: html[data-theme='dark'] .jarvis-toggle__knob{background:#3b434c}
+C336: html[data-theme='dark'] .jarvis-toggle__knob::after{background:#d7dde4}
+C341: html[data-theme='dark'] .ai-voice-toggle{background:#222a33}
+C344: html[data-theme='dark'] .jarvis-toast{background:#14341f;border-color:#2f7a4c;co
+C355: html[data-theme='dark'] .ai-chat{background:#12161b;border-color:#2c333d}
+C356: html[data-theme='dark'] .ai-msg>div:not(.ai-msg__head){background:#1d232b;border
+C357: html[data-theme='dark'] .ai-msg--user>div:not(.ai-msg__head){background:var(--gr
+C358: html[data-theme='dark'] .ai-msg--bot>div:not(.ai-msg__head){background:#1d232b}
+C359: html[data-theme='dark'] .ai-msg__stats{background:#222a33;color:#9aa5b1}
+C360: html[data-theme='dark'] .ai-composer .ctl{background:#1d232b}

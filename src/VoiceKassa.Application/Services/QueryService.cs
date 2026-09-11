@@ -85,6 +85,64 @@ public class QueryService
         return await _aiQuery.InterpretJarvisAsync(text, contextJson, ct);
     }
 
+    /// <summary>
+    /// Odiy Admin (biznes egasi) Jarvis buyrug'i: faqat o'z biznesining
+    /// stollari, menyusi, xodimlari va bugungi savdosi konteksti beriladi.
+    /// Buyruq faqat admin panel amallari bilan cheklanadi.
+    /// </summary>
+    public async Task<JarvisCommandResponse> OwnerJarvisCommandAsync(long businessId, string text, CancellationToken ct = default)
+    {
+        var contextJson = await BuildOwnerContextJsonAsync(businessId, ct);
+        return await _aiQuery.InterpretOwnerJarvisAsync(text, contextJson, ct);
+    }
+
+    /// <summary>Bitta biznesning Jarvis kontekstini JSON qilib tayyorlaydi.</summary>
+    private async Task<string> BuildOwnerContextJsonAsync(long businessId, CancellationToken ct)
+    {
+        var business = await _businessRepo.GetBusinessByIdAsync(businessId, ct);
+        var now = DateTime.UtcNow;
+        var fromUtc = now.Date;
+
+        var tables = await _businessRepo.GetTablesByBusinessAsync(businessId, ct);
+        var products = await _businessRepo.GetProductsByBusinessAsync(businessId, ct);
+        var staff = await _businessRepo.GetStaffByBusinessAsync(businessId, ct);
+        var orders = await _orderRepo.GetByBusinessAndRangeAsync(businessId, fromUtc, now, ct);
+        var completed = orders.Where(o => o.Status == OrderStatus.Completed).ToList();
+
+        var context = new
+        {
+            NowUtc = now,
+            TodayFromUtc = fromUtc,
+            Business = business == null ? null : new
+            {
+                business.Id,
+                business.Name,
+                Type = business.Type.ToString(),
+                business.IsActive,
+                business.PhoneNumber,
+            },
+            Tables = tables.Select(t => new { t.Id, t.Name, Status = t.Status.ToString() }),
+            Products = products.Select(p => new { p.Id, p.Name, p.Price, p.StockQuantity }),
+            Staff = staff.Select(s => new { s.Id, s.FullName, Role = s.Role.ToString(), s.IsActive }),
+            TodayOrders = new
+            {
+                Count = completed.Count,
+                TotalAmount = completed.Sum(o => o.TotalAmount),
+                CashAmount = completed.Where(o => o.PaymentType == PaymentType.Cash).Sum(o => o.TotalAmount),
+                CardAmount = completed.Where(o => o.PaymentType == PaymentType.Card).Sum(o => o.TotalAmount),
+                OnlineAmount = completed.Where(o => o.PaymentType == PaymentType.Online).Sum(o => o.TotalAmount),
+                TopProducts = completed
+                    .SelectMany(o => o.Items)
+                    .GroupBy(i => i.ProductNameSpoken)
+                    .Select(g => new { Name = g.Key, Quantity = g.Sum(i => i.Quantity), Revenue = g.Sum(i => i.LineTotal) })
+                    .OrderByDescending(p => p.Revenue)
+                    .Take(10),
+            },
+        };
+
+        return JsonSerializer.Serialize(context);
+    }
+
     /// <summary>Platformadagi barcha bizneslar va obunalar kontekstini JSON qilib tayyorlaydi.</summary>
     private async Task<string> BuildPlatformContextJsonAsync(CancellationToken ct)
     {

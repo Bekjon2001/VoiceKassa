@@ -42,6 +42,7 @@ const VIEW_TITLES = {
   supermarket: ["Supermarket", "Mahsulotlar, narxlar va ombor qoldig‘i shu bo‘limda boshqariladi."],
   shop: ["Do‘kon", "Tovarlar, narxlar va sotuvlar shu bo‘limda boshqariladi."],
   organization: ["Tashkilot", "Umumiy tashkilot ma’lumotlari shu bo‘limda boshqariladi."],
+  ai: ["AI yordamchi", "Jarvis — ovozli buyruqlar va savollar (faqat sizning biznesingiz haqida)."],
 };
 const ROLE_NAMES = { 0: "Ega", 1: "Menejer", 2: "Kassir", 3: "Ofitsiant", 4: "Oshpaz" };
 const ROLE_META = {
@@ -1005,3 +1006,531 @@ $("staff-fire-btn").addEventListener("click", async () => {
 // ---------- Boshlash: sessiyani tiklash ----------
 const existingSession = loadSession();
 if (existingSession && existingSession.token) enterWorkspace(existingSession, true);
+
+// ======================= Jarvis — ovozli AI yordamchi (Admin) =======================
+// Super Admin'dagi Jarvis bilan bir xil printsipda ishlaydi, lekin AI faqat
+// shu biznesning (stollar, menyu, xodimlar, bugungi savdo) kontekstini ko'radi
+// va buyruqlar faqat admin panel amallari bilan cheklangan.
+const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+const canMic = typeof SpeechRec !== "undefined";
+const canSpeak = typeof window.speechSynthesis !== "undefined";
+const aiMsgEl = $("ai-message");
+const aiChatEl = $("ai-messages");
+
+let aiRecognition = null;
+let aiListening = false;
+let aiRecLang = "uz-UZ";
+try { aiRecLang = localStorage.getItem("vk_ai_rec_lang") || "uz-UZ"; } catch { /* ignore */ }
+let aiNoSpeechRetried = false;
+let aiAlwaysListen = false; // Jarvis switch yoqilganmi (doimiy eshitish)
+let aiSpeakingNow = false;  // Jarvis hozir ovoz chiqaryaptimi
+let aiAlwaysErrors = 0;     // ketma-ket xatolar (cheksiz loop bo'lmasligi uchun)
+let jarvisBusy = false;
+let aiSpeakAbort = null;
+let aiAudioEl = null;
+let aiLastHeardCmd = "";    // so'nggi bajarilgan buyruq (takrorlanishni oldini olish)
+let aiLastHeardAt = 0;
+const aiLangBtn = $("ai-lang");
+
+function aiLangLabel() { return aiRecLang.toLowerCase().startsWith("ru") ? "ru" : "uz"; }
+if (aiLangBtn) {
+  aiLangBtn.textContent = aiLangLabel();
+  aiLangBtn.addEventListener("click", () => {
+    aiRecLang = aiLangLabel() === "uz" ? "ru-RU" : "uz-UZ";
+    try { localStorage.setItem("vk_ai_rec_lang", aiRecLang); } catch { /* ignore */ }
+    aiLangBtn.textContent = aiLangLabel();
+    if (aiMsgEl) setMsg(aiMsgEl, "Mikrofon tili: " + (aiLangLabel() === "uz" ? "o‘zbekcha (uz)" : "ruscha (ru)"), "");
+    if (aiAlwaysListen && aiRecognition) { try { aiRecognition.stop(); } catch { /* onend qayta ishga tushiradi */ } }
+  });
+}
+
+// Mikrofonga ruxsatni aniq so'raymiz (brauzer foydalanuvchi ish-harakatidan
+// so'ng ruxsat olishi kerak). true — ruxsat bor; string — xato xabari.
+async function requestMicPermission() {
+  try {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return true;
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    stream.getTracks().forEach(t => t.stop());
+    return true;
+  } catch (err) {
+    const name = err && err.name ? String(err.name) : "";
+    if (/NotAllowed|Permission|denied|security/i.test(name))
+      return "Mikrofonga ruxsat berilmagan. Brauzer manzil qatoridagi qulf belgisini bosib → 'Mikrofon' → 'Ruxsat' ni tanlang, keyin Ctrl+F5 bilan sahifani yangilang.";
+    if (/NotFound|Devices?|source/i.test(name))
+      return "Mikrofon qurilmasi topilmadi. Mikrofon ulanganini va Windows Sozlamalar → Tizim → Ovoz → Kirish bo‘limida standart qilib tanlanganini tekshiring.";
+    if (/NotReadable|in.use/i.test(name))
+      return "Mikrofon boshqa dasturda ishlatilyapti (masalan Zoom). Uni yoping va qayta urinib ko‘ring.";
+    return "Mikrofonga ulanishda xatolik: " + (name || "noma'lum") + ". Qayta urinib ko‘ring.";
+  }
+}
+function updateJarvisUi() {
+  const wrap = document.getElementById("jarvis-wrap");
+  if (!wrap) return;
+  const small = wrap.querySelector(".jarvis-toggle__label small");
+  if (small) small.textContent = aiAlwaysListen ? (aiListening ? "eshityapti 🔴" : "ulanmoqda...") : "AI buyruqlar";
+  wrap.classList.toggle("jarvis-toggle--listening", aiAlwaysListen && aiListening);
+}
+
+async function startAlwaysListen() {
+  if (!canMic) {
+    if (aiMsgEl) setMsg(aiMsgEl, "Bu brauzer mikrofonni qo‘llab-quvvatlamaydi. Chrome yoki Edge’dan foydalaning.", "err");
+    return;
+  }
+  if (aiAlwaysListen) return;
+  const perm = await requestMicPermission();
+  if (perm !== true) {
+    if (aiMsgEl) setMsg(aiMsgEl, "Jarvis eshita olmaydi: " + perm, "err");
+    return;
+  }
+  aiAlwaysListen = true;
+  updateJarvisUi();
+  startAlwaysRecognition();
+}
+
+function stopAlwaysListen() {
+  aiAlwaysListen = false;
+  aiAlwaysErrors = 0;
+  if (aiRecognition) { try { aiRecognition.onend = null; aiRecognition.stop(); } catch { /* ignore */ } }
+  aiRecognition = null;
+  aiListening = false;
+  updateJarvisUi();
+}
+
+// Chrome'da continuous=true ishonchsiz — continuous=false + onend qayta
+// ishga tushirish ishlatiladi (super-admin'dagi bilan bir xil yondashuv).
+function startAlwaysRecognition() {
+  if (!aiAlwaysListen || !canMic || aiListening) return;
+  aiRecognition = new SpeechRec();
+  aiRecognition.lang = aiRecLang;
+  aiRecognition.continuous = false;
+  aiRecognition.interimResults = true;
+  aiRecognition.maxAlternatives = 1;
+
+  aiRecognition.onstart = () => {
+    aiListening = true;
+    aiAlwaysErrors = 0;
+    updateJarvisUi();
+  };
+
+  aiRecognition.onresult = event => {
+    let finalText = "", interimText = "";
+    for (let i = 0; i < event.results.length; i++) {
+      const r = event.results[i];
+      if (r.isFinal) finalText += r[0].transcript + " ";
+      else interimText += r[0].transcript;
+    }
+    finalText = finalText.trim();
+    if (!finalText && interimText.trim() && !aiSpeakingNow) {
+      if (aiMsgEl) setMsg(aiMsgEl, "🔴 Eshtyapti: “" + interimText.trim() + "”", "");
+      return;
+    }
+    if (!finalText || aiSpeakingNow) return;
+    const now = Date.now();
+    if (finalText === aiLastHeardCmd && now - aiLastHeardAt < 4000) return;
+    aiLastHeardCmd = finalText;
+    aiLastHeardAt = now;
+    handleAlwaysHeard(finalText);
+  };
+
+  aiRecognition.onerror = event => {
+    const code = event && event.error ? String(event.error) : "";
+    if (/language-not-supported/i.test(code) && aiLangLabel() !== "ru") {
+      aiRecLang = "ru-RU";
+      try { localStorage.setItem("vk_ai_rec_lang", aiRecLang); } catch { /* ignore */ }
+      if (aiLangBtn) aiLangBtn.textContent = aiLangLabel();
+      return; // onend qayta ishga tushiradi
+    }
+    if (/not-allowed|permission|denied|audio-capture|service-not-allowed/i.test(code)) {
+      aiAlwaysErrors++;
+      if (aiAlwaysErrors >= 2) {
+        stopAlwaysListen();
+        const toggle = $("jarvis-toggle");
+        if (toggle) toggle.checked = false;
+        if (aiMsgEl) setMsg(aiMsgEl, "Doimiy eshitish to‘xtatildi: mikrofonga ruxsat yo‘q yoki mikrofon topilmadi. 🎤 tugmasi bilan bir martalik eshitish va matn yozish ishlaydi.", "err");
+        return;
+      }
+    }
+    // no-speech / network — jim o'tadi, onend qayta ishga tushiradi
+  };
+
+  aiRecognition.onend = () => {
+    aiListening = false;
+    updateJarvisUi();
+    if (aiAlwaysListen && !aiSpeakingNow) {
+      setTimeout(() => { if (aiAlwaysListen && !aiListening && !aiSpeakingNow) startAlwaysRecognition(); }, 250);
+    }
+  };
+
+  try { aiRecognition.start(); }
+  catch { setTimeout(() => { if (aiAlwaysListen && !aiListening && !aiSpeakingNow) startAlwaysRecognition(); }, 400); }
+}
+
+function jarvisShouldRun() {
+  const toggle = document.getElementById("jarvis-toggle");
+  return Boolean(toggle && toggle.checked && ownerToken && activeBusinessId);
+}
+// Jarvis javoblari har qanday bo'limda ko'rinishi uchun suzuvchi xabar (toast).
+let jarvisToastTimer = null;
+function jarvisToast(text, isError) {
+  let current = "";
+  try { current = sessionStorage.getItem(VIEW_STORAGE_KEY) || ""; } catch { /* ignore */ }
+  if (current === "ai") return; // AI chatda allaqachon ko'rinadi
+  let el = document.getElementById("jarvis-toast");
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "jarvis-toast";
+    document.body.appendChild(el);
+  }
+  el.textContent = text;
+  el.className = "jarvis-toast" + (isError ? " jarvis-toast--err" : "");
+  el.style.display = "block";
+  clearTimeout(jarvisToastTimer);
+  jarvisToastTimer = setTimeout(() => { el.style.display = "none"; }, 4500);
+}
+
+function aiAddMessage(role, text) {
+  if (!aiChatEl) return;
+  const wrapEl = document.createElement("div");
+  wrapEl.className = "ai-msg ai-msg--" + (role === "user" ? "user" : "bot");
+  const head = document.createElement("div");
+  head.className = "ai-msg__head";
+  const label = document.createElement("span");
+  label.className = "ai-msg__label";
+  label.textContent = role === "user" ? "Siz" : "Jarvis";
+  const stats = document.createElement("span");
+  stats.className = "ai-msg__stats";
+  stats.textContent = new Date().toLocaleTimeString("uz-UZ", { hour: "2-digit", minute: "2-digit" });
+  head.append(label, stats);
+  const body = document.createElement("div");
+  body.textContent = String(text || "");
+  wrapEl.append(head, body);
+  aiChatEl.append(wrapEl);
+  aiChatEl.scrollTop = aiChatEl.scrollHeight;
+}
+
+// ---- Ovoz (TTS): Edge TTS backend proxy orqali, super-admin bilan bir xil ----
+function selectedAiVoice(text) {
+  const hasCyr = /[А-Яа-яЁё]/.test(String(text || ""));
+  return "&voice=" + encodeURIComponent(hasCyr ? "ru-RU-SvetlanaNeural" : "uz-UZ-MadinaNeural");
+}
+
+function speechClean(text) {
+  return String(text || "")
+    .replace(/[*_`#>|]/g, " ")
+    .replace(/-{3,}/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function splitSpeechChunks(text, maxLen) {
+  const clean = String(text || "").trim();
+  if (clean.length <= maxLen) return clean ? [clean] : [];
+  const words = clean.split(" ");
+  const chunks = [];
+  let current = "";
+  for (const w of words) {
+    if ((current + " " + w).trim().length > maxLen) {
+      if (current) chunks.push(current.trim());
+      current = w;
+    } else {
+      current = (current + " " + w).trim();
+    }
+  }
+  if (current) chunks.push(current.trim());
+  return chunks;
+}
+
+function playAudioBlob(blob, signal) {
+  return new Promise((resolve, reject) => {
+    if (!aiAudioEl) aiAudioEl = new Audio();
+    aiAudioEl.src = URL.createObjectURL(blob);
+    const onEnd = () => { cleanup(); resolve(); };
+    const onErr = () => { cleanup(); reject(new Error("audio-play-error")); };
+    const onAbort = () => { cleanup(); resolve(); };
+    function cleanup() {
+      aiAudioEl.removeEventListener("ended", onEnd);
+      aiAudioEl.removeEventListener("error", onErr);
+      aiAudioEl.removeEventListener("abort", onAbort);
+      if (signal) signal.removeEventListener("abort", onAbort);
+      try { URL.revokeObjectURL(aiAudioEl.src); } catch { /* ignore */ }
+    }
+    aiAudioEl.addEventListener("ended", onEnd);
+    aiAudioEl.addEventListener("error", onErr);
+    if (signal) {
+      if (signal.aborted) { cleanup(); return resolve(); }
+      signal.addEventListener("abort", onAbort);
+    }
+    aiAudioEl.play().catch(err => { cleanup(); reject(err); });
+  });
+}
+async function aiSpeak(text) {
+  try { jarvisToast(String(text || "").trim()); } catch { /* ignore */ }
+  const toggle = $("ai-voice-toggle");
+  if (toggle && !toggle.checked) return;
+  if (aiSpeakAbort) aiSpeakAbort.abort(); // oldingi ovozni to'xtatamiz
+  const control = new AbortController();
+  aiSpeakAbort = control;
+
+  const clean = speechClean(text);
+  if (!clean) return;
+  // Jarvis o'z ovozini eshitib qolmasligi uchun — gapirayotganda mikrofonni to'xtatamiz
+  aiSpeakingNow = true;
+  updateJarvisUi();
+  if (aiAlwaysListen && aiRecognition) {
+    try { aiRecognition.onend = null; aiRecognition.stop(); } catch { /* ignore */ }
+    aiListening = false;
+  }
+  if (canSpeak) { try { window.speechSynthesis.cancel(); } catch { /* ignore */ } }
+  if (aiAudioEl) { try { aiAudioEl.pause(); } catch { /* ignore */ } }
+
+  const chunks = splitSpeechChunks(clean, 800);
+  const fetchChunk = async chunk => {
+    const url = "/Query/SpeakOwner/speak-owner?businessId=" + encodeURIComponent(activeBusinessId) +
+      "&text=" + encodeURIComponent(chunk) + selectedAiVoice(chunk);
+    const doFetch = () => fetch(url, {
+      headers: ownerToken ? { "X-Owner-Token": ownerToken } : {},
+      signal: control.signal,
+    }).then(res => {
+      if (!res.ok) throw new Error("tts-status-" + res.status);
+      return res.blob();
+    });
+    try {
+      return await doFetch();
+    } catch (err) {
+      if (control.signal.aborted) throw err;
+      // Server/Bing vaqtincha ishlamasa — bir marta qayta urinamiz
+      return await doFetch();
+    }
+  };
+  try {
+    let nextPromise = fetchChunk(chunks[0]);
+    for (let i = 0; i < chunks.length; i++) {
+      if (control.signal.aborted) return;
+      const blob = await nextPromise;
+      nextPromise = i + 1 < chunks.length ? fetchChunk(chunks[i + 1]) : null;
+      if (control.signal.aborted) return;
+      await playAudioBlob(blob, control.signal);
+    }
+  } catch (error) {
+    if (error && error.name === "AbortError") return;
+    // Zaxira: brauzer ovozi (speechSynthesis) — Edge TTS ishlamasa ham eshitadi
+    if (canSpeak) {
+      try {
+        if (aiAudioEl) { try { aiAudioEl.pause(); } catch { /* ignore */ } }
+        const utter = new SpeechSynthesisUtterance(clean);
+        utter.lang = "uz-UZ";
+        utter.rate = 0.95;
+        utter.pitch = 1;
+        window.speechSynthesis.speak(utter);
+      } catch { /* ignore */ }
+    }
+  } finally {
+    aiSpeakingNow = false;
+    updateJarvisUi();
+    if (aiAlwaysListen) {
+      setTimeout(() => { if (aiAlwaysListen && !aiListening && !aiSpeakingNow) startAlwaysRecognition(); }, 250);
+    }
+  }
+}
+// ---- AI konteksti: faqat SHU biznesning ma'lumotlari yig'iladi ----
+async function buildOwnerJarvisContext() {
+  const ctx = { businessId: Number(activeBusinessId), date: new Date().toISOString().slice(0, 10) };
+  try {
+    const now = new Date();
+    const from = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const to = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+    ctx.todaySummary = await api(
+      `/Query/GetSummary/summary?businessId=${encodeURIComponent(activeBusinessId)}` +
+      `&fromDate=${encodeURIComponent(from.toISOString())}&toDate=${encodeURIComponent(to.toISOString())}`);
+  } catch { ctx.todaySummary = null; }
+  try {
+    const list = await api(`/Business/GetTables/${encodeURIComponent(activeBusinessId)}/tables`);
+    ctx.tables = (list || []).map(t => ({ id: t.id, name: t.name, capacity: t.capacity, status: t.status, isActive: t.isActive }));
+    ctx.tablesCount = ctx.tables.length;
+  } catch { ctx.tables = []; }
+  try {
+    const list = await api(`/Product/GetByBusiness?businessId=${encodeURIComponent(activeBusinessId)}`);
+    ctx.menu = (list || []).slice(0, 25).map(p => ({ id: p.id, name: p.name, price: p.price, unit: p.unit, stock: p.stockQuantity ?? p.stock }));
+    ctx.menuCount = (list || []).length;
+  } catch { ctx.menu = []; }
+  try {
+    const list = await api(`/Business/GetStaff/${encodeURIComponent(activeBusinessId)}/staff`, {
+      headers: { "X-Owner-Token": ownerToken },
+    });
+    ctx.staff = (list || []).map(s => ({ id: s.id, fullName: s.fullName, role: s.role, isActive: s.isActive, monthlySalary: s.monthlySalary }));
+    ctx.staffCount = ctx.staff.length;
+  } catch { ctx.staff = []; }
+  return ctx;
+}
+
+// ---- Jarvis'ga matn yuborish (backend faqat owner token bilan) ----
+async function askOwnerJarvis(text) {
+  const res = await api("/Query/OwnerJarvisCommand/owner-jarvis", {
+    method: "POST",
+    headers: { "X-Owner-Token": ownerToken },
+    body: JSON.stringify({ businessId: Number(activeBusinessId), text }),
+  });
+  return res;
+}
+
+// AI javobini panel amaliga aylantirish (super-admin'dagi executeJarvisAction'ning admin varianti)
+function executeJarvisAction(res) {
+  const action = String(res.action || "").toLowerCase();
+  const view = String(res.view || "");
+  if (action === "navigate" && view) {
+    setOwnerView(view);
+    flash("Bo'lim ochildi: " + view);
+    return;
+  }
+  if (action === "open_form" && view) {
+    const target = { "table-add": "table-add", "staff-add": "staff-add", "meals-add": "meals-add" }[view] || view;
+    setOwnerView(target);
+    flash("Forma ochildi: " + target);
+    return;
+  }
+  aiAddMessage("bot", "Kechirasiz, bu buyruqni bajara olmadim.");
+}
+// ---- Buyruq/savolni to'liq ishlash: kontekst → AI → amal/javob ----
+async function processOwnerJarvis(text) {
+  if (!ownerToken || !activeBusinessId) {
+    const msg = "Jarvis ishlashi uchun avval tizimga kiring.";
+    if (aiMsgEl) setMsg(aiMsgEl, msg, "err");
+    jarvisToast(msg, true);
+    return;
+  }
+  if (jarvisBusy) return;
+  jarvisBusy = true;
+  if (aiMsgEl) setMsg(aiMsgEl, "Jarvis o'ylayapti...", "");
+  try {
+    const ctx = await buildOwnerJarvisContext();
+    const res = await askOwnerJarvis(text);
+    const kind = String(res.kind || "answer").toLowerCase();
+    if (kind === "action" && res.action) {
+      executeJarvisAction(res);
+      const acted = "✅ Bajarildi: " + (res.view || res.action);
+      if (aiMsgEl) setMsg(aiMsgEl, acted, "ok");
+      aiSpeak("Bajarildi.");
+    } else {
+      const answer = String(res.answer || "").trim() || "Javob topilmadi.";
+      aiAddMessage("bot", answer);
+      if (aiMsgEl) setMsg(aiMsgEl, answer, "");
+      aiSpeak(answer);
+    }
+  } catch (error) {
+    const msg = "Jarvis xatosi: " + (error && error.message ? error.message : "noma'lum");
+    if (aiMsgEl) setMsg(aiMsgEl, msg, "err");
+    jarvisToast(msg, true);
+  } finally {
+    jarvisBusy = false;
+  }
+}
+
+// Jarvis switch (doimiy eshitish) — pastki o'ng burchakdagi
+document.getElementById("jarvis-toggle").addEventListener("change", async event => {
+  const sessionReady = Boolean(ownerToken && activeBusinessId);
+  if (!sessionReady) {
+    event.target.checked = false;
+    const msg = "Jarvisni yoqish uchun avval tizimga kiring.";
+    if (aiMsgEl) setMsg(aiMsgEl, msg, "err");
+    jarvisToast(msg, true);
+    return;
+  }
+  if (event.target.checked) await startAlwaysListen();
+  else stopAlwaysListen();
+});
+
+// Doimiy eshitishdan kelgan matn: ko'p hollarda "jarvis"/"hey jarvis" prefiksi
+// olib tashlanadi (super-admin'dagidek), keyin buyruq/savol sifatida yuboriladi.
+function handleAlwaysHeard(rawText) {
+  const text = String(rawText || "").replace(/^(hey\s+)?jarvis[,!.]?\s*/i, "").trim();
+  const finalText = text || String(rawText || "").trim();
+  if (!finalText) return;
+  aiAddMessage("user", finalText);
+  processOwnerJarvis(finalText);
+}
+
+// Bir martalik mikrofon (AI bo'limidagi 🎤 tugmasi)
+function startSingleRecognition() {
+  if (!canMic) {
+    if (aiMsgEl) setMsg(aiMsgEl, "Bu brauzer mikrofonni qo‘llab-quvvatlamaydi. Chrome yoki Edge’dan foydalaning.", "err");
+    return;
+  }
+  if (aiListening) return;
+  const single = new SpeechRec();
+  single.lang = aiRecLang;
+  single.continuous = false;
+  single.interimResults = true;
+  single.maxAlternatives = 1;
+  let gotFinal = false;
+  single.onstart = () => {
+    aiListening = true;
+    if (aiMsgEl) setMsg(aiMsgEl, "🔴 Eshtyapti... gapiring.", "");
+  };
+  single.onresult = event => {
+    let finalText = "", interimText = "";
+    for (let i = 0; i < event.results.length; i++) {
+      const r = event.results[i];
+      if (r.isFinal) finalText += r[0].transcript + " ";
+      else interimText += r[0].transcript;
+    }
+    finalText = finalText.trim();
+    if (!finalText && interimText.trim() && !aiSpeakingNow) {
+      if (aiMsgEl) setMsg(aiMsgEl, "🔴 Eshtyapti: “" + interimText.trim() + "”", "");
+      return;
+    }
+    if (!finalText) return;
+    gotFinal = true;
+    aiAddMessage("user", finalText);
+    processOwnerJarvis(finalText);
+  };
+  single.onerror = event => {
+    const code = event && event.error ? String(event.error) : "";
+    if (/language-not-supported/i.test(code) && aiLangLabel() !== "ru") {
+      aiRecLang = "ru-RU";
+      try { localStorage.setItem("vk_ai_rec_lang", aiRecLang); } catch { /* ignore */ }
+      if (aiLangBtn) aiLangBtn.textContent = aiLangLabel();
+      return;
+    }
+    if (/not-allowed|permission|denied|audio-capture|service-not-allowed/i.test(code)) {
+      if (aiMsgEl) setMsg(aiMsgEl, "Mikrofon ishlamadi: ruxsat berilmagan yoki mikrofon topilmadi.", "err");
+      return;
+    }
+    if (/no-speech/i.test(code)) {
+      if (aiMsgEl) setMsg(aiMsgEl, "Gap aniqlanmadi — yana bir bor urinib ko‘ring.", "");
+      return;
+    }
+    if (aiMsgEl) setMsg(aiMsgEl, "Mikrofon xatosi: " + (code || "noma'lum"), "err");
+  };
+  single.onend = () => {
+    aiListening = false;
+    if (!gotFinal && aiMsgEl && !aiSpeakingNow) {
+      // hech narsa tanilmagan bo'lsa — holat toza qoladi
+    }
+  };
+  try { single.start(); }
+  catch { if (aiMsgEl) setMsg(aiMsgEl, "Mikrofonni ishga tushirib bo‘lmadi. Qayta urinib ko‘ring.", "err"); }
+}
+// AI bo'limi tugmalari: mikrofon, yuborish, Enter
+$("ai-mic").addEventListener("click", startSingleRecognition);
+$("ai-send").addEventListener("click", () => {
+  const input = $("ai-input");
+  const text = (input.value || "").trim();
+  if (!text) { if (aiMsgEl) setMsg(aiMsgEl, "Savol yoki buyruq yozing.", "err"); return; }
+  input.value = "";
+  aiAddMessage("user", text);
+  processOwnerJarvis(text);
+});
+$("ai-input").addEventListener("keydown", event => {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    $("ai-send").click();
+  }
+});
+
+// Chatga boshlang'ich salom xabari
+if (aiChatEl && !aiChatEl.children.length) {
+  aiAddMessage("bot",
+    "Salom! Men Jarvis — sizning yordamchingizman. Ovozli buyruqlar uchun pastdagi Jarvis switchni yoqing yoki 🎤 ni bosing. " +
+    "Masalan: “stollarni och”, “yangi xodim qo‘sh”, “bugun qancha savdo bo‘ldi?”");
+}
+
