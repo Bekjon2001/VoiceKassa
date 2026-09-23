@@ -7,16 +7,7 @@ namespace VoiceKassa.Application.Services;
 
 /// <summary>
 /// Ovozli (matnli) buyurtma qabul qilish va yopish oqimi.
-///
-/// Restoran oqimi (TableId berilganda):
-///   - Shu stolning ochiq buyurtmasi bo'lsa - yangi qatorlar shunga qo'shiladi.
-///   - Bo'lmasa - yangi Order (Status=Open) yaratiladi, stol Occupied qilinadi.
-///   - Ombor bu bosqichda KAMAYTIRILMAYDI (taom hali tayyorlanmagan bo'lishi
-///     mumkin) - faqat CloseOrderAsync chaqirilganda hisoblanadi.
-///
-/// Do'kon oqimi (TableId berilmaganda):
-///   - Bitta gap = bitta yakunlangan sotuv. Order to'g'ridan-to'g'ri
-///     Status=Completed qilib yaratiladi, ombor darhol kamaytiriladi.
+/// Narx faqat bazadagi Product.Price; jami faqat qatorlar yig'indisi.
 /// </summary>
 public class OrderService
 {
@@ -37,11 +28,21 @@ public class OrderService
         if (string.IsNullOrWhiteSpace(request.TranscriptText))
             return (false, "Matn bo'sh bo'lishi mumkin emas.", null);
 
+        var business = await _businessRepo.GetBusinessByIdAsync(request.BusinessId, ct);
+        if (business is null || !business.IsActive)
+            return (false, "Biznes topilmadi yoki faol emas.", null);
+
+        var isRestaurantFlow = request.TableId.HasValue;
+        if (isRestaurantFlow)
+        {
+            var table = await _businessRepo.GetTableByIdAsync(request.TableId!.Value, ct);
+            if (table is null || table.BusinessId != request.BusinessId)
+                return (false, "Stol shu biznesga tegishli emas.", null);
+        }
+
         var extraction = await _aiExtraction.ExtractOrderAsync(request.TranscriptText, ct);
         if (!extraction.Success || extraction.Items.Count == 0)
             return (false, extraction.ErrorMessage ?? "Buyurtmadan mahsulot topilmadi.", null);
-
-        var isRestaurantFlow = request.TableId.HasValue;
 
         Order order;
         if (isRestaurantFlow)
@@ -67,84 +68,70 @@ public class OrderService
             };
         }
 
-        order.TranscriptText = request.TranscriptText;
+        order.TranscriptText = request.TranscriptText.Trim();
+
+        var stockMoves = new List<(long ProductId, decimal Quantity)>();
+        var inventory = new List<InventoryTransaction>();
+        var unmatched = new List<string>();
 
         foreach (var item in extraction.Items)
         {
-            var product = await _orderRepo.FindProductByNameAsync(request.BusinessId, item.Name, ct);
-            var unitPrice = item.Price ?? product?.Price ?? 0;
+            if (item.Quantity <= 0)
+                return (false, $"'{item.Name}' miqdori noto'g'ri.", null);
 
+            var product = await _orderRepo.FindProductByNameAsync(request.BusinessId, item.Name, ct);
+            if (product is null || !product.IsAvailable)
+            {
+                unmatched.Add(string.IsNullOrWhiteSpace(item.Name) ? "?" : item.Name);
+                continue;
+            }
+
+            var unitPrice = product.Price;
             order.Items.Add(new OrderItem
             {
-                ProductId = product?.Id,
+                ProductId = product.Id,
                 ProductNameSpoken = item.Name,
                 Quantity = item.Quantity,
-                Unit = string.IsNullOrWhiteSpace(item.Unit) ? "dona" : item.Unit,
+                Unit = string.IsNullOrWhiteSpace(item.Unit) ? product.Unit : item.Unit,
                 LineTotal = unitPrice * item.Quantity,
             });
 
-            // Do'kon oqimida ombor darhol kamayadi. Restoran oqimida
-            // buyurtma yopilganda (CloseOrderAsync) kamayadi.
-            if (!isRestaurantFlow && product is not null && product.StockQuantity.HasValue)
+            if (!isRestaurantFlow && product.StockQuantity.HasValue)
             {
-                var newQty = product.StockQuantity.Value - item.Quantity;
-                await _orderRepo.DecrementStockAsync(product.Id, item.Quantity, ct);
-                await _orderRepo.AddInventoryTransactionAsync(new InventoryTransaction
+                if (product.StockQuantity.Value < item.Quantity)
+                    return (false, $"'{product.Name}' omborda yetarli emas.", null);
+
+                stockMoves.Add((product.Id, item.Quantity));
+                inventory.Add(new InventoryTransaction
                 {
                     BusinessId = request.BusinessId,
                     ProductId = product.Id,
                     Type = InventoryTransactionType.Out,
                     Quantity = item.Quantity,
                     Reason = "Sotuv (ovozli)",
-                }, ct);
+                });
             }
         }
 
-        order.TotalAmount = extraction.Total ?? order.Items.Sum(i => i.LineTotal);
+        if (unmatched.Count > 0)
+            return (false, "Menyuda topilmadi: " + string.Join(", ", unmatched), null);
 
-        if (order.Id == 0)
-            await _orderRepo.AddAsync(order, ct);
-        else
-            await _orderRepo.SaveChangesAsync(ct);
+        if (order.Items.Count == 0)
+            return (false, "Buyurtmadan mahsulot topilmadi.", null);
 
-        if (isRestaurantFlow)
-            await _businessRepo.UpdateTableStatusAsync(request.TableId!.Value, TableStatus.Occupied, ct);
+        order.TotalAmount = order.Items.Sum(i => i.LineTotal);
 
-        return (true, null, ToOrderResponse(order));
+        var saved = await _orderRepo.SaveOrderWithStockAsync(
+            order, stockMoves, inventory, isRestaurantFlow ? request.TableId : null, ct);
+
+        return (true, null, ToOrderResponse(saved));
     }
 
     public async Task<(bool Success, string? Error, OrderResponse? Order)> CloseOrderAsync(
         long orderId, CloseOrderRequest request, CancellationToken ct = default)
     {
-        var order = await _orderRepo.GetByIdAsync(orderId, ct);
-        if (order is null) return (false, "Bunday buyurtma topilmadi.", null);
-        if (order.Status == OrderStatus.Completed) return (false, "Buyurtma allaqachon yopilgan.", null);
-
-        // Restoran oqimida ombor faqat shu yerda, yopilganda kamayadi.
-        foreach (var item in order.Items.Where(i => i.ProductId.HasValue))
-        {
-            var product = await _businessRepo.GetProductByIdAsync(item.ProductId!.Value, ct);
-            if (product is not null && product.StockQuantity.HasValue)
-            {
-                await _orderRepo.DecrementStockAsync(product.Id, item.Quantity, ct);
-                await _orderRepo.AddInventoryTransactionAsync(new InventoryTransaction
-                {
-                    BusinessId = order.BusinessId,
-                    ProductId = product.Id,
-                    Type = InventoryTransactionType.Out,
-                    Quantity = item.Quantity,
-                    Reason = "Buyurtma yopildi",
-                }, ct);
-            }
-        }
-
-        await _orderRepo.UpdateOrderStatusAsync(orderId, OrderStatus.Completed, DateTime.UtcNow, request.PaymentType, ct);
-
-        if (order.TableId.HasValue)
-            await _businessRepo.UpdateTableStatusAsync(order.TableId.Value, TableStatus.Free, ct);
-
-        var refreshed = await _orderRepo.GetByIdAsync(orderId, ct);
-        return (true, null, refreshed is null ? null : ToOrderResponse(refreshed));
+        var (success, error, order) = await _orderRepo.CloseAtomicallyAsync(orderId, request.PaymentType, ct);
+        return (success, error, order is null ? null : ToOrderResponse(order));
     }
 
     public async Task<OrderResponse?> GetOrderAsync(long orderId, CancellationToken ct = default)

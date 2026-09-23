@@ -16,6 +16,7 @@ public interface IBusinessRepository
     Task<UserAccount?> GetSuperAdminByTokenAsync(string token, CancellationToken ct = default);
     Task<RestaurantOwner> CreateRestaurantOwnerAsync(RestaurantOwner owner, CancellationToken ct = default);
     Task<RestaurantOwner?> GetOwnerByLoginAsync(string login, CancellationToken ct = default);
+    Task<bool> UpdateOwnerAccessTokenAsync(long ownerId, string token, CancellationToken ct = default);
     Task<RestaurantOwner?> GetOwnerByTokenAsync(string token, CancellationToken ct = default);
     Task<RestaurantOwner?> GetOwnerByBusinessIdAsync(long businessId, CancellationToken ct = default);
 
@@ -56,5 +57,6 @@ public interface IBusinessRepository
 
     Task<Table> CreateTableAsync(Table table, CancellationToken ct = default);
     Task<List<Table>> GetTablesByBusinessAsync(long businessId, CancellationToken ct = default);
+    Task<Table?> GetTableByIdAsync(long tableId, CancellationToken ct = default);
     Task<bool> UpdateTableStatusAsync(long tableId, TableStatus status, CancellationToken ct = default);
 }

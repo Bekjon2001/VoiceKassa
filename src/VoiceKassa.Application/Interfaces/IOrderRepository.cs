@@ -25,4 +25,16 @@ public interface IOrderRepository
     Task DecrementStockAsync(long productId, decimal quantity, CancellationToken ct = default);
 
     Task AddInventoryTransactionAsync(InventoryTransaction transaction, CancellationToken ct = default);
+
+    /// <summary>Buyurtma + ombor + stol holati bitta tranzaksiyada.</summary>
+    Task<Order> SaveOrderWithStockAsync(
+        Order order,
+        IReadOnlyList<(long ProductId, decimal Quantity)> stockDecrements,
+        IReadOnlyList<InventoryTransaction> inventory,
+        long? occupyTableId,
+        CancellationToken ct = default);
+
+    /// <summary>Faqat Open/InProgress buyurtmani yopadi; ombor va stol bitta tranzaksiyada.</summary>
+    Task<(bool Success, string? Error, Order? Order)> CloseAtomicallyAsync(
+        long orderId, PaymentType paymentType, CancellationToken ct = default);
 }

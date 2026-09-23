@@ -36,7 +36,16 @@ public class BusinessRepository : IBusinessRepository
     }
 
     public Task<RestaurantOwner?> GetOwnerByLoginAsync(string login, CancellationToken ct = default) =>
-        _db.RestaurantOwners.FirstOrDefaultAsync(o => o.Login == login && o.IsActive, ct);
+        _db.RestaurantOwners.FirstOrDefaultAsync(o => o.Login == login, ct);
+
+    public async Task<bool> UpdateOwnerAccessTokenAsync(long ownerId, string token, CancellationToken ct = default)
+    {
+        var owner = await _db.RestaurantOwners.FindAsync(new object[] { ownerId }, ct);
+        if (owner is null) return false;
+        owner.AccessToken = token;
+        await _db.SaveChangesAsync(ct);
+        return true;
+    }
 
     public Task<RestaurantOwner?> GetOwnerByTokenAsync(string token, CancellationToken ct = default) =>
         _db.RestaurantOwners.FirstOrDefaultAsync(o => o.AccessToken == token && o.IsActive, ct);
@@ -68,6 +77,8 @@ public class BusinessRepository : IBusinessRepository
         if (owner is null) return false;
 
         owner.IsActive = isActive;
+        if (!isActive)
+            owner.AccessToken = AccessTokens.New();
         await _db.SaveChangesAsync(ct);
         return true;
     }
