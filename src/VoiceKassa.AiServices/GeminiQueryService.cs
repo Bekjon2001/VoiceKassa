@@ -7,8 +7,22 @@ namespace VoiceKassa.AiServices;
 public class GeminiQueryService : IAiQueryService
 {
     private readonly GeminiApiClient _client;
+    private readonly JarvisConversationMemory _memory;
 
-    private const string SystemPrompt = """
+    private const string CharacterBlock = """
+        Sen VoiceKassa tizimining shaxsiy yordamchisisan — Jarvis. Xarakteringiz:
+        - Xushmuomala, hurmatli, lekin quruq-rasmiy emas — jonli odam kabi gapirasan.
+        - Qisqa va aniq javob berasan, ortiqcha cho'zmaysan (ovozda o'qilishi kerak).
+        - Kerak bo'lganda ozgina hazil-mutoyiba qilishing mumkin, lekin jiddiy
+          vaziyatda (masalan xato, muammo haqida xabar berganda) jiddiy ohangda
+          qolasan.
+        - Foydalanuvchiga "siz" deb hurmat bilan murojaat qilasan.
+        - Bilmagan narsangni bilmayman deb ochiq aytasan, o'ylab topib javob bermaysan.
+        """;
+
+    private const string SystemPrompt = CharacterBlock +
+        "\nHozir restoran/do'kon egasi bilan gaplashyapsan.\n\n" +
+        """
         Sen restoran yoki do'kon uchun AI hisobchisan. Senga JSON formatda
         savdo/buyurtma ma'lumotlari beriladi. Qoidalar:
         1. Har doim faqat O'ZBEK TILIDA (lotin yozuvida) javob ber. Savol o'zbekcha,
@@ -25,7 +39,11 @@ public class GeminiQueryService : IAiQueryService
         4. Agar savolga javob berish uchun ma'lumot yetarli bo'lmasa, o'zbek tilida aniq shuni ayt.
         """;
 
-    public GeminiQueryService(GeminiApiClient client) => _client = client;
+    public GeminiQueryService(GeminiApiClient client, JarvisConversationMemory memory)
+    {
+        _client = client;
+        _memory = memory;
+    }
 
     public async Task<string> AnswerAsync(string question, string dataContextJson, CancellationToken ct = default)
     {
@@ -43,7 +61,9 @@ public class GeminiQueryService : IAiQueryService
         return string.IsNullOrWhiteSpace(answer) ? "Javob topilmadi." : answer;
     }
 
-    private const string SuperAdminSystemPrompt = """
+    private const string SuperAdminSystemPrompt = CharacterBlock +
+        "\nHozir tizim administratori (Super Admin) bilan gaplashyapsan.\n\n" +
+        """
         Sen VoiceKassa platformasining Super Admin AI yordamchisisan. Qoidalar:
         1. Har doim faqat O'ZBEK TILIDA (lotin yozuvida) javob ber. Savol o'zbekcha,
            ruscha yoki boshqa tilda berilganidan qat'i nazar, javob HAR DOIM o'zbek
@@ -80,7 +100,9 @@ public class GeminiQueryService : IAiQueryService
 
     // ======================= Jarvis: buyruq/savol tahlili (function calling) =======================
 
-    private const string JarvisSystemPrompt = """
+    private const string JarvisSystemPrompt = CharacterBlock +
+        "\nHozir Super Admin (platforma boshqaruvchisi) bilan gaplashyapsan.\n\n" +
+        """
         Sen VoiceKassa platformasining Jarvis yordamchisisan. Senga foydalanuvchi
         matni beriladi (ko'pincha ovoz tanib olishdan kelgan — imlo xatolari,
         buzilgan so'zlar bo'lishi mumkin) va platformadagi bizneslar JSON konteksti.
@@ -113,9 +135,14 @@ public class GeminiQueryService : IAiQueryService
         "navigate", "select_business", "activate_business", "deactivate_business",
     };
 
-    public async Task<JarvisCommandResponse> InterpretJarvisAsync(string text, string dataContextJson, CancellationToken ct = default)
+    public async Task<JarvisCommandResponse> InterpretJarvisAsync(string text, string dataContextJson, string? sessionKey = null, CancellationToken ct = default)
     {
         var userMessage = $"Platformadagi bizneslar (JSON):\n{dataContextJson}\n\nFoydalanuvchi matni: {text}";
+        // Oldingi suhbat (agar bor bo'lsa) Gemini'ga kontekst sifatida beriladi
+        var history = _memory.GetHistoryText(sessionKey);
+        if (!string.IsNullOrEmpty(history))
+            userMessage = $"[Oldingi suhbat]\n{history}\n\n[Yangi savol]\n{userMessage}";
+
         var result = await _client.CompleteWithToolsAsync(JarvisSystemPrompt, userMessage, BuildJarvisTools(), maxTokens: 500, ct);
 
         // Model buyruq deb topdi — funksiya chaqiruvini amalga aylantiramiz.
@@ -144,6 +171,9 @@ public class GeminiQueryService : IAiQueryService
             }
             catch { /* args buzilgan — null qoladi, frontend xato beradi */ }
 
+            // Bajarilgan buyruqning qisqa tavsifi xotiraga yoziladi (keyingi savollar eslab qoladi)
+            _memory.Add(sessionKey, text, $"BUYRUQ: {action}" + (string.IsNullOrWhiteSpace(view) ? "" : $" ({view})"));
+
             return new JarvisCommandResponse
             {
                 Kind = "action",
@@ -167,10 +197,14 @@ public class GeminiQueryService : IAiQueryService
             var retryAnswer = (retry.Text ?? "").Trim();
             if (!string.IsNullOrWhiteSpace(retryAnswer) && !HasCyrillic(retryAnswer)) answer = retryAnswer;
         }
+
+        var finalAnswer = string.IsNullOrWhiteSpace(answer) ? "Javob topilmadi." : answer;
+        // Suhbat tarixini yangilaymiz — keyingi savolda Jarvis eslab qoladi
+        _memory.Add(sessionKey, text, finalAnswer);
         return new JarvisCommandResponse
         {
             Kind = "answer",
-            Answer = string.IsNullOrWhiteSpace(answer) ? "Javob topilmadi." : answer,
+            Answer = finalAnswer,
         };
     }
 
@@ -242,7 +276,9 @@ public class GeminiQueryService : IAiQueryService
 
     // ======================= Owner Jarvis (odiy Admin) =======================
 
-    private const string OwnerJarvisSystemPrompt = """
+    private const string OwnerJarvisSystemPrompt = CharacterBlock +
+        "\nHozir biznes egasi bilan gaplashyapsan.\n\n" +
+        """
         Sen VoiceKassa boshqaruv panelining (restoran/do'kon egasi) Jarvis
         yordamchisisan. Senga foydalanuvchi matni (ko'pincha ovoz tanib olishdan
         kelgan — imlo xatolari bo'lishi mumkin) va FAQAT SHU foydalanuvchining
@@ -280,9 +316,14 @@ public class GeminiQueryService : IAiQueryService
         "navigate", "open_form",
     };
 
-    public async Task<JarvisCommandResponse> InterpretOwnerJarvisAsync(string text, string dataContextJson, CancellationToken ct = default)
+    public async Task<JarvisCommandResponse> InterpretOwnerJarvisAsync(string text, string dataContextJson, string? sessionKey = null, CancellationToken ct = default)
     {
         var userMessage = $"Biznes ma'lumotlari (JSON):\n{dataContextJson}\n\nFoydalanuvchi matni: {text}";
+        // Oldingi suhbat (agar bor bo'lsa) Gemini'ga kontekst sifatida beriladi
+        var history = _memory.GetHistoryText(sessionKey);
+        if (!string.IsNullOrEmpty(history))
+            userMessage = $"[Oldingi suhbat]\n{history}\n\n[Yangi savol]\n{userMessage}";
+
         var result = await _client.CompleteWithToolsAsync(OwnerJarvisSystemPrompt, userMessage, BuildOwnerJarvisTools(), maxTokens: 500, ct);
 
         if (result.ToolCall != null)
@@ -309,6 +350,9 @@ public class GeminiQueryService : IAiQueryService
             }
             catch { /* args buzilgan — null qoladi, frontend xato beradi */ }
 
+            // Bajarilgan buyruqning qisqa tavsifi xotiraga yoziladi (keyingi savollar eslab qoladi)
+            _memory.Add(sessionKey, text, $"BUYRUQ: {action}" + (string.IsNullOrWhiteSpace(view) ? "" : $" ({view})"));
+
             return new JarvisCommandResponse
             {
                 Kind = "action",
@@ -328,10 +372,14 @@ public class GeminiQueryService : IAiQueryService
             var retryAnswer = (retry.Text ?? "").Trim();
             if (!string.IsNullOrWhiteSpace(retryAnswer) && !HasCyrillic(retryAnswer)) answer = retryAnswer;
         }
+
+        var finalAnswer = string.IsNullOrWhiteSpace(answer) ? "Javob topilmadi." : answer;
+        // Suhbat tarixini yangilaymiz — keyingi savolda Jarvis eslab qoladi
+        _memory.Add(sessionKey, text, finalAnswer);
         return new JarvisCommandResponse
         {
             Kind = "answer",
-            Answer = string.IsNullOrWhiteSpace(answer) ? "Javob topilmadi." : answer,
+            Answer = finalAnswer,
         };
     }
 

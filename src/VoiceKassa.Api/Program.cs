@@ -18,11 +18,15 @@ var geminiOptions = new GeminiApiOptions
 {
     ApiKey = builder.Configuration["Gemini:ApiKey"]
         ?? throw new InvalidOperationException("Gemini:ApiKey topilmadi. `dotnet user-secrets set \"Gemini:ApiKey\" \"...\"` orqali qo'shing. Kalitni https://aistudio.google.com/apikey sahifasidan bepul olish mumkin."),
-    Model = builder.Configuration["Gemini:Model"] ?? "gemini-2.0-flash",
+    Model = builder.Configuration["Gemini:Model"] ?? "gemini-3.6-flash",
 };
 builder.Services.AddSingleton(geminiOptions);
 builder.Services.AddHttpClient<GeminiApiClient>();
 builder.Services.AddSingleton<EdgeTtsService>();
+
+// Jarvis suhbat xotirasi — Singleton: server qayta ishga tushmagan ekan
+// har bir sessiyaning so'nggi almashinuvlari xotirada saqlanadi.
+builder.Services.AddSingleton<JarvisConversationMemory>();
 
 // --- Application services / DI wiring ---
 builder.Services.AddScoped<IOrderRepository, OrderRepository>();

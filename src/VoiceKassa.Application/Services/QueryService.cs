@@ -79,10 +79,10 @@ public class QueryService
     /// Jarvis (Super Admin ovozli yordamchi) buyruq/savolini AI orqali tahlil
     /// qiladi: buyruq bo'lsa amal (action), savol bo'lsa matn javobi qaytadi.
     /// </summary>
-    public async Task<JarvisCommandResponse> JarvisCommandAsync(string text, CancellationToken ct = default)
+    public async Task<JarvisCommandResponse> JarvisCommandAsync(string text, string? sessionKey = null, CancellationToken ct = default)
     {
         var contextJson = await BuildPlatformContextJsonAsync(ct);
-        return await _aiQuery.InterpretJarvisAsync(text, contextJson, ct);
+        return await _aiQuery.InterpretJarvisAsync(text, contextJson, sessionKey, ct);
     }
 
     /// <summary>
@@ -90,10 +90,10 @@ public class QueryService
     /// stollari, menyusi, xodimlari va bugungi savdosi konteksti beriladi.
     /// Buyruq faqat admin panel amallari bilan cheklanadi.
     /// </summary>
-    public async Task<JarvisCommandResponse> OwnerJarvisCommandAsync(long businessId, string text, CancellationToken ct = default)
+    public async Task<JarvisCommandResponse> OwnerJarvisCommandAsync(long businessId, string text, string? sessionKey = null, CancellationToken ct = default)
     {
         var contextJson = await BuildOwnerContextJsonAsync(businessId, ct);
-        return await _aiQuery.InterpretOwnerJarvisAsync(text, contextJson, ct);
+        return await _aiQuery.InterpretOwnerJarvisAsync(text, contextJson, sessionKey, ct);
     }
 
     /// <summary>Bitta biznesning Jarvis kontekstini JSON qilib tayyorlaydi.</summary>

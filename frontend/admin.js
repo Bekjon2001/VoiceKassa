@@ -4,6 +4,7 @@ const API_BASE = location.protocol.startsWith("http")
   : "http://localhost:55983";
 const SESSION_KEY = "vk_owner_session";
 const VIEW_STORAGE_KEY = "vk_owner_view";
+const JARVIS_KEY = "vk_owner_jarvis_enabled"; // Jarvis switch (doimiy eshitish) holati — refresh'da saqlanadi
 const fallbackTableImage = "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=500&q=80";
 const fallbackFoodImage = "https://images.unsplash.com/photo-1547592180-85f173990554?auto=format&fit=crop&w=700&q=80";
 /* ---------- Kun/Tun rejimi ---------- */
@@ -166,6 +167,15 @@ function enterWorkspace(session) {
   $("owner-restaurant-name").textContent = session.restaurantName || "Restoran";
   loadWorkspaceData();
   setOwnerView(restoreOwnerView());
+
+  // Jarvis switch holatini tiklash (sahifa yangilanganda ham saqlanadi)
+  const jarvisToggle = document.getElementById("jarvis-toggle");
+  if (jarvisToggle) {
+    let wasOn = false;
+    try { wasOn = localStorage.getItem(JARVIS_KEY) === "1"; } catch { /* ignore */ }
+    jarvisToggle.checked = wasOn;
+    if (wasOn) startAlwaysListen();
+  }
 }
 
 function resetToEntry() {
@@ -333,7 +343,7 @@ function restoreOwnerView() {
       "meals-add": "meals-food",
     };
     const target = detailMap[saved] || saved;
-    const known = [...RESTAURANT_VIEWS, "supermarket", "shop", "organization"];
+    const known = [...RESTAURANT_VIEWS, "supermarket", "shop", "organization", "ai"];
     return known.includes(target) ? target : "tables";
   } catch { return "tables"; }
 }
@@ -352,34 +362,15 @@ document.querySelectorAll(".nav-item.sub[data-owner-view]").forEach(item => {
   });
 });
 
-// Desktop/mobil ajratish: ≤900px da sidebar gorizontal bo'ladi va flyout pastga ochiladi
-const NAV_DESKTOP = window.matchMedia("(min-width: 901px)");
-
-// "Restoran"/"Ovqatlar" tugmasi bosilganda — ICHGA KIRILADI (oxirgi ochilgan bo'lim),
-// faqat mobilda pastga ochiladigan ro'yxat sifatida ishlaydi.
+// "Restoran"/"Ovqatlar" tugmasi bosilganda — pastga/yon tomonga ochiladigan
+// ro'yxat ochiladi/yopiladi. Bosish ORQALI ishlaydi; sichqoncha hoveri emas.
 document.querySelectorAll("[data-owner-toggle]").forEach(btn => {
   btn.addEventListener("click", event => {
     event.stopPropagation();
     const group = btn.closest(".nav-group");
-    if (!NAV_DESKTOP.matches) {
-      // Mobil: ro'yxatni ochish/yopish
-      group.classList.toggle("open", !group.classList.contains("open"));
-      return;
-    }
-    // Desktop: to'g'ridan-to'g'ri bo'limga kiriladi
-    const key = group.dataset.ownerGroup;
-    const target = key === "meals" ? selectedMealsSub : selectedRestaurantSub;
-    setOwnerView(target);
+    group.classList.toggle("open", !group.classList.contains("open"));
   });
 });
-
-// Desktopda flyout hover bilan ochilib, chiqib ketganda yopiladi (tanlash uchun qulay)
-if (NAV_DESKTOP.matches) {
-  document.querySelectorAll(".nav-group[data-owner-group]").forEach(group => {
-    group.addEventListener("mouseenter", () => group.classList.add("open"));
-    group.addEventListener("mouseleave", () => group.classList.remove("open"));
-  });
-}
 
 // Flyout tashqarisiga bosilsa — yopiladi
 document.addEventListener("click", event => {
@@ -1435,6 +1426,8 @@ document.getElementById("jarvis-toggle").addEventListener("change", async event 
     jarvisToast(msg, true);
     return;
   }
+  // Holatni saqlaymiz — sahifa yangilanganda ham o'zgarishsiz qoladi
+  try { localStorage.setItem(JARVIS_KEY, event.target.checked ? "1" : "0"); } catch { /* ignore */ }
   if (event.target.checked) await startAlwaysListen();
   else stopAlwaysListen();
 });

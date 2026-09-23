@@ -64,7 +64,8 @@ public class QueryController : ControllerBase
         if (string.IsNullOrWhiteSpace(request.Text))
             return BadRequest(new { error = "Matn bo'sh bo'lishi mumkin emas." });
 
-        var response = await _queryService.JarvisCommandAsync(request.Text.Trim(), ct);
+        var sessionKey = Request.Headers["X-Super-Admin-Token"].FirstOrDefault();
+        var response = await _queryService.JarvisCommandAsync(request.Text.Trim(), sessionKey, ct);
         return Ok(response);
     }
 
@@ -87,7 +88,8 @@ public class QueryController : ControllerBase
         if (!access.Success)
             return Unauthorized(new { error = access.Error ?? "Ruxsat yo'q." });
 
-        var response = await _queryService.OwnerJarvisCommandAsync(request.BusinessId, request.Text.Trim(), ct);
+        // Suhbat xotirasi kaliti: har bir biznes uchun alohida tarix saqlanadi
+        var response = await _queryService.OwnerJarvisCommandAsync(request.BusinessId, request.Text.Trim(), $"owner:{request.BusinessId}", ct);
         return Ok(response);
     }
 

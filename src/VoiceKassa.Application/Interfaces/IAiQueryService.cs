@@ -15,12 +15,14 @@ public interface IAiQueryService
     /// function calling): buyruq bo'lsa — bajariladigan amal va parametrlari,
     /// savol bo'lsa — matn javobi qaytaradi.
     /// </summary>
-    Task<JarvisCommandResponse> InterpretJarvisAsync(string text, string dataContextJson, CancellationToken ct = default);
+    /// <param name="sessionKey">Xotira kaliti (X-Super-Admin-Token).</param>
+    Task<JarvisCommandResponse> InterpretJarvisAsync(string text, string dataContextJson, string? sessionKey = null, CancellationToken ct = default);
 
     /// <summary>
     /// Odiy Admin (biznes egasi) Jarvis matnini tahlil qiladi: faqat o'z
     /// biznesi konteksti va admin paneldagi amallar (navigate/open_form)
     /// bilan cheklangan.
     /// </summary>
-    Task<JarvisCommandResponse> InterpretOwnerJarvisAsync(string text, string dataContextJson, CancellationToken ct = default);
+    /// <param name="sessionKey">Xotira kaliti (masalan "owner:{businessId}").</param>
+    Task<JarvisCommandResponse> InterpretOwnerJarvisAsync(string text, string dataContextJson, string? sessionKey = null, CancellationToken ct = default);
 }
