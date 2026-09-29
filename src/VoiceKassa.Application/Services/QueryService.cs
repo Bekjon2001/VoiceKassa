@@ -20,8 +20,9 @@ public class QueryService
 
     public async Task<AskQuestionResponse> AskAsync(AskQuestionRequest request, CancellationToken ct = default)
     {
-        var toUtc = DateTime.UtcNow;
-        var fromUtc = toUtc.Date; // bugungi kun bo'yicha kontekst beriladi
+        // "Bugungi kun" chegarasi O'zbekiston vaqti (UTC+5) bo'yicha hisoblanadi —
+        // aks holda mahalliy 00:00–05:00 orasidagi savdo kechagi kunga tushib qolardi.
+        var (fromUtc, toUtc) = LocalClock.TodayRangeUtc();
 
         var summary = await GetSummaryAsync(request.BusinessId, fromUtc, toUtc, ct);
         var contextJson = JsonSerializer.Serialize(summary);
@@ -101,12 +102,13 @@ public class QueryService
     {
         var business = await _businessRepo.GetBusinessByIdAsync(businessId, ct);
         var now = DateTime.UtcNow;
-        var fromUtc = now.Date;
+        // Bugungi kun chegarasi ham mahalliy vaqt (UTC+5) bo'yicha olinadi.
+        var (fromUtc, toUtc) = LocalClock.TodayRangeUtc(now);
 
         var tables = await _businessRepo.GetTablesByBusinessAsync(businessId, ct);
         var products = await _businessRepo.GetProductsByBusinessAsync(businessId, ct);
         var staff = await _businessRepo.GetStaffByBusinessAsync(businessId, ct);
-        var orders = await _orderRepo.GetByBusinessAndRangeAsync(businessId, fromUtc, now, ct);
+        var orders = await _orderRepo.GetByBusinessAndRangeAsync(businessId, fromUtc, toUtc, ct);
         var completed = orders.Where(o => o.Status == OrderStatus.Completed).ToList();
 
         var context = new

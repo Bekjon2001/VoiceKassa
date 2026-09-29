@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using VoiceKassa.Application.Interfaces;
+using VoiceKassa.Application.Services;
 using VoiceKassa.DataLayer;
 using VoiceKassa.Domain.Entities;
 using VoiceKassa.Domain.Enums;
@@ -206,6 +207,13 @@ public class BusinessRepository : IBusinessRepository
 
     public Task<List<Table>> GetTablesByBusinessAsync(long businessId, CancellationToken ct = default) =>
         _db.Tables.Where(t => t.BusinessId == businessId).OrderBy(t => t.Name).ToListAsync(ct);
+
+    /// <summary>
+    /// Bitta stolni Id bo'yicha oladi (buyurtma oqimida stol shu biznesga
+    /// tegishliligini tekshirish uchun ishlatiladi).
+    /// </summary>
+    public Task<Table?> GetTableByIdAsync(long tableId, CancellationToken ct = default) =>
+        _db.Tables.FirstOrDefaultAsync(t => t.Id == tableId, ct);
 
     public async Task<bool> UpdateTableStatusAsync(long tableId, TableStatus status, CancellationToken ct = default)
     {

@@ -73,8 +73,12 @@ public class QueryController : ControllerBase
     /// Odiy Admin (biznes egasi) Jarvis (ovozli yordamchi) uchun: owner token
     /// bilan biznes tekshiriladi va AI faqat shu biznes konteksti bilan tahlil
     /// qiladi — buyruq (navigate/open_form) yoki savol javobi qaytadi.
+    /// 
+    /// Legacy compatibility: ba'zi eski frontend/client'lar "Query/JarvisCommand/owner-jarvis"
+    /// yo'liga murojaat qiladi. Bu yerdagi eski URL ni ham qabul qilamiz.
     /// </summary>
     [HttpPost("owner-jarvis")]
+    [HttpPost("/Query/JarvisCommand/owner-jarvis")]
     public async Task<IActionResult> OwnerJarvisCommand([FromBody] OwnerJarvisCommandRequest request, CancellationToken ct)
     {
         if (request.BusinessId <= 0)
@@ -157,8 +161,11 @@ public class QueryController : ControllerBase
         [FromQuery] DateTime? toDate,
         CancellationToken ct)
     {
-        var fromUtc = (fromDate ?? DateTime.UtcNow.Date).ToUniversalTime();
-        var toUtc = (toDate ?? DateTime.UtcNow.Date.AddDays(1)).ToUniversalTime();
+        // Sana berilmasa — bugungi kun O'zbekiston vaqti (UTC+5) bo'yicha olinadi,
+        // shunda "bugungi savdo" mahalliy yarim tunda almashadi.
+        var (todayFromUtc, todayToUtc) = LocalClock.TodayRangeUtc();
+        var fromUtc = fromDate?.ToUniversalTime() ?? todayFromUtc;
+        var toUtc = toDate?.ToUniversalTime() ?? todayToUtc;
 
         var summary = await _queryService.GetSummaryAsync(businessId, fromUtc, toUtc, ct);
         return Ok(summary);
