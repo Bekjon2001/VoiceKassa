@@ -29,9 +29,13 @@ Thumbs.db
 # Logs
 *.log
 
-# Vaqtinchalik test/build natijalari
-build_out.txt
-vk_*.txt
+# Vaqtinchalik tekshiruv/chiqish fayllari (ildizdagi _ bilan boshlanuvchilar)
+_*.txt
+_*.log
+_*.csv
+_*.json
+_*.ps1
+_*.cmd
 
 # Server log chiqishlari (maxfiy ma'lumot saqlashi mumkin)
 _srv_out.txt

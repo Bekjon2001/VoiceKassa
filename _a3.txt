@@ -1,4 +1,0 @@
-﻿L62: let ownerToken = "";
-L161: ownerToken = session.token || "";
-L256: headers: { "X-Owner-Token": ownerToken },
-L699: if (ownerToken && activeBusinessId) return true;

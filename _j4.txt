@@ -1,1 +1,0 @@
-FINDSTR: Cannot open jarvis\ d:\project\VoiceKassa\frontend\admin.js 
