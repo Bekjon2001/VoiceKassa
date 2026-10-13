@@ -395,6 +395,17 @@ public class BusinessService
         return tables.Select(ToTableResponse).ToList();
     }
 
+    /// <summary>
+    /// Mijozlar uchun OCHIQ ro'yxat: faol restoran/marketlarni nom bo'yicha
+    /// qidiradi. QR/skaner ishlamagan holatda menyudan restoranni tanlash
+    /// uchun — Super Admin tokeni shart emas.
+    /// </summary>
+    public async Task<List<BusinessResponse>> SearchPublicBusinessesAsync(string? query, CancellationToken ct = default)
+    {
+        var businesses = await _repo.SearchActiveBusinessesAsync(query, ct);
+        return businesses.Select(ToBusinessResponse).ToList();
+    }
+
     public async Task<(bool Success, string? Error)> UpdateTableStatusAsync(
         long tableId, UpdateTableStatusRequest request, CancellationToken ct = default)
     {

@@ -12,6 +12,13 @@ public interface IOrderRepository
     /// <summary>Restoran oqimi: shu stolda hozir ochiq (yopilmagan) buyurtma bormi.</summary>
     Task<Order?> GetOpenOrderByTableAsync(long tableId, CancellationToken ct = default);
 
+    /// <summary>Oshxona uchun: biznesdagi ochiq (Open/InProgress) buyurtmalar
+    /// — tarkibi va stol nomi bilan.</summary>
+    Task<List<Order>> GetOpenByBusinessAsync(long businessId, CancellationToken ct = default);
+
+    /// <summary>ID bo'yicha mahsulot (menyudan tanlangan itemlar uchun).</summary>
+    Task<Product?> GetProductByIdAsync(long productId, CancellationToken ct = default);
+
     Task<List<Order>> GetByBusinessAndRangeAsync(
         long businessId, DateTime fromUtc, DateTime toUtc, CancellationToken ct = default);
 

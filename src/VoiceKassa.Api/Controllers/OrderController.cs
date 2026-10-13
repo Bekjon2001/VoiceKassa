@@ -34,6 +34,24 @@ public class OrderController : ControllerBase
         return success ? Ok(order) : BadRequest(new { error });
     }
 
+    /// <summary>Oshxona uchun: biznesdagi ochiq (Open/InProgress) buyurtmalar
+    /// — tarkibi va stol nomi bilan. Admin panel "Oshxona" bo'limi 10s da
+    /// bir marta so'raydi.</summary>
+    [HttpGet("open/{businessId:long}")]
+    public async Task<IActionResult> GetOpen(long businessId, CancellationToken ct)
+    {
+        var orders = await _orderService.GetOpenOrdersAsync(businessId, ct);
+        return Ok(orders);
+    }
+
+    /// <summary>Oshxona buyurtmani oldi: Open -> InProgress.</summary>
+    [HttpPost("{orderId:long}/start")]
+    public async Task<IActionResult> Start(long orderId, CancellationToken ct)
+    {
+        var (success, error, order) = await _orderService.StartOrderAsync(orderId, ct);
+        return success ? Ok(order) : BadRequest(new { error });
+    }
+
     [HttpGet("{orderId:long}")]
     public async Task<IActionResult> GetById(long orderId, CancellationToken ct)
     {

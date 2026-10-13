@@ -62,6 +62,7 @@
             <div class="subnav" id="restaurant-subnav">
               <button class="nav-item sub" type="button" data-owner-view="staff"><span class="icon-chip">👤</span><span>Xodimlar</span></button>
               <button class="nav-item sub" type="button" data-owner-view="tables"><span class="icon-chip">▰</span><span>Stollar</span></button>
+              <button class="nav-item sub" type="button" data-owner-view="kitchen"><span class="icon-chip">🍳</span><span>Oshxona</span></button>
               <div class="nav-group nav-group--nested" data-owner-group="meals">
                 <button class="nav-item sub" type="button" data-owner-toggle="meals"><span class="icon-chip">🍽</span><span>Ovqatlar</span><b class="chev">▸</b></button>
                 <div class="subnav">
@@ -157,6 +158,21 @@
               </div>
               <p class="form-message" id="table-form-message"></p>
             </form>
+          </article>
+        </div>
+
+        <!-- ======================= OSHXONA (ochiq buyurtmalar) ======================= -->
+        <div class="cards-grid panels" data-owner-panel="kitchen" hidden>
+          <article class="card card--wide">
+            <div class="card-head">
+              <div><span class="step-label">OSHXONA</span><h3>Ochiq buyurtmalar</h3><p class="sub">Mijozdan kelgan buyurtmalar shu yerda — tarkibi bilan. 10 soniyada bir yangilanadi.</p></div>
+              <div style="display:flex;gap:8px;align-items:center">
+                <span class="count-badge" id="kitchen-count" title="Ochiq buyurtmalar soni">0</span>
+                <button class="btn btn-ghost btn-sm" id="kitchen-refresh" type="button">↻ Yangilash</button>
+              </div>
+            </div>
+            <p class="empty" id="kitchen-empty">Hozircha ochiq buyurtma yo‘q.</p>
+            <div class="items" id="kitchen-orders"></div>
           </article>
         </div>
 

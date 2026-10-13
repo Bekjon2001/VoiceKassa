@@ -20,7 +20,8 @@
     <section class="entry-panel" aria-labelledby="menu-page-title">
       <div class="panel-heading">
         <span class="step-label">03 / MENYU</span>
-        <h2 id="menu-page-title">Bugungi menyu</h2>
+        <h2 id="restaurant-title">Restoran</h2>
+        <h2 id="menu-page-title" class="menu-page-title">Bugungi menyu</h2>
         <p id="location-note">Menyu yuklanmoqda...</p>
       </div>
 
@@ -36,8 +37,23 @@
           <button type="button" class="method-tab active" data-method="text" role="tab" aria-selected="true">Matn</button>
           <button type="button" class="method-tab" data-method="voice" role="tab" aria-selected="false">Ovoz</button>
         </div>
-        <label for="order-text">Buyurtma</label>
-        <textarea id="order-text" name="transcriptText" rows="4" placeholder="Masalan: ikki lag'mon, bitta choy..."></textarea>
+        <div class="order-box">
+          <div class="order-box-head">
+            <label for="order-text">Buyurtma</label>
+          </div>
+          <div class="selection-note" id="selection-note" hidden>
+            <table class="order-items-table" aria-label="Tanlangan buyurtma">
+              <thead>
+                <tr><th>Nomi</th><th>Soni</th><th>Sumasi</th></tr>
+              </thead>
+              <tbody id="selection-note-body"></tbody>
+              <tfoot>
+                <tr><td colspan="2">Jami</td><td id="selection-note-total">0 so'm</td></tr>
+              </tfoot>
+            </table>
+          </div>
+          <textarea id="order-text" name="transcriptText" rows="4" placeholder="Masalan: ikki lag'mon, bitta choy..."></textarea>
+        </div>
         <p class="voice-note" id="voice-note" hidden>Ovoz yozish keyingi bosqichda ulanadi.</p>
         <button class="primary-button" type="submit"><span>Buyurtmani yuborish</span><strong>→</strong></button>
         <p class="form-message" id="form-message" role="status"></p>

@@ -180,6 +180,18 @@ public class BusinessController : ControllerBase
         return Ok(tables);
     }
 
+    /// <summary>
+    /// Mijozlar uchun OCHIQ ro'yxat: faol restoran/marketlarni nom bo'yicha
+    /// qidiradi. QR/skaner ishlamagan holatda menyudan restoranni tanlash
+    /// uchun — Super Admin tokeni shart emas.
+    /// </summary>
+    [HttpGet("public/search")]
+    public async Task<IActionResult> SearchPublicBusinesses([FromQuery] string? query, CancellationToken ct)
+    {
+        var businesses = await _businessService.SearchPublicBusinessesAsync(query, ct);
+        return Ok(businesses);
+    }
+
     [HttpPut("tables/{tableId:long}/status")]
     public async Task<IActionResult> UpdateTableStatus(long tableId, [FromBody] UpdateTableStatusRequest request, CancellationToken ct)
     {

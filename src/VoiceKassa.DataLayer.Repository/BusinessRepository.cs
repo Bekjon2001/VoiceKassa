@@ -209,6 +209,21 @@ public class BusinessRepository : IBusinessRepository
         _db.Tables.Where(t => t.BusinessId == businessId).OrderBy(t => t.Name).ToListAsync(ct);
 
     /// <summary>
+    /// Mijozlar uchun ochiq qidiruv: faol bizneslarni nom bo'yicha topadi
+    /// (QR/skaner ishlamaganda menyudan restoranni tanlash uchun).
+    /// </summary>
+    public Task<List<Business>> SearchActiveBusinessesAsync(string? query, CancellationToken ct = default)
+    {
+        var businesses = _db.Businesses.Where(b => b.IsActive);
+        if (!string.IsNullOrWhiteSpace(query))
+        {
+            var normalized = query.Trim().ToLowerInvariant();
+            businesses = businesses.Where(b => b.Name.ToLower().Contains(normalized));
+        }
+        return businesses.OrderBy(b => b.Name).ToListAsync(ct);
+    }
+
+    /// <summary>
     /// Bitta stolni Id bo'yicha oladi (buyurtma oqimida stol shu biznesga
     /// tegishliligini tekshirish uchun ishlatiladi).
     /// </summary>

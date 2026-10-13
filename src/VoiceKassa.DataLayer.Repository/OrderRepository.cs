@@ -29,6 +29,18 @@ public class OrderRepository : IOrderRepository
             .OrderByDescending(o => o.CreatedAt)
             .FirstOrDefaultAsync(ct);
 
+    public Task<List<Order>> GetOpenByBusinessAsync(long businessId, CancellationToken ct = default) =>
+        _db.Orders
+            .Include(o => o.Items)
+            .Include(o => o.Table)
+            .Where(o => o.BusinessId == businessId
+                        && (o.Status == OrderStatus.Open || o.Status == OrderStatus.InProgress))
+            .OrderByDescending(o => o.CreatedAt)
+            .ToListAsync(ct);
+
+    public Task<Product?> GetProductByIdAsync(long productId, CancellationToken ct = default) =>
+        _db.Products.FirstOrDefaultAsync(p => p.Id == productId, ct);
+
     public Task<List<Order>> GetByBusinessAndRangeAsync(
         long businessId, DateTime fromUtc, DateTime toUtc, CancellationToken ct = default) =>
         _db.Orders
@@ -55,19 +67,37 @@ public class OrderRepository : IOrderRepository
 
     public async Task<Product?> FindProductByNameAsync(long businessId, string spokenName, CancellationToken ct = default)
     {
-        var normalized = spokenName.Trim().ToLowerInvariant();
-
-        // Exact name match first, then alias match. Fuzzy/phonetic matching
-        // (Levenshtein, trigram search via pg_trgm) is a good next upgrade
-        // once real spoken-name variance data comes in.
+        // Fuzzy matching: "Lag'mon" -> "lagmon 100" kabi boshlanishlarni ham
+        // ushlaydi. Avval aniq nom/alias, so'ng boshlanish (startsWith) bo'yicha.
         var products = await _db.Products
             .Where(p => p.BusinessId == businessId)
             .ToListAsync(ct);
 
-        return products.FirstOrDefault(p =>
-            p.Name.Trim().ToLowerInvariant() == normalized ||
-            p.Aliases.Any(a => a.Trim().ToLowerInvariant() == normalized));
+        var exact = NormalizeName(spokenName);
+
+        var exactMatch = products.FirstOrDefault(p =>
+            NormalizeName(p.Name) == exact ||
+            p.Aliases.Any(a => NormalizeName(a) == exact));
+        if (exactMatch is not null) return exactMatch;
+
+        // Eng qisqa nomli mahsulotni tanlaymiz ("lagmon" -> "Lag'mon 25",
+        // "lagmon 100" emas — eng yaqin moslik).
+        return products
+            .Where(p => NormalizeName(p.Name).StartsWith(exact) ||
+                        p.Aliases.Any(a => NormalizeName(a).StartsWith(exact)))
+            .OrderBy(p => p.Name.Length)
+            .ThenBy(p => p.Id)
+            .FirstOrDefault();
     }
+
+    // "Lag'mon  25 " -> "lagmon 25", "Coca-Cola 100" -> "coca cola 100":
+    // kichik harf, apostrof va tire olib tashlanadi, bo'shliqlar siqiladi.
+    private static string NormalizeName(string value) =>
+        string.Join(' ', value.Trim().ToLowerInvariant()
+            .Replace('’', '\'')
+            .Replace('-', ' ')
+            .Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)
+            .Select(part => part.Replace("'", "")));
 
     public async Task DecrementStockAsync(long productId, decimal quantity, CancellationToken ct = default)
     {

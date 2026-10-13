@@ -24,9 +24,22 @@ public class OrderExtractionResult
 // ---------- Voice -> Order ----------
 
 /// <summary>
+/// Menyudan bosib tanlangan mahsulot. ProductId bo'lsa — to'g'ridan-to'g'ri
+/// bazadan topiladi (AI ishtirok etmaydi); faqat nom bo'lsa — nom bo'yicha qidiriladi.
+/// </summary>
+public class SelectedOrderItem
+{
+    public long? ProductId { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public decimal Quantity { get; set; } = 1;
+}
+
+/// <summary>
 /// TableId berilsa - restoran oqimi (shu stolning ochiq buyurtmasiga
 /// qo'shiladi, yopilmagan holda qoladi). TableId null bo'lsa - do'kon
 /// oqimi (to'g'ridan-to'g'ri yakunlangan sotuv sifatida yaratiladi).
+/// Items (menyudan tanlanganlar) berilsa — ular to'g'ridan-to'g'ri buyurtmaga
+/// tushadi; TranscriptText faqat qo'lda yozilgan qo'shimcha matn uchun.
 /// </summary>
 public class CreateOrderFromTextRequest
 {
@@ -34,6 +47,7 @@ public class CreateOrderFromTextRequest
     public long? TableId { get; set; }
     public long? StaffId { get; set; }
     public string TranscriptText { get; set; } = string.Empty;
+    public List<SelectedOrderItem>? Items { get; set; }
 }
 
 public class CloseOrderRequest
@@ -56,6 +70,7 @@ public class OrderResponse
     public long Id { get; set; }
     public long BusinessId { get; set; }
     public long? TableId { get; set; }
+    public string? TableName { get; set; }
     public long? StaffId { get; set; }
     public OrderStatus Status { get; set; }
     public decimal TotalAmount { get; set; }

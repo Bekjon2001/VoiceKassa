@@ -30,6 +30,7 @@ if (themeToggleBtn) {
 const VIEW_TITLES = {
   staff: ["Xodimlar", "Xodimlar ro‘yxati, profili va maosh tarixi."],
   tables: ["Stollar", "Restorandagi stollarni boshqaring."],
+  kitchen: ["Oshxona", "Ochiq buyurtmalar va ularning tarkibi."],
   meals: ["Ovqatlar", "Menyu va ichimliklarni boshqaring."],
   "staff-detail": ["Xodim profili", "Xodim ma’lumotlari va maosh tarixi."],
   "table-detail": ["Stol profili", "Stol ma’lumotlari va holati."],
@@ -53,7 +54,7 @@ const ROLE_META = {
   3: { badge: "role-badge--waiter", avatar: "avatar--waiter" },
   4: { badge: "role-badge--cook", avatar: "avatar--cook" },
 };
-const STAFF_VIEWS = ["staff", "tables", "meals"];
+const STAFF_VIEWS = ["staff", "tables", "kitchen", "meals"];
 // Restoran guruhiga tegishli barcha ko‘rinishlar (flyout bo‘limlari + ularning qo'shish/profil sahifalari)
 const RESTAURANT_VIEWS = [...STAFF_VIEWS, "staff-detail", "table-detail", "staff-add", "table-add",
   "meals-food", "meals-drink", "meals-fruit", "meals-dessert", "meals-add"];
@@ -295,6 +296,98 @@ async function loadTodayStats() {
     noteEl.textContent = "buyurtmalar: —";
   }
 }
+
+// ---------- Oshxona: ochiq buyurtmalar (10s da bir yangilanadi) ----------
+let kitchenTimer = null;
+let kitchenOrders = [];
+
+function kitchenPill(status) {
+  if (Number(status) === 0) return ["Keldi", "pill--warn"];
+  if (Number(status) === 1) return ["Tayyorlanmoqda", "pill--ok"];
+  return ["—", "pill--off"];
+}
+
+function fmtOrderTime(value) {
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleTimeString("uz-UZ", { hour: "2-digit", minute: "2-digit" });
+}
+
+async function loadKitchenOrders() {
+  const listEl = $("kitchen-orders");
+  const emptyEl = $("kitchen-empty");
+  if (!listEl) return;
+  if (!activeBusinessId) return;
+  try {
+    const orders = await api(`/Order/GetOpen/open/${encodeURIComponent(activeBusinessId)}`);
+    kitchenOrders = Array.isArray(orders) ? orders : [];
+  } catch (error) {
+    listEl.innerHTML = `<p class="empty">${esc(error.message)}</p>`;
+    if (emptyEl) emptyEl.hidden = true;
+    if ($("kitchen-count")) $("kitchen-count").textContent = "0";
+    return;
+  }
+  renderKitchenOrders();
+}
+
+function renderKitchenOrders() {
+  const listEl = $("kitchen-orders");
+  const emptyEl = $("kitchen-empty");
+  const countEl = $("kitchen-count");
+  if (!listEl) return;
+  if (countEl) countEl.textContent = String(kitchenOrders.length);
+  if (emptyEl) emptyEl.hidden = kitchenOrders.length > 0;
+  if (kitchenOrders.length === 0) { listEl.innerHTML = ""; return; }
+
+  listEl.innerHTML = kitchenOrders.map(order => {
+    const [label, cls] = kitchenPill(order.status);
+    const table = order.tableName || (order.tableId ? `Stol ${order.tableId}` : "—");
+    const itemRows = (order.items || []).map(i =>
+      `<tr><td class="cell-name">${esc(i.productNameSpoken)}</td><td class="cell-qty">${i.quantity}</td><td class="cell-sum">${fmtSum(i.lineTotal)} so'm</td></tr>`
+    ).join("");
+    const canStart = Number(order.status) === 0;
+    return `<div class="item kitchen-order">
+      <div class="item-body">
+        <strong>${esc(table)} — buyurtma №${order.id}</strong>
+        <small class="muted">${fmtOrderTime(order.createdAt)} · <span class="pill ${cls}">${label}</span></small>
+        <table class="order-items-table">
+          <thead><tr><th>Nomi</th><th>Soni</th><th>Sumasi</th></tr></thead>
+          <tbody>${itemRows}</tbody>
+          <tfoot><tr><td colspan="2">Jami</td><td>${fmtSum(order.totalAmount)} so'm</td></tr></tfoot>
+        </table>
+      </div>
+      <span class="item-end">
+        ${canStart ? `<button class="btn btn-primary btn-sm" type="button" data-kitchen-start="${order.id}">Qabul qildim</button>` : ""}
+      </span>
+    </div>`;
+  }).join("");
+
+  listEl.querySelectorAll("[data-kitchen-start]").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      btn.disabled = true;
+      try {
+        await api(`/Order/Start/${btn.dataset.kitchenStart}/start`, { method: "POST" });
+        flash("Buyurtma oshxonaga qabul qilindi.");
+        await loadKitchenOrders();
+      } catch (error) {
+        flash("Buyurtmani boshlab bo‘lmadi: " + error.message, true);
+        btn.disabled = false;
+      }
+    });
+  });
+}
+
+function startKitchenPolling() {
+  stopKitchenPolling();
+  loadKitchenOrders();
+  kitchenTimer = setInterval(loadKitchenOrders, 10000);
+}
+
+function stopKitchenPolling() {
+  if (kitchenTimer) { clearInterval(kitchenTimer); kitchenTimer = null; }
+}
+
+$("kitchen-refresh")?.addEventListener("click", loadKitchenOrders);
 // ---------- Ish maydoni navigatsiyasi ----------
 function setOwnerView(view) {
   const isRestaurantView = RESTAURANT_VIEWS.includes(view);
@@ -324,6 +417,10 @@ function setOwnerView(view) {
   const pair = VIEW_TITLES[view] || (STAFF_VIEWS.includes(view) ? ["Restoran", ""] : [view, ""]);
   $("owner-view-title").textContent = pair[0];
   $("owner-view-subtitle").textContent = pair[1];
+
+  // Oshxona bo'limi ochilganda — avto-yangilanish, yopilganda to'xtaydi.
+  if (view === "kitchen") startKitchenPolling();
+  else stopKitchenPolling();
 
   // Oxirgi ochilgan sahifani yodda saqlash (refresh'da ham o'sha sahifa ochiladi)
   try { sessionStorage.setItem(VIEW_STORAGE_KEY, view); } catch { /* ignore */ }

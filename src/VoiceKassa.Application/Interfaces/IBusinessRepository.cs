@@ -35,6 +35,13 @@ public interface IBusinessRepository
     Task<Business?> GetBusinessByIdAsync(long businessId, CancellationToken ct = default);
     Task<List<Business>> GetAllBusinessesAsync(CancellationToken ct = default);
 
+    /// <summary>
+    /// Mijozlar uchun ochiq qidiruv: faol bizneslarni (restoran/market) nom
+    /// bo'yicha topadi. Super Admin tokeni talab qilmaydi — QR/skaner
+    /// ishlamagan holatda menyudan restoranni tanlash uchun.
+    /// </summary>
+    Task<List<Business>> SearchActiveBusinessesAsync(string? query, CancellationToken ct = default);
+
     Task<Staff> CreateStaffAsync(Staff staff, CancellationToken ct = default);
     Task<List<Staff>> GetStaffByBusinessAsync(long businessId, CancellationToken ct = default);
     Task<Staff?> GetStaffByIdAsync(long staffId, CancellationToken ct = default);

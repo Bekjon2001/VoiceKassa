@@ -25,7 +25,8 @@ public class OrderService
     public async Task<(bool Success, string? Error, OrderResponse? Order)> CreateFromTextAsync(
         CreateOrderFromTextRequest request, CancellationToken ct = default)
     {
-        if (string.IsNullOrWhiteSpace(request.TranscriptText))
+        var hasItems = request.Items is { Count: > 0 };
+        if (!hasItems && string.IsNullOrWhiteSpace(request.TranscriptText))
             return (false, "Matn bo'sh bo'lishi mumkin emas.", null);
 
         var business = await _businessRepo.GetBusinessByIdAsync(request.BusinessId, ct);
@@ -40,9 +41,32 @@ public class OrderService
                 return (false, "Stol shu biznesga tegishli emas.", null);
         }
 
-        var extraction = await _aiExtraction.ExtractOrderAsync(request.TranscriptText, ct);
-        if (!extraction.Success || extraction.Items.Count == 0)
-            return (false, extraction.ErrorMessage ?? "Buyurtmadan mahsulot topilmadi.", null);
+        // Qo'shimcha matn bo'lsa — AI orqali qo'shimcha itemlar ajratiladi
+        // (faqat menyudan tanlanmagan, qo'lda yozilgan qismlar uchun).
+        var extraction = new OrderExtractionResult { Success = true };
+        if (!string.IsNullOrWhiteSpace(request.TranscriptText))
+        {
+            extraction = await _aiExtraction.ExtractOrderAsync(request.TranscriptText, ct);
+            if (!extraction.Success && !hasItems)
+                return (false, extraction.ErrorMessage ?? "Buyurtmadan mahsulot topilmadi.", null);
+        }
+
+        // Yagona ro'yxat: menyudan tanlangan (strukturali) + matndan ajratilgan.
+        var wanted = new List<(long? ProductId, string Name, decimal Quantity, string Unit)>();
+        foreach (var item in request.Items ?? new List<SelectedOrderItem>())
+        {
+            var name = item.Name?.Trim() ?? string.Empty;
+            if (item.ProductId is null && string.IsNullOrEmpty(name)) continue;
+            wanted.Add((item.ProductId, name, item.Quantity <= 0 ? 1 : item.Quantity, "dona"));
+        }
+        if (extraction.Success)
+        {
+            foreach (var item in extraction.Items)
+                wanted.Add((null, item.Name?.Trim() ?? string.Empty, item.Quantity,
+                    string.IsNullOrWhiteSpace(item.Unit) ? "dona" : item.Unit));
+        }
+        if (wanted.Count == 0)
+            return (false, "Buyurtmadan mahsulot topilmadi.", null);
 
         Order order;
         if (isRestaurantFlow)
@@ -68,21 +92,24 @@ public class OrderService
             };
         }
 
-        order.TranscriptText = request.TranscriptText.Trim();
+        order.TranscriptText = request.TranscriptText?.Trim() ?? string.Empty;
 
         var stockMoves = new List<(long ProductId, decimal Quantity)>();
         var inventory = new List<InventoryTransaction>();
         var unmatched = new List<string>();
 
-        foreach (var item in extraction.Items)
+        foreach (var (productId, name, quantity, unit) in wanted)
         {
-            if (item.Quantity <= 0)
-                return (false, $"'{item.Name}' miqdori noto'g'ri.", null);
+            if (quantity <= 0)
+                return (false, $"'{(string.IsNullOrEmpty(name) ? productId?.ToString() : name)}' miqdori noto'g'ri.", null);
 
-            var product = await _orderRepo.FindProductByNameAsync(request.BusinessId, item.Name, ct);
-            if (product is null || !product.IsAvailable)
+            var product = productId.HasValue
+                ? await _orderRepo.GetProductByIdAsync(productId.Value, ct)
+                : await _orderRepo.FindProductByNameAsync(request.BusinessId, name, ct);
+
+            if (product is null || product.BusinessId != request.BusinessId || !product.IsAvailable)
             {
-                unmatched.Add(string.IsNullOrWhiteSpace(item.Name) ? "?" : item.Name);
+                unmatched.Add(string.IsNullOrEmpty(name) ? "?" : name);
                 continue;
             }
 
@@ -90,24 +117,24 @@ public class OrderService
             order.Items.Add(new OrderItem
             {
                 ProductId = product.Id,
-                ProductNameSpoken = item.Name,
-                Quantity = item.Quantity,
-                Unit = string.IsNullOrWhiteSpace(item.Unit) ? product.Unit : item.Unit,
-                LineTotal = unitPrice * item.Quantity,
+                ProductNameSpoken = string.IsNullOrEmpty(name) ? product.Name : name,
+                Quantity = quantity,
+                Unit = string.IsNullOrWhiteSpace(unit) ? product.Unit : unit,
+                LineTotal = unitPrice * quantity,
             });
 
             if (!isRestaurantFlow && product.StockQuantity.HasValue)
             {
-                if (product.StockQuantity.Value < item.Quantity)
+                if (product.StockQuantity.Value < quantity)
                     return (false, $"'{product.Name}' omborda yetarli emas.", null);
 
-                stockMoves.Add((product.Id, item.Quantity));
+                stockMoves.Add((product.Id, quantity));
                 inventory.Add(new InventoryTransaction
                 {
                     BusinessId = request.BusinessId,
                     ProductId = product.Id,
                     Type = InventoryTransactionType.Out,
-                    Quantity = item.Quantity,
+                    Quantity = quantity,
                     Reason = "Sotuv (ovozli)",
                 });
             }
@@ -140,6 +167,32 @@ public class OrderService
         return order is null ? null : ToOrderResponse(order);
     }
 
+    /// <summary>Oshxona uchun: biznesdagi ochiq (Open/InProgress) buyurtmalar
+    /// tarkibi va stol nomi bilan.</summary>
+    public async Task<List<OrderResponse>> GetOpenOrdersAsync(long businessId, CancellationToken ct = default)
+    {
+        var orders = await _orderRepo.GetOpenByBusinessAsync(businessId, ct);
+        return orders.Select(ToOrderResponse).ToList();
+    }
+
+    /// <summary>Oshxona buyurtmani oldi: Open -> InProgress. Yopilgan/
+    /// bekor qilingan buyurtmani olib bo'lmaydi.</summary>
+    public async Task<(bool Success, string? Error, OrderResponse? Order)> StartOrderAsync(
+        long orderId, CancellationToken ct = default)
+    {
+        var order = await _orderRepo.GetByIdAsync(orderId, ct);
+        if (order is null)
+            return (false, "Buyurtma topilmadi.", null);
+        if (order.Status is OrderStatus.Completed or OrderStatus.Cancelled)
+            return (false, "Bu buyurtma yopilgan.", null);
+        if (order.Status == OrderStatus.InProgress)
+            return (true, null, ToOrderResponse(order)); // allaqachon oshxonada
+
+        await _orderRepo.UpdateOrderStatusAsync(orderId, OrderStatus.InProgress, null, null, ct);
+        order.Status = OrderStatus.InProgress;
+        return (true, null, ToOrderResponse(order));
+    }
+
     private static PaymentType ParsePaymentType(string raw) => raw.Trim().ToLowerInvariant() switch
     {
         "naqd" => PaymentType.Cash,
@@ -150,7 +203,8 @@ public class OrderService
 
     private static OrderResponse ToOrderResponse(Order o) => new()
     {
-        Id = o.Id, BusinessId = o.BusinessId, TableId = o.TableId, StaffId = o.StaffId,
+        Id = o.Id, BusinessId = o.BusinessId, TableId = o.TableId, TableName = o.Table?.Name,
+        StaffId = o.StaffId,
         Status = o.Status, TotalAmount = o.TotalAmount, PaymentType = o.PaymentType,
         CreatedAt = o.CreatedAt, ClosedAt = o.ClosedAt,
         Items = o.Items.Select(i => new OrderItemResponse
