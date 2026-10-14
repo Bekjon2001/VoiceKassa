@@ -44,8 +44,35 @@ function productKind(product) {
 // Menyuda bosib tanlangan taomlar: nom -> { id (API'dan kelsa ), name }.
 // id orqali backendga to'g'ridan-to'g'ri yuboriladi — AI kerak emas.
 const selectedMenuItems = new Map();
+// Buyurtma oshxonaga yuborilgach "Stolni almashtirish" back-link yashiriladi.
+// Stol band bo'lgani uchun buyurtma yuborilgandan KEYIN ro'yxatga qaytib bo'lmaydi.
+// Buyurtma hali yuborilmagan bo'lsa (taom tanlangan bo'lsa ham) — link ko'rinadi.
+let orderSent = false;
 
 document.addEventListener("DOMContentLoaded", init);
+
+// ---------- Kun/Tun (light/dark) rejimi ----------
+// Mijoz sahifalari (index/tables/menu) admin panellar bilan BIR XIL
+// localStorage kalitidan (vk_theme) foydalanadi — bir paneldan boshqasiga
+// o'tganda tanlangan rejim saqlanib qoladi.
+function applyTheme(theme) {
+  document.documentElement.dataset.theme = theme === "dark" ? "dark" : "light";
+  try { localStorage.setItem("vk_theme", theme === "dark" ? "dark" : "light"); } catch { /* ignore */ }
+  const btn = document.getElementById("theme-toggle");
+  if (btn) btn.textContent = theme === "dark" ? "☀️" : "🌙";
+}
+
+function initTheme() {
+  // head'dagi inline skript allaqachon rejimni qo'llagan — tugmani moslaymiz.
+  applyTheme(document.documentElement.dataset.theme);
+  const btn = document.getElementById("theme-toggle");
+  if (btn) {
+    btn.addEventListener("click", () => {
+      applyTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark");
+    });
+  }
+}
+initTheme();
 
 async function init() {
   // Har bir qadam — alohida sahifa:
@@ -267,11 +294,13 @@ async function initMenuPage() {
   if (titleEl) titleEl.textContent = restaurantName;
   locationNote.textContent = `${restaurantName} · ${tableName} tanlandi.`;
 
-  // "Stolni almashtirish" linki — shu restoranni stol tanlash sahifasiga qaytaradi.
-  const backLink = document.querySelector(".back-link");
+  // "Stolni almashtirish" linki (yuqoridagi topbar'da) — shu restoranni stol
+  // tanlash sahifasiga qaytaradi. Bu link doim ko'rinadi: foydalanuvchi
+  // xohlagan vaqtda (taom tanlaganda ham, buyurtma yuborilgach ham) stolni
+  // almashtirib, ro'yxatga qayta olishi mumkin.
+  const backLink = document.getElementById("menu-back-link");
   if (backLink) {
     backLink.href = `tables.html?businessId=${encodeURIComponent(businessId)}&restaurantName=${encodeURIComponent(restaurantName)}`;
-    backLink.textContent = "← Stolni almashtirish";
   }
 
   try {
@@ -395,6 +424,14 @@ function updateSelectionSummary() {
   wrap.hidden = entries.length === 0;
   if (!body) return;
 
+  // "Stolni almashtirish" back-linki FAQAT buyurtma qutisi butunlay bo'sh
+  // bo'lganda ko'rinadi. Quyidagi ikki holatda yashiriladi (foydalanuvchi
+  // stolni almashtira olmaydi):
+  //   1) Buyurtma qutida tanlangan taom bor (hali yuborilmagan bo'lsa ham).
+  //   2) Buyurtma oshxonaga yuborilgan — stol band bo'lgani uchun.
+  const backLink = document.getElementById("menu-back-link");
+  if (backLink) backLink.hidden = orderSent || entries.length > 0;
+
   let total = 0;
   body.innerHTML = entries.map((p) => {
     const lineTotal = (Number(p.price) || 0) * p.quantity;
@@ -482,6 +519,10 @@ document.getElementById("entry-form")?.addEventListener("submit", async (event) 
     });
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || "Buyurtma yuborilmadi.");
+    // Buyurtma oshxonaga yuborildi — bu stol endi band. "Stolni almashtirish"
+    // back-linki (yuqoridagi topbar'da) endi yashiriladi, ya'ni foydalanuvchi
+    // ro'yxatga qaytib, boshqa stolni tanlay olmaydi.
+    orderSent = true;
     // Tanlov tozalanadi: menyu belgilari o'chadi, jadval qutidan yo'qoladi.
     selectedMenuItems.clear();
     document.querySelectorAll(".menu-item.selected").forEach((el) => {

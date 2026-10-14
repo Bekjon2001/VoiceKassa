@@ -5,16 +5,23 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#f5f1e9" />
   <title>VoiceKassa | Menyu</title>
+  <script>
+    // Kun/Tun (light/dark) rejimini sahifa chizilishidan OLDIN qo'llaymiz — miltillash bo'lmasligi uchun.
+    try { document.documentElement.dataset.theme = localStorage.getItem("vk_theme") === "dark" ? "dark" : "light"; } catch (e) {}
+  </script>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
+  <header class="menu-topbar">
+    <a class="menu-back-link" id="menu-back-link" href="tables.html">← Stolni almashtirish</a>
+    <button class="theme-toggle" id="theme-toggle" type="button" title="Kun/Tun rejimini almashtirish" aria-label="Kun/Tun rejimini almashtirish">🌙</button>
+  </header>
   <main class="shell menu-page">
     <section class="intro-panel">
       <div class="brand-mark" aria-label="VoiceKassa">VK</div>
       <p class="eyebrow">VOICEKASSA / RESTORAN</p>
       <h1>Buyurtmani<br /><em>tanlang.</em></h1>
       <p class="intro-copy">Menyudan taomlarni tanlang yoki buyurtmangizni ovoz bilan ayting.</p>
-      <a class="back-link" href="index.html">← Stolni almashtirish</a>
     </section>
 
     <section class="entry-panel" aria-labelledby="menu-page-title">

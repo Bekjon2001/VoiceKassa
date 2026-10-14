@@ -1,12 +1,13 @@
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,600;1,600&display=swap');
 
 :root { --ink: #202522; --muted: #737a72; --paper: #f5f1e9; --panel: #fffdf8; --green: #1d684d; --line: #d9ded4; --coral: #d96f53; }
+html[data-theme='dark'] { color-scheme: dark; }
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
-body { margin: 0; min-width: 320px; color: var(--ink); background: #dfe7dc; font-family: 'DM Sans', sans-serif; }
-body::before { content: ''; position: fixed; inset: 0; pointer-events: none; opacity: .36; background-image: radial-gradient(#9aaa96 0.7px, transparent 0.7px); background-size: 18px 18px; }
-.shell { position: relative; display: grid; grid-template-columns: minmax(280px, .9fr) minmax(360px, 1.1fr); max-width: 1100px; min-height: 680px; margin: 5vh auto; overflow: hidden; background: var(--paper); box-shadow: 0 24px 65px rgba(34, 54, 42, .16); }
-.intro-panel { display: flex; flex-direction: column; justify-content: space-between; padding: clamp(30px, 6vw, 72px); background: var(--green); color: #f7f4e9; position: relative; overflow: hidden; }
+body { margin: 0; min-width: 320px; color: var(--ink); background-color: #eef2e6; background-image: radial-gradient(1100px 620px at 100% -12%, rgba(233,187,118,.30), transparent 58%), radial-gradient(980px 720px at -12% 112%, rgba(29,104,77,.22), transparent 56%), radial-gradient(760px 520px at 78% 108%, rgba(217,111,83,.16), transparent 60%), linear-gradient(165deg, #f8f4ec 0%, #eff3e6 52%, #e4eadb 100%); background-attachment: fixed; font-family: 'DM Sans', sans-serif; }
+body::before { content: ''; position: fixed; inset: 0; pointer-events: none; opacity: .5; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.32'/%3E%3C/svg%3E"); }
+.shell { position: relative; display: grid; grid-template-columns: minmax(280px, .9fr) minmax(360px, 1.1fr); max-width: 1100px; min-height: 680px; margin: 5vh auto; overflow: hidden; background: var(--paper); border-radius: 22px; box-shadow: 0 30px 70px -22px rgba(16, 54, 40, .38), 0 2px 10px rgba(16, 54, 40, .10); }
+.intro-panel { display: flex; flex-direction: column; justify-content: space-between; padding: clamp(30px, 6vw, 72px); background: radial-gradient(520px 320px at 85% 6%, rgba(233,187,118,.20), transparent 60%), linear-gradient(160deg, #22734f 0%, #134c39 100%); color: #f7f4e9; position: relative; overflow: hidden; }
 .intro-panel::after { content: ''; position: absolute; width: 340px; height: 340px; right: -150px; bottom: -130px; border: 1px solid rgba(255,255,255,.25); border-radius: 50%; box-shadow: 0 0 0 34px rgba(255,255,255,.07), 0 0 0 68px rgba(255,255,255,.05); }
 .brand-mark { display: grid; place-items: center; width: 47px; height: 47px; border: 1px solid rgba(255,255,255,.55); font-size: 14px; font-weight: 700; letter-spacing: 1px; }
 .eyebrow, .step-label { margin: 0; font-size: 11px; letter-spacing: 1.7px; font-weight: 700; }
@@ -26,6 +27,42 @@ body::before { content: ''; position: fixed; inset: 0; pointer-events: none; opa
 /* Menyu sahifasi: chapda scroll bo'luvchi menyu, o'ngda doimiy (sticky) buyurtma
    qutisi. Menyu o'zi ichkarida aylanadi — butun sahqa tepa/pastga sakramaydi. */
 .menu-page .shell { overflow: visible; }
+/* Yuqoridagi doimiy panel: chapda "Stolni almashtirish", o'ngda kun/tun tugmasi.
+   Sticky — menyu aylanganda ham tepada qotib turadi va foydalanuvchi istalgan
+   paytda stolni almashtirib ro'yxatga qayta oladi. */
+.menu-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+  padding: 12px 20px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+  box-shadow: 0 10px 30px -22px rgba(0, 0, 0, .5);
+}
+.menu-back-link {
+  color: var(--green);
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.menu-back-link:hover { text-decoration: underline; }
+/* Topbar ichidagi kun/tun tugmasi oqimda (static) turadi — ekran burchagida suzmaydi. */
+.menu-topbar .theme-toggle {
+  position: static;
+  top: auto;
+  right: auto;
+  z-index: auto;
+  width: 40px;
+  height: 40px;
+  font-size: 18px;
+}
 .menu-layout { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 28px; align-items: start; }
 .menu-page .menu-section { max-height: calc(100vh - 235px); overflow-y: auto; padding-right: 6px; }
 .order-side { position: sticky; top: 24px; align-self: start; }
@@ -265,3 +302,107 @@ input:focus, textarea:focus { border-color: var(--green); box-shadow: 0 0 0 3px 
 	.admin-body .super-admin-layout { grid-template-columns: 320px minmax(0, 1fr); }
 	.admin-body .owner-workspace { grid-template-columns: 220px minmax(760px, 1fr); }
 }
+
+/* ============================================================
+   Kun/Tun (light/dark) almashtiruvchi tugma
+   ============================================================ */
+.theme-toggle {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 60;
+  width: 46px;
+  height: 46px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--panel);
+  box-shadow: 0 8px 22px -10px rgba(0, 0, 0, .4);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  transition: transform .15s, box-shadow .15s, background .2s, border-color .2s;
+}
+.theme-toggle:hover { transform: translateY(-1px) scale(1.06); box-shadow: 0 12px 26px -10px rgba(0, 0, 0, .5); }
+.theme-toggle:active { transform: scale(.96); }
+
+/* ============================================================
+   Kun/Tun (light/dark) rejim — mijoz sahifalari (index/tables/menu)
+   Admin panellar bilan bir xil: <html data-theme="dark"> + localStorage vk_theme
+   ============================================================ */
+html[data-theme='dark'] {
+  --paper: #0f1216;
+  --panel: #181d24;
+  --ink: #e8ebf0;
+  --muted: #99a3af;
+  --green: #3cb683;
+  --line: #2b323b;
+  --coral: #e08a6f;
+  color-scheme: dark;
+}
+html[data-theme='dark'] body {
+  background:
+    radial-gradient(1200px 700px at 100% -10%, rgba(60, 182, 131, .16), transparent 55%),
+    radial-gradient(980px 640px at -10% 110%, rgba(86, 78, 168, .28), transparent 55%),
+    radial-gradient(1000px 680px at 110% 110%, rgba(176, 74, 47, .16), transparent 55%),
+    linear-gradient(180deg, #12161c 0%, #0c0f14 100%);
+}
+html[data-theme='dark'] .shell { background: var(--panel); box-shadow: 0 46px 100px -60px rgba(0, 0, 0, .95); }
+html[data-theme='dark'] .intro-panel { background: linear-gradient(160deg, #17352b 0%, #10241d 55%, #0b1c17 100%); }
+html[data-theme='dark'] .intro-panel::before { background: radial-gradient(620px 420px at 100% 0%, rgba(201, 162, 75, .32), transparent 60%); }
+html[data-theme='dark'] .eyebrow,
+html[data-theme='dark'] .intro-panel p { color: #b9c6bd; }
+html[data-theme='dark'] .intro-panel em { color: var(--green); }
+
+/* Formal va maydonlar */
+html[data-theme='dark'] input,
+html[data-theme='dark'] textarea { background: rgba(255, 255, 255, .05); border-color: var(--line); color: var(--ink); }
+html[data-theme='dark'] input::placeholder,
+html[data-theme='dark'] textarea::placeholder { color: #6c7683; }
+html[data-theme='dark'] input:focus,
+html[data-theme='dark'] textarea:focus { border-color: var(--green); box-shadow: 0 0 0 3px rgba(60, 182, 131, .18); }
+
+/* Karta/tugma uslublaridagi qattiq oq fonlar */
+html[data-theme='dark'] .table-button,
+html[data-theme='dark'] .menu-item,
+html[data-theme='dark'] .search-result,
+html[data-theme='dark'] .restaurant-option,
+html[data-theme='dark'] .row-action,
+html[data-theme='dark'] .search-row input { background: #141920; color: var(--ink); }
+html[data-theme='dark'] .table-button,
+html[data-theme='dark'] .menu-item,
+html[data-theme='dark'] .search-result,
+html[data-theme='dark'] .restaurant-option { border-color: var(--line); }
+html[data-theme='dark'] .table-info small { color: var(--green); }
+
+html[data-theme='dark'] .scan-box { background: #131922; border-color: #33413c; }
+html[data-theme='dark'] .detail-item,
+html[data-theme='dark'] .data-table tbody tr:hover,
+html[data-theme='dark'] .admin-item { background: #131922; }
+
+html[data-theme='dark'] .order-box { background: rgba(255, 255, 255, .03); border-color: var(--line); }
+html[data-theme='dark'] .menu-tabs { background: var(--panel); }
+html[data-theme='dark'] .menu-tab { border-color: var(--line); background: #141920; color: var(--ink); }
+html[data-theme='dark'] .menu-tab.active { background: var(--green); border-color: var(--green); color: #08251b; }
+
+html[data-theme='dark'] .data-table th { background: #131a22; color: var(--muted); border-bottom-color: var(--line); }
+html[data-theme='dark'] .status-pill.active { background: #173d2f; color: var(--green); }
+html[data-theme='dark'] .status-button.active { background: #173d2f; color: var(--green); }
+html[data-theme='dark'] .status-button.passive { background: #3a211b; color: #e6a290; }
+html[data-theme='dark'] .search-divider::before,
+html[data-theme='dark'] .search-divider::after { background: var(--line); }
+html[data-theme='dark'] .selection-note { background: var(--panel); }
+  /* Tanlangan buyurtmalar jadvali (Buyurtma qutisi) — oq fondan to'qqa o'tkazamiz */
+  html[data-theme='dark'] .order-items-table { background: #141920; border-color: var(--line); }
+  html[data-theme='dark'] .order-items-table thead th { background: #1a212a; color: var(--muted); }
+  html[data-theme='dark'] .order-items-table th,
+  html[data-theme='dark'] .order-items-table td { border-bottom-color: var(--line); }
+  html[data-theme='dark'] .order-items-table tfoot td { border-top-color: var(--line); color: var(--ink); }
+  html[data-theme='dark'] .order-box .order-items-table { border-bottom-color: var(--line); }
+  html[data-theme='dark'] .qty-btn { background: #141920; border-color: var(--line); color: var(--green); }
+
+/* Yorqin matnlar tun rejimda to'qroq yashil bilan */
+html[data-theme='dark'] .menu-item b,
+html[data-theme='dark'] .staff-state { color: var(--green); }
+

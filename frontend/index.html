@@ -5,11 +5,17 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#f5f1e9" />
   <title>VoiceKassa | Restoran tanlash</title>
+  <script>
+    // Kun/Tun (light/dark) rejimini sahifa chizilishidan OLDIN qo'llaymiz — miltillash bo'lmasligi uchun.
+    // Admin panellar bilan bir xil localStorage kaliti (vk_theme) ishlatiladi.
+    try { document.documentElement.dataset.theme = localStorage.getItem("vk_theme") === "dark" ? "dark" : "light"; } catch (e) {}
+  </script>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
+  <button class="theme-toggle" id="theme-toggle" type="button" title="Kun/Tun rejimini almashtirish" aria-label="Kun/Tun rejimini almashtirish">🌙</button>
   <main class="shell tables-page">
-    <section class="intro-panel">   
+    <section class="intro-panel"> 
       <div class="brand-mark" aria-label="VoiceKassa">VK</div>
       <p class="eyebrow">UNIVERSAL VOICE SALES SYSTEM</p>
       <h1>Buyurtmani<br /><em>oson</em> boshlang.</h1>
