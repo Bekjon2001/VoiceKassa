@@ -15,11 +15,31 @@ const DEFAULT_TABLES = [
   { id: 5, name: "VIP stol", status: 0, image: "https://images.unsplash.com/photo-1550966871-3ed3cdb5ed0c?auto=format&fit=crop&w=500&q=80" },
 ];
 const DEFAULT_PRODUCTS = [
-  { name: "Lag'mon", price: 32000, isAvailable: true, image: "https://images.unsplash.com/photo-1625398407796-82650a8c135f?auto=format&fit=crop&w=700&q=80" },
-  { name: "Shashlik", price: 25000, isAvailable: true, image: "https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=700&q=80" },
-  { name: "Choy", price: 8000, isAvailable: true, image: "https://images.unsplash.com/photo-1544787219-7f47ccb76574?auto=format&fit=crop&w=700&q=80" },
-  { name: "Coca Cola", price: 12000, isAvailable: true, image: "https://images.unsplash.com/photo-1554866585-cd94860890b7?auto=format&fit=crop&w=700&q=80" },
+  { name: "Lag'mon", price: 32000, isAvailable: true, kind: "food", image: "https://images.unsplash.com/photo-1625398407796-82650a8c135f?auto=format&fit=crop&w=700&q=80" },
+  { name: "Shashlik", price: 25000, isAvailable: true, kind: "food", image: "https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=700&q=80" },
+  { name: "Choy", price: 8000, isAvailable: true, kind: "drink", image: "https://images.unsplash.com/photo-1544787219-7f47ccb76574?auto=format&fit=crop&w=700&q=80" },
+  { name: "Coca Cola", price: 12000, isAvailable: true, kind: "drink", image: "https://images.unsplash.com/photo-1554866585-cd94860890b7?auto=format&fit=crop&w=700&q=80" },
 ];
+
+// Menyu bo'limlari va ularning ko'rsatilish tartibi. Mahsulot turi (kind)
+// quyidagi tartibda aniqlanadi: ichimlik -> meva -> shirinlik -> ovqat.
+const MENU_CATEGORIES = [
+  { key: "food", title: "Ovqatlar" },
+  { key: "drink", title: "Ichimliklar" },
+  { key: "fruit", title: "Mevalar" },
+  { key: "dessert", title: "Shirinliklar" },
+];
+
+// Mahsulot turini aniqlaydi. API'dan kelgan mahsulotda bu "aliases" ro'yxatida
+// saqlanadi (admin paneldagi mantiq bilan bir xil), demo mahsulotlarda "kind".
+function productKind(product) {
+  if (product.kind) return product.kind;
+  const aliases = Array.isArray(product.aliases) ? product.aliases : [];
+  if (aliases.includes("drink")) return "drink";
+  if (aliases.includes("fruit")) return "fruit";
+  if (aliases.includes("dessert")) return "dessert";
+  return "food";
+}
 
 // Menyuda bosib tanlangan taomlar: nom -> { id (API'dan kelsa ), name }.
 // id orqali backendga to'g'ridan-to'g'ri yuboriladi — AI kerak emas.
@@ -28,67 +48,75 @@ const selectedMenuItems = new Map();
 document.addEventListener("DOMContentLoaded", init);
 
 async function init() {
-  if (window.location.pathname.endsWith("/menu.html")) {
+  // Har bir qadam — alohida sahifa:
+  //   index.html  → restoran tanlash (qidiruv)
+  //   tables.html → stol tanlash
+  //   menu.html   → menyu + buyurtma
+  const path = window.location.pathname;
+  if (path.endsWith("/menu.html")) {
     await initMenuPage();
     return;
   }
+  if (path.endsWith("/tables.html")) {
+    await initTablesPage();
+    return;
+  }
 
+  // ---------- index.html: restoran tanlash ----------
   const params = new URLSearchParams(window.location.search);
   const businessId = params.get("businessId") || params.get("business");
   const scanBox = document.getElementById("scan-box");
-  const tableSection = document.getElementById("table-section");
+  const searchBox = document.getElementById("search-box");
   const locationNote = document.getElementById("location-note");
   const businessInput = document.getElementById("business-id");
   const restaurantTitle = document.getElementById("restaurant-title");
-  const searchBox = document.getElementById("search-box");
   const searchInput = document.getElementById("restaurant-search");
   const searchResults = document.getElementById("search-results");
 
-  // Yo'l 1: QR/skaner — URL'da businessId bo'lsa, to'g'ridan-to'g'ri o'sha
-  // restoranga o'tadi (qidiruv ko'rinmaydi, faqat stol tanlanadi).
+  // QR/skaner — URL'da businessId bo'lsa, to'g'ridan-to'g'ri stol tanlash
+  // sahifasiga o'tkazib yuboramiz (qidiruv ko'rinmaydi).
   if (businessId) {
-    businessInput.value = businessId;
-    restaurantTitle.textContent = params.get("restaurantName") || `Restoran #${businessId}`;
-    scanBox.hidden = true;
-    searchBox.hidden = true;
-    locationNote.textContent = "Restoran aniqlandi. Stollar ro‘yxati yuklanmoqda...";
-    try {
-      await loadTables(businessId);
-    } catch (error) {
-      document.getElementById("form-message").textContent = error.message;
-    }
+    if (businessInput) businessInput.value = businessId;
+    window.location.href = `tables.html?businessId=${encodeURIComponent(businessId)}`
+      + (params.get("restaurantName") ? `&restaurantName=${encodeURIComponent(params.get("restaurantName"))}` : "");
     return;
   }
 
   // Yo'l 2: QR ishlamagan — nom bo'yicha qidiruv bilan restoranni tanlaydi.
-  // Qidiruv vaqtda (har harfda) ishlaydi; natijadan birini bossa stollar ochiladi.
-  scanBox.hidden = true;
-  searchBox.hidden = false;
-  locationNote.textContent = "Restoranni nomidan toping va stolni tanlang.";
-  restaurantTitle.textContent = "Restoranni tanlang";
+  if (scanBox) scanBox.hidden = true;
+  if (searchBox) searchBox.hidden = false;
+  if (locationNote) locationNote.textContent = "Restoranni tanlang.";
+  if (restaurantTitle) restaurantTitle.textContent = "Restoranni tanlang";
 
   let searchTimer = null;
-  searchInput.addEventListener("input", () => {
-    clearTimeout(searchTimer);
-    searchTimer = setTimeout(() => runRestaurantSearch(searchInput.value.trim()), 250);
-  });
-
-  // QR tugmasi: haqiqiy skaner URL'ni (businessId bilan) brauzerda ochadi.
-  // Bu yerda kamera-skaner o'rnatilmagan, shuning uchun tugma foydalanuvchini
-  // nom bo'yicha qidiruvga yo'naltiradi.
-  const qrButton = document.getElementById("qr-button");
-  if (qrButton) {
-    qrButton.addEventListener("click", () => {
-      locationNote.textContent = "QR ishlamasa, quyida restoranni nomidan toping.";
-      searchInput.focus();
+  if (searchInput) {
+    searchInput.addEventListener("input", () => {
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(() => runRestaurantSearch(searchInput.value.trim()), 250);
+    });
+    // Maydonga bosilganda (fokuslanganda) ro'yxat ochiladi — bo'sh bo'lsa hamma
+    // faol restoranlar, yozilgan bo'lsa shu nom bo'yicha filtr chiqadi.
+    searchInput.addEventListener("focus", () => {
+      clearTimeout(searchTimer);
+      runRestaurantSearch(searchInput.value.trim());
     });
   }
 
-  // Sahifa ochilganda barcha faol restoranlar ko'rsatiladi (bo'sh so'rov).
-  await runRestaurantSearch("");
+  const qrButton = document.getElementById("qr-button");
+  if (qrButton) {
+    qrButton.addEventListener("click", () => {
+      if (locationNote) locationNote.textContent = "QR ishlamasa, quyida restoranni nomidan toping.";
+      if (searchInput) searchInput.focus();
+    });
+  }
+
+  // Sahifa yuklanganda ro'yxat yopiq turadi — faqat foydalanuvchi qidiruv
+  // maydoniga bosganida (focus) hamma restoranlar ro'yxati ochiladi.
 }
 
-// Nom bo'yicha ochiq qidiruv: Business/public/search (token shart emas).
+// Nom bo'yicha ochiq qidiruv: Business/SearchPublicBusinesses/public/search (token shart emas).
+// Diqqat: controller [controller]/[action] konvensiyasida, shuning uchun action
+// nomi (SearchPublicBusinesses) URL'da saqlanishi shart.
 async function runRestaurantSearch(query) {
   const searchResults = document.getElementById("search-results");
   const message = document.getElementById("form-message");
@@ -96,8 +124,8 @@ async function runRestaurantSearch(query) {
   searchResults.innerHTML = `<p class="search-hint">Qidirilmoqda…</p>`;
   try {
     const url = query
-      ? `${API_BASE}/Business/public/search?query=${encodeURIComponent(query)}`
-      : `${API_BASE}/Business/public/search`;
+      ? `${API_BASE}/Business/SearchPublicBusinesses/public/search?query=${encodeURIComponent(query)}`
+      : `${API_BASE}/Business/SearchPublicBusinesses/public/search`;
     const response = await fetch(url);
     if (!response.ok) throw new Error("Restoranlarni yuklab bo‘lmadi.");
     const businesses = await response.json();
@@ -110,7 +138,14 @@ async function runRestaurantSearch(query) {
       const button = document.createElement("button");
       button.type = "button";
       button.className = "search-result";
-      button.innerHTML = `<strong>${escapeHtml(biz.name)}</strong><small>${escapeHtml(biz.address || "Restoran")}</small>`;
+      const initial = escapeHtml((biz.name || "R").trim().charAt(0).toUpperCase());
+      button.innerHTML =
+        `<span class="search-result-icon">${initial}</span>` +
+        `<span class="search-result-body">` +
+        `<strong>${escapeHtml(biz.name)}</strong>` +
+        `<small>${escapeHtml(biz.address || "Restoran")}</small>` +
+        `</span>` +
+        `<span class="search-result-arrow" aria-hidden="true">→</span>`;
       button.addEventListener("click", () => pickRestaurant(biz));
       searchResults.appendChild(button);
     });
@@ -120,28 +155,15 @@ async function runRestaurantSearch(query) {
   }
 }
 
-// Qidiruvdan tanlangan restoran: sarlavha va stollar yangilanadi.
+// Qidiruvdan tanlangan restoran: stol tanlash sahifasiga (tables.html) o'tadi.
 async function pickRestaurant(biz) {
-  const businessInput = document.getElementById("business-id");
-  const restaurantTitle = document.getElementById("restaurant-title");
-  const locationNote = document.getElementById("location-note");
   const searchResults = document.getElementById("search-results");
-  const tableSection = document.getElementById("table-section");
-
-  businessInput.value = biz.id;
-  restaurantTitle.textContent = biz.name;
-  locationNote.textContent = `${biz.name} tanlandi. Stolni tanlang.`;
   if (searchResults) { searchResults.hidden = true; searchResults.innerHTML = ""; }
-  tableSection.hidden = false;
-  try {
-    await loadTables(biz.id);
-    const tableList = document.getElementById("table-list");
-    if (tableList && tableList.children.length === 0) {
-      locationNote.textContent = `${biz.name} — hozircha stol qo‘shilmagan.`;
-    }
-  } catch (error) {
-    document.getElementById("form-message").textContent = error.message;
-  }
+  const params = new URLSearchParams({
+    businessId: String(biz.id),
+    restaurantName: biz.name || `Restoran #${biz.id}`,
+  });
+  window.location.href = `tables.html?${params.toString()}`;
 }
 
 async function loadTables(businessId) {
@@ -184,7 +206,8 @@ function renderTables(tables, businessId) {
 }
 
 async function selectTable(businessId, table, button) {
-  const restaurantName = document.getElementById("restaurant-title")?.textContent || "";
+  // Restoran nomi URL'dan olinadi (index.html'da emas, shu sahifada saqlanmagan).
+  const restaurantName = new URLSearchParams(window.location.search).get("restaurantName") || "";
   const params = new URLSearchParams({
     businessId: String(businessId),
     tableId: String(table.id),
@@ -192,6 +215,37 @@ async function selectTable(businessId, table, button) {
   });
   if (restaurantName) params.set("restaurantName", restaurantName);
   window.location.href = `menu.html?${params.toString()}`;
+}
+
+// ---------- tables.html: stol tanlash (alohida sahifa) ----------
+async function initTablesPage() {
+  const params = new URLSearchParams(window.location.search);
+  const businessId = params.get("businessId");
+  const restaurantName = params.get("restaurantName") || "Restoran";
+  const restaurantTitle = document.getElementById("restaurant-title");
+  const locationNote = document.getElementById("location-note");
+  const businessInput = document.getElementById("business-id");
+
+  if (restaurantTitle) restaurantTitle.textContent = restaurantName;
+  if (businessInput) businessInput.value = businessId || "";
+  if (locationNote) locationNote.textContent = `${restaurantName} · stolni tanlang.`;
+
+  // Restoran tanlanmagan bo'lsa — orqaga, tanlash sahifasiga qaytaramiz.
+  if (!businessId) {
+    if (locationNote) locationNote.textContent = "Avval restoranni tanlang.";
+    window.location.href = "index.html";
+    return;
+  }
+
+  try {
+    await loadTables(businessId);
+    const tableList = document.getElementById("table-list");
+    if (tableList && tableList.children.length === 0 && locationNote) {
+      locationNote.textContent = `${restaurantName} — hozircha stol qo‘shilmagan.`;
+    }
+  } catch (error) {
+    document.getElementById("form-message").textContent = error.message;
+  }
 }
 
 async function initMenuPage() {
@@ -212,6 +266,13 @@ async function initMenuPage() {
   const titleEl = document.getElementById("restaurant-title");
   if (titleEl) titleEl.textContent = restaurantName;
   locationNote.textContent = `${restaurantName} · ${tableName} tanlandi.`;
+
+  // "Stolni almashtirish" linki — shu restoranni stol tanlash sahifasiga qaytaradi.
+  const backLink = document.querySelector(".back-link");
+  if (backLink) {
+    backLink.href = `tables.html?businessId=${encodeURIComponent(businessId)}&restaurantName=${encodeURIComponent(restaurantName)}`;
+    backLink.textContent = "← Stolni almashtirish";
+  }
 
   try {
     await loadMenu(businessId, params.get("demo") === "1");
@@ -238,19 +299,74 @@ async function loadMenu(businessId, isDemo = false) {
 
 function renderMenu(products) {
   const menuList = document.getElementById("menu-list");
+  const tabsWrap = document.getElementById("menu-tabs");
   menuList.innerHTML = "";
+  if (tabsWrap) tabsWrap.innerHTML = "";
   selectedMenuItems.clear();
   updateSelectionSummary();
-  products.filter((product) => product.isAvailable).forEach((product) => {
-    // Button — klaviatura bilan ham bosilsin (Enter/Space), type="submit" emas.
-    const item = document.createElement("button");
-    item.type = "button";
-    item.className = "menu-item";
-    item.dataset.name = product.name;
-    item.setAttribute("aria-pressed", "false");
-    item.innerHTML = `<img src="${product.image || "https://images.unsplash.com/photo-1547592180-85f173990554?auto=format&fit=crop&w=700&q=80"}" alt="${product.name} rasmi"><span class="food-info"><strong>${product.name}</strong><small>Yangi tayyorlangan</small></span><b>${Number(product.price).toLocaleString()} so'm</b><span class="item-check" aria-hidden="true">✓</span>`;
-    item.addEventListener("click", () => toggleMenuSelection(product, item));
-    menuList.appendChild(item);
+
+  // Faqat mavjud (sotiladigan) mahsulotlarni turi bo'yicha bo'limlarga ajratamiz.
+  const available = products.filter((product) => product.isAvailable);
+  const groups = new Map();
+  available.forEach((product) => {
+    const key = productKind(product);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(product);
+  });
+
+  // Faqat bo'sh bo'lmagan bo'limlarni olamiz (tartib MENU_CATEGORIES bo'yicha).
+  const present = MENU_CATEGORIES.filter(({ key }) => (groups.get(key) || []).length > 0);
+  if (present.length === 0) return;
+
+  // Har bir bo'lim uchun: tepada tab tugmasi + panel (yashirin, faqat biri ochiq).
+  present.forEach(({ key, title }, index) => {
+    // Tab tugmasi — bosilganda shu bo'lim ochiladi.
+    if (tabsWrap) {
+      const tab = document.createElement("button");
+      tab.type = "button";
+      tab.className = "menu-tab";
+      tab.dataset.kind = key;
+      tab.setAttribute("role", "tab");
+      tab.setAttribute("aria-selected", index === 0 ? "true" : "false");
+      tab.textContent = title;
+      tab.addEventListener("click", () => setActiveMenuTab(key));
+      tabsWrap.appendChild(tab);
+    }
+
+    // Panel (bo'lim) — mahsulotlar ro'yxati; faqat birinchisi ochiq.
+    const panel = document.createElement("div");
+    panel.className = "menu-panel";
+    panel.dataset.kind = key;
+    panel.hidden = index !== 0;
+
+    const list = document.createElement("div");
+    list.className = "menu-list";
+    (groups.get(key) || []).forEach((product) => {
+      // Button — klaviatura bilan ham bosilsin (Enter/Space), type="submit" emas.
+      const item = document.createElement("button");
+      item.type = "button";
+      item.className = "menu-item";
+      item.dataset.name = product.name;
+      item.setAttribute("aria-pressed", "false");
+      item.innerHTML = `<img src="${product.image || "https://images.unsplash.com/photo-1547592180-85f173990554?auto=format&fit=crop&w=700&q=80"}" alt="${product.name} rasmi"><span class="food-info"><strong>${product.name}</strong><small>Yangi tayyorlangan</small></span><b>${Number(product.price).toLocaleString()} so'm</b><span class="item-check" aria-hidden="true">✓</span>`;
+      item.addEventListener("click", () => toggleMenuSelection(product, item));
+      list.appendChild(item);
+    });
+    panel.appendChild(list);
+    menuList.appendChild(panel);
+  });
+}
+
+// Faqat tanlangan bo'lim (tab) panelini ko'rsatadi. Butun menyu qayta
+// chizilmaydi, shuning uchun tanlangan mahsulotlar tab almashganda saqlanadi.
+function setActiveMenuTab(key) {
+  document.querySelectorAll("#menu-tabs .menu-tab").forEach((tab) => {
+    const active = tab.dataset.kind === key;
+    tab.classList.toggle("active", active);
+    tab.setAttribute("aria-selected", active ? "true" : "false");
+  });
+  document.querySelectorAll("#menu-list .menu-panel").forEach((panel) => {
+    panel.hidden = panel.dataset.kind !== key;
   });
 }
 
@@ -329,11 +445,17 @@ function composeSelectionItems() {
   }));
 }
 
-document.getElementById("entry-form").addEventListener("submit", async (event) => {
+document.getElementById("entry-form")?.addEventListener("submit", async (event) => {
   event.preventDefault();
-  const businessId = document.getElementById("business-id").value;
-  const tableId = document.getElementById("table-id").value;
-  const typedText = document.getElementById("order-text").value.trim();
+  const orderTextEl = document.getElementById("order-text");
+  const tableIdEl = document.getElementById("table-id");
+  const businessIdEl = document.getElementById("business-id");
+  // Bu handler faqat buyurtma sahifasida (menu.html) ishlaydi. Restoran/stol
+  // tanlash sahifalarida order-text/table-id bo'lmagani uchun chiqib ketamiz.
+  if (!orderTextEl || !tableIdEl) return;
+  const businessId = businessIdEl ? businessIdEl.value : "";
+  const tableId = tableIdEl.value;
+  const typedText = orderTextEl.value.trim();
   // Menyudan tanlanganlar strukturali (id bilan), qo'lda yozilgan qism — matn.
   const items = composeSelectionItems();
   const message = document.getElementById("form-message");

@@ -23,6 +23,12 @@ body::before { content: ''; position: fixed; inset: 0; pointer-events: none; opa
 .tables-page .entry-panel, .menu-page .entry-panel { align-self: start; max-width: 1180px; margin: 0 auto; padding: clamp(30px, 5vw, 72px); }
 .tables-page .table-list { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 .menu-page .menu-list { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+/* Menyu sahifasi: chapda scroll bo'luvchi menyu, o'ngda doimiy (sticky) buyurtma
+   qutisi. Menyu o'zi ichkarida aylanadi — butun sahqa tepa/pastga sakramaydi. */
+.menu-page .shell { overflow: visible; }
+.menu-layout { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 28px; align-items: start; }
+.menu-page .menu-section { max-height: calc(100vh - 235px); overflow-y: auto; padding-right: 6px; }
+.order-side { position: sticky; top: 24px; align-self: start; }
 .step-label { color: var(--coral); }
 .panel-heading h2 { margin: 12px 0 8px; font-size: clamp(28px, 4vw, 42px); letter-spacing: -1.5px; line-height: 1.05; }
 .panel-heading p { margin: 0 0 34px; color: var(--muted); font-size: 14px; }
@@ -49,11 +55,15 @@ input:focus, textarea:focus { border-color: var(--green); box-shadow: 0 0 0 3px 
 .search-row { display: grid; }
 .search-row input { width: 100%; padding: 13px 14px; border: 1px solid var(--line); background: white; color: var(--ink); font: inherit; font-size: 14px; }
 .search-row input:focus { outline: none; border-color: var(--green); box-shadow: 0 0 0 2px rgba(29,104,77,.18); }
-.search-results { display: grid; gap: 8px; margin-top: 12px; max-height: 260px; overflow-y: auto; }
-.search-result { display: grid; gap: 3px; padding: 11px 13px; border: 1px solid var(--line); background: white; color: var(--ink); cursor: pointer; text-align: left; font: inherit; transition: border-color .15s, box-shadow .15s; }
-.search-result:hover { border-color: var(--green); box-shadow: 0 0 0 2px rgba(29,104,77,.15); }
-.search-result strong { font-size: 14px; }
-.search-result small { color: var(--muted); font-size: 11px; }
+.search-results { display: grid; gap: 8px; margin-top: 12px; max-height: 320px; overflow-y: auto; }
+.search-result { display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: white; color: var(--ink); cursor: pointer; text-align: left; font: inherit; transition: border-color .15s, box-shadow .15s, background .15s; }
+.search-result:hover { border-color: var(--green); box-shadow: 0 0 0 2px rgba(29,104,77,.15); background: #fbfdfb; }
+.search-result-icon { flex: 0 0 auto; display: grid; place-items: center; width: 38px; height: 38px; border-radius: 9px; background: rgba(29,104,77,.1); color: var(--green); font-size: 16px; font-weight: 700; }
+.search-result-body { display: grid; gap: 2px; flex: 1 1 auto; min-width: 0; }
+.search-result-body strong { font-size: 14px; }
+.search-result-body small { color: var(--muted); font-size: 11px; }
+.search-result-arrow { flex: 0 0 auto; color: var(--muted); font-size: 16px; transition: transform .15s, color .15s; }
+.search-result:hover .search-result-arrow { color: var(--green); transform: translateX(3px); }
 .search-hint { margin: 0; color: var(--muted); font-size: 13px; }
 /* Menyu sahifasidagi restoran nomi sarlavhasi. */
 .menu-page-title { margin-top: 2px; color: var(--green); }
@@ -70,6 +80,15 @@ input:focus, textarea:focus { border-color: var(--green); box-shadow: 0 0 0 3px 
 .table-button:disabled .table-info small { color: var(--coral); }
 .table-button:disabled { cursor: not-allowed; opacity: .5; }
 .menu-heading h3 { margin: 7px 0 12px; font-size: 20px; }
+/* Menyu bo'limlari (tablar): Ovqatlar / Ichimliklar / Mevalar / Shirinliklar.
+   Tepada gorizontal tugmalar — bosilganda shu bo'lim ochiladi. sticky: menyu
+   aylanganda tablar tepada qotib qoladi, pastdagi taomlar ro'yxati suriladi. */
+.menu-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 14px; padding: 8px 4px; position: sticky; top: 0; z-index: 2; background: var(--paper); }
+.menu-tab { border: 1px solid var(--line); background: #fff; color: var(--ink); padding: 9px 20px; border-radius: 999px; font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; transition: border-color .15s, background .15s, color .15s; }
+.menu-tab:hover { border-color: var(--green); color: var(--green); }
+.menu-tab.active { background: var(--green); border-color: var(--green); color: #fff; }
+#menu-list { display: block; }
+.menu-panel[hidden] { display: none; }
 .menu-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .menu-item { display: grid; grid-template-columns: 62px 1fr; grid-template-rows: auto auto; gap: 2px 10px; overflow: hidden; padding: 0 10px 10px 0; border: 1px solid var(--line); background: white; font-size: 12px; position: relative; cursor: pointer; text-align: left; font-family: inherit; color: inherit; transition: border-color .15s, box-shadow .15s; }
 .menu-item:hover { border-color: var(--green); }
@@ -115,7 +134,7 @@ input:focus, textarea:focus { border-color: var(--green); box-shadow: 0 0 0 3px 
 .primary-button:hover { background: #bf5942; }
 .form-message, .voice-note { margin: 3px 0 0; color: var(--muted); font-size: 12px; }
 @media (max-width: 700px) { .shell { grid-template-columns: 1fr; min-height: 100vh; margin: 0; box-shadow: none; } .intro-panel { min-height: 285px; padding: 28px 24px 30px; } .intro-panel h1 { margin: 14px 0 12px; font-size: 43px; } .intro-copy { font-size: 13px; } .entry-panel { padding: 38px 24px 44px; max-width: none; } .panel-heading p { margin-bottom: 24px; } }
-@media (max-width: 900px) { .tables-page .table-list { grid-template-columns: repeat(4, minmax(0, 1fr)); } .menu-page .menu-list { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 900px) { .tables-page .table-list { grid-template-columns: repeat(4, minmax(0, 1fr)); } .menu-page .menu-list { grid-template-columns: repeat(2, minmax(0, 1fr)); } .menu-layout { grid-template-columns: 1fr; gap: 20px; } .menu-page .menu-section { max-height: 60vh; } .order-side { position: static; } }
 @media (max-width: 500px) { .menu-list { grid-template-columns: 1fr; } }
 @media (max-width: 500px) { .table-list, .menu-list { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; } .table-button { grid-template-rows: 72px auto; } .table-button img { height: 72px; } }
 @media (max-width: 380px) { .intro-panel { min-height: 260px; } .intro-panel h1 { font-size: 37px; } .entry-panel { padding-inline: 18px; } }
