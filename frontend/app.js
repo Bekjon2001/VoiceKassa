@@ -295,9 +295,10 @@ async function initMenuPage() {
   locationNote.textContent = `${restaurantName} · ${tableName} tanlandi.`;
 
   // "Stolni almashtirish" linki (yuqoridagi topbar'da) — shu restoranni stol
-  // tanlash sahifasiga qaytaradi. Bu link doim ko'rinadi: foydalanuvchi
-  // xohlagan vaqtda (taom tanlaganda ham, buyurtma yuborilgach ham) stolni
-  // almashtirib, ro'yxatga qayta olishi mumkin.
+  // tanlash sahifasiga qaytaradi. Link FAQAT buyurtma qutisi butunlay bo'sh
+  // bo'lganda ko'rinadi. Qutida taom bo'lsa yoki buyurtma oshxonaga
+  // yuborilgan bo'lsa (stol band) — yashirin qoladi. Buni updateSelectionSummary()
+  // boshqaradi; bu yerda faqat manzil (href) o'rnatiladi.
   const backLink = document.getElementById("menu-back-link");
   if (backLink) {
     backLink.href = `tables.html?businessId=${encodeURIComponent(businessId)}&restaurantName=${encodeURIComponent(restaurantName)}`;
@@ -309,6 +310,10 @@ async function initMenuPage() {
   } catch (error) {
     document.getElementById("form-message").textContent = error.message;
   }
+
+  // Sahifa yangilanganda (refresh) yuborilgan buyurtma cheki yo'qolmasligi
+  // uchun — stolning hozirgi faol buyurtmasini serverdan qayta tiklaymiz.
+  await restoreActiveOrder(businessId, tableId);
 }
 
 async function loadMenu(businessId, isDemo = false) {
@@ -482,6 +487,249 @@ function composeSelectionItems() {
   }));
 }
 
+// Buyurtma yuborilgach mijoz shu sahifada qolsa — oshxona bekor qilganini
+// ko'rishi uchun holatni kuzatamiz (polling). orderSent=true bo'lganda ishlaydi.
+let customerOrderId = null;
+let customerOrderSnapshot = [];
+let customerPollTimer = null;
+
+function stopCustomerPolling() {
+  if (customerPollTimer) { clearInterval(customerPollTimer); customerPollTimer = null; }
+}
+
+function startCustomerPolling(orderId, initialItems) {
+  stopCustomerPolling();
+  customerOrderId = orderId;
+  customerOrderSnapshot = Array.isArray(initialItems) ? initialItems.map(i => ({
+    name: i.productNameSpoken,
+    qty: Number(i.quantity),
+  })) : [];
+  // Har 5 soniyada buyurtma holatini tekshiramiz.
+  customerPollTimer = setInterval(pollCustomerOrder, 5000);
+}
+
+async function pollCustomerOrder() {
+  if (!customerOrderId || !orderSent) { stopCustomerPolling(); return; }
+  const message = document.getElementById("form-message");
+  const statusBox = document.getElementById("order-status");
+  if (!message) return;
+  try {
+    // Controller: [Route("[controller]/[action]")] + GetById action
+    // → /Order/GetById/{orderId}
+    const res = await fetch(`${API_BASE}/Order/GetById/${customerOrderId}`);
+    if (!res.ok) return; // buyurtma hali ko'rinmasa — jim kutamiz
+    const order = await res.json();
+    const status = Number(order.status);
+    const items = Array.isArray(order.items) ? order.items : [];
+
+    // 1) Butun buyurtma bekor qilingan (Cancelled = 3)
+    if (status === 3) {
+      stopCustomerPolling();
+      hidePayActions(); // bekor qilingan buyurtma to'lab bo'lmaydi
+      if (statusBox) {
+        statusBox.hidden = false;
+        statusBox.className = "order-status order-status--cancelled";
+        statusBox.innerHTML = `⚠️ <strong>Buyurtmangiz oshxona tomonidan bekor qilindi.</strong>`
+          + `<br/>Sabab: taom tugagan yoki oshxona qabul qila olmagan bo'lishi mumkin. Iltimos, ofitsiant bilan gaplashing yoki qayta buyurtma bering.`;
+      }
+      return;
+    }
+
+    // 2) Bitta taom o'chirilgan — avvalgi ro'yxatda bor, yangisida yo'q
+    const currentNames = new Set(items.map(i => `${i.productNameSpoken}__${i.quantity}`));
+    const removed = customerOrderSnapshot.filter(s => !currentNames.has(`${s.name}__${s.qty}`));
+    // Miqdori o'zgargan bo'lsa ham (qisman o'chirish) — sodda solishtirish: nom bo'yicha
+    const currentNameOnly = new Set(items.map(i => i.productNameSpoken));
+    const removedByName = customerOrderSnapshot.filter(s => !currentNameOnly.has(s.name));
+
+    if (removedByName.length > 0) {
+      const names = removedByName.map(r => escapeHtml(r.name)).join(", ");
+      if (statusBox) {
+        statusBox.hidden = false;
+        statusBox.className = "order-status order-status--warn";
+        statusBox.innerHTML = `⚠️ <strong>Bekor qilingan taom:</strong> ${names}.`
+          + `<br/>Bu taom tugagan bo'lishi mumkin — qolgan taomlaringiz tayyorlanmoqda.`
+          + (order.totalAmount != null ? `<br/>Yangilangan jami: <strong>${Number(order.totalAmount).toLocaleString("uz-UZ")} so'm</strong>` : "");
+      }
+      // Keyingi polling'da qayta xabar chiqmasligi uchun snapshot'ni yangilaymiz
+      customerOrderSnapshot = items.map(i => ({ name: i.productNameSpoken, qty: Number(i.quantity) }));
+      // Qabul qilingan chek jadvalini ham yangilab qo'yamiz (qatorlar + jami summa)
+      const receiptTable = message.querySelector(".order-items-table tbody");
+      if (receiptTable) {
+        receiptTable.innerHTML = items.map((i) =>
+          `<tr><td class="cell-name">${escapeHtml(i.productNameSpoken)}</td><td class="cell-qty">${i.quantity}</td><td class="cell-sum">${Number(i.lineTotal || 0).toLocaleString("uz-UZ")} so'm</td></tr>`
+        ).join("");
+      }
+      const receiptTotal = message.querySelector(".order-items-table tfoot td:last-child");
+      if (receiptTotal && order.totalAmount != null) {
+        receiptTotal.textContent = `${Number(order.totalAmount).toLocaleString("uz-UZ")} so'm`;
+      }
+    } else if (removed.length > 0) {
+      customerOrderSnapshot = items.map(i => ({ name: i.productNameSpoken, qty: Number(i.quantity) }));
+    }
+  } catch { /* tarmoq uzilsa — keyingi siklda urinib ko'ramiz */ }
+}
+
+// ---------- Faol buyurtmani tiklash (refresh'da chek saqlanadi) ----------
+// Yuborilgan buyurtma ID'si sessionStorage'da saqlanadi (tab yopilsa o'chadi).
+// Asosiy manba — serverdagi ochiq buyurtmalar; sessionStorage faqat
+// buyurtma bekor qilinganini keyingi ochilishda ko'rsatish uchun kerak.
+function activeOrderStorageKey() {
+  const b = document.getElementById("business-id")?.value;
+  const t = document.getElementById("table-id")?.value;
+  return b && t ? `vk_active_order_${b}_${t}` : "";
+}
+
+function saveActiveOrderId(id) {
+  try { const k = activeOrderStorageKey(); if (k) sessionStorage.setItem(k, String(id)); } catch { /* ignore */ }
+}
+
+function readActiveOrderId() {
+  try { const k = activeOrderStorageKey(); return k ? sessionStorage.getItem(k) : null; } catch { return null; }
+}
+
+function clearActiveOrderId() {
+  try { const k = activeOrderStorageKey(); if (k) sessionStorage.removeItem(k); } catch { /* ignore */ }
+}
+
+// ---------- To'lov (mijoz buyurtmani to'liq yopishi) ----------
+// Ochiq buyurtma ko'rsatilganda #order-pay bloki ochiladi; mijoz Naqd/Karta/
+// Onlayn tugmasini bosib /Order/{id}/close orqali buyurtmani yopadi — stol
+// bo'shatiladi va qayta buyurtma berish mumkin.
+function showPayActions() {
+  const box = document.getElementById("order-pay");
+  if (box) box.hidden = false;
+}
+
+function hidePayActions() {
+  const box = document.getElementById("order-pay");
+  if (box) box.hidden = true;
+}
+
+async function payActiveOrder(paymentType) {
+  if (!customerOrderId) return;
+  const statusBox = document.getElementById("order-status");
+  try {
+    // Controller yo'li: [controller]/[action] + [HttpPost("{orderId}/close")]
+    // → /Order/Close/{orderId}/close
+    const res = await fetch(`${API_BASE}/Order/Close/${encodeURIComponent(customerOrderId)}/close`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ paymentType: Number(paymentType) }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || "To'lov bo'yicha xatolik.");
+    stopCustomerPolling();
+    clearActiveOrderId();
+    hidePayActions();
+    orderSent = false; // stol bo'sh — "Stolni almashtirish" back-linki qaytadi
+    updateSelectionSummary();
+    if (statusBox) {
+      statusBox.hidden = false;
+      statusBox.className = "order-status order-status--paid";
+      statusBox.innerHTML = `✅ <strong>To'lov qabul qilindi.</strong> Buyurtma yopildi, stol bo'shatildi.`;
+    }
+    const note = document.querySelector("#form-message .receipt-note");
+    if (note) note.textContent = "To'landi ✅";
+  } catch (error) {
+    if (statusBox) {
+      statusBox.hidden = false;
+      statusBox.className = "order-status order-status--warn";
+      statusBox.textContent = `To'lov amalga oshmadi: ${error.message}`;
+    }
+  }
+}
+
+document.querySelectorAll("#order-pay .pay-btn").forEach((btn) => {
+  btn.addEventListener("click", () => payActiveOrder(Number(btn.dataset.pay)));
+});
+
+// Buyurtmani chek ko'rinishida ko'rsatadi — yuborilgandan KEYIN va sahifa
+// qayta yuklanganda (restoreActiveOrder) ikkala holatda ham shu funksiya ishlaydi.
+function showCustomerReceipt(order) {
+  const items = Array.isArray(order.items) ? order.items : [];
+  // Stol band: "Stolni almashtirish" back-linki yashiriladi, menyu tanlovi tozalanadi.
+  orderSent = true;
+  selectedMenuItems.clear();
+  document.querySelectorAll(".menu-item.selected").forEach((el) => {
+    el.classList.remove("selected");
+    el.setAttribute("aria-pressed", "false");
+  });
+  updateSelectionSummary();
+
+  const message = document.getElementById("form-message");
+  if (!message) return;
+  const total = Number(order.totalAmount || 0);
+  const rows = items.map((i) =>
+    `<tr><td class="cell-name">${escapeHtml(i.productNameSpoken)}</td><td class="cell-qty">${i.quantity}</td><td class="cell-sum">${Number(i.lineTotal || 0).toLocaleString("uz-UZ")} so'm</td></tr>`
+  ).join("");
+  // Oshxona buyurtmani allaqachon olgan bo'lsa (InProgress=1) — boshqacha yozuv.
+  const statusText = Number(order.status) === 1
+    ? "Oshxonada tayyorlanmoqda."
+    : "Oshxonaga yuborildi.";
+  message.innerHTML = `<div class="receipt"><strong>Buyurtma qabul qilindi. №${order.id}</strong>`
+    + (rows ? `<table class="order-items-table"><thead><tr><th>Nomi</th><th>Soni</th><th>Sumasi</th></tr></thead><tbody>${rows}</tbody>`
+      + `<tfoot><tr><td colspan="2">Jami</td><td>${total.toLocaleString("uz-UZ")} so'm</td></tr></tfoot></table>` : "")
+    + `<p class="receipt-note">${statusText}</p></div>`;
+  // Ochiq buyurtmada mijoz to'liq to'lov qila oladi (Naqd/Karta/Onlayn).
+  if (Number(order.status) === 0 || Number(order.status) === 1) showPayActions();
+  else hidePayActions();
+}
+
+// Sahifa yuklanganda stolning faol buyurtmasini topadi va chekni qayta chizadi.
+async function restoreActiveOrder(businessId, tableId) {
+  // 1) Serverdagi ochiq (Open/InProgress) buyurtmalar orqali shu stolni topamiz —
+  //    bu asosiy yo'l: refresh yoki yangi tab ochilsa ham ishlaydi.
+  let active = null;
+  try {
+    const res = await fetch(`${API_BASE}/Order/GetOpen/open/${encodeURIComponent(businessId)}`);
+    if (res.ok) {
+      const orders = await res.json();
+      active = (Array.isArray(orders) ? orders : [])
+        .find(o => String(o.tableId) === String(tableId)) || null;
+    }
+  } catch { /* tarmoq xatosi — 2-bosqichga o'tamiz */ }
+
+  if (active) {
+    showCustomerReceipt(active);
+    saveActiveOrderId(active.id);
+    startCustomerPolling(active.id, active.items);
+    return;
+  }
+
+  // 2) Serverda ochiq buyurtma yo'q — ehtimol u bekor qilingan yoki yopilgan.
+  //    sessionStorage'dagi oxirgi buyurtma orqali holatni ko'rsatamiz.
+  const savedId = readActiveOrderId();
+  if (!savedId) return;
+  try {
+    const res = await fetch(`${API_BASE}/Order/GetById/${encodeURIComponent(savedId)}`);
+    if (!res.ok) { clearActiveOrderId(); return; }
+    const order = await res.json();
+    const status = Number(order.status);
+    if (status === 3) {
+      // Oshxona bekor qilgan — mijoz xabardor qilinadi (chek emas, ogohlantirish).
+      const statusBox = document.getElementById("order-status");
+      if (statusBox) {
+        statusBox.hidden = false;
+        statusBox.className = "order-status order-status--cancelled";
+        statusBox.innerHTML = `⚠️ <strong>Buyurtmangiz oshxona tomonidan bekor qilindi.</strong>`
+          + `<br/>Sabab: taom tugagan yoki oshxona qabul qila olmagan bo'lishi mumkin. Iltimos, ofitsiant bilan gaplashing yoki qayta buyurtma bering.`;
+      }
+      // buyurtma yopilgan/emas — keyingi ochilishda ham shu xabar ko'rinsin,
+      // shuning uchun ID saqlanadi (yangi buyurtma yuborilganda almashtiriladi).
+      hidePayActions();
+    } else if (status === 0 || status === 1) {
+      // Ochiq buyurtma (GetOpen topmagan bo'lsa — masalan tarmoq chigalligi) — chekni tiklaymiz.
+      showCustomerReceipt(order);
+      saveActiveOrderId(order.id);
+      startCustomerPolling(order.id, order.items);
+    } else {
+      // Completed (yopilgan/to'langan) — eski yozuvni tozalaymiz.
+      clearActiveOrderId();
+    }
+  } catch { /* ignore */ }
+}
+
 document.getElementById("entry-form")?.addEventListener("submit", async (event) => {
   event.preventDefault();
   const orderTextEl = document.getElementById("order-text");
@@ -521,24 +769,12 @@ document.getElementById("entry-form")?.addEventListener("submit", async (event) 
     if (!response.ok) throw new Error(result.error || "Buyurtma yuborilmadi.");
     // Buyurtma oshxonaga yuborildi — bu stol endi band. "Stolni almashtirish"
     // back-linki (yuqoridagi topbar'da) endi yashiriladi, ya'ni foydalanuvchi
-    // ro'yxatga qaytib, boshqa stolni tanlay olmaydi.
-    orderSent = true;
-    // Tanlov tozalanadi: menyu belgilari o'chadi, jadval qutidan yo'qoladi.
-    selectedMenuItems.clear();
-    document.querySelectorAll(".menu-item.selected").forEach((el) => {
-      el.classList.remove("selected");
-      el.setAttribute("aria-pressed", "false");
-    });
-    updateSelectionSummary();
-    // Buyurtma qabul qilinganda uning tarkibi jadval ko'rinishida ko'rsatiladi.
-    const total = Number(result.totalAmount || 0);
-    const rows = (Array.isArray(result.items) ? result.items : []).map((i) =>
-      `<tr><td class="cell-name">${escapeHtml(i.productNameSpoken)}</td><td class="cell-qty">${i.quantity}</td><td class="cell-sum">${Number(i.lineTotal || 0).toLocaleString("uz-UZ")} so'm</td></tr>`
-    ).join("");
-    message.innerHTML = `<div class="receipt"><strong>Buyurtma qabul qilindi. №${result.id}</strong>`
-      + (rows ? `<table class="order-items-table"><thead><tr><th>Nomi</th><th>Soni</th><th>Sumasi</th></tr></thead><tbody>${rows}</tbody>`
-        + `<tfoot><tr><td colspan="2">Jami</td><td>${total.toLocaleString("uz-UZ")} so'm</td></tr></tfoot></table>` : "")
-      + `<p class="receipt-note">Oshxonaga yuborildi.</p></div>`;
+    // ro'yxatga qaytib, boshqa stolni tanlay olmaydi. Chek chiziladi va
+    // buyurtma ID'si sessionStorage'ga saqlanadi — refresh'da qayta tiklanadi.
+    showCustomerReceipt(result);
+    saveActiveOrderId(result.id);
+    // Oshxona bekor qilsa — mijoz shu sahifada xabar oladi (5s da bir tekshiruv).
+    startCustomerPolling(result.id, result.items);
   } catch (error) {
     message.textContent = `Buyurtma yuborilmadi: ${error.message}`;
   }

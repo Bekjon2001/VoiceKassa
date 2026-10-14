@@ -33,6 +33,8 @@ button{font-family:inherit}
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:1px solid transparent;border-radius:12px;padding:11px 18px;font-size:14px;font-weight:600;cursor:pointer;transition:.18s ease;line-height:1}
 .btn-primary{background:var(--green);color:#fff;box-shadow:0 8px 18px -10px rgba(19,95,65,.55)}
 .btn-primary:hover{background:var(--green-dark);transform:translateY(-1px)}
+.btn-danger{background:var(--red-soft);border-color:#f0c4bf;color:var(--red)}
+.btn-danger:hover{background:var(--red);border-color:var(--red);color:#fff}
 .btn-ghost{background:#fff;border-color:var(--line);color:var(--ink)}
 .btn-ghost:hover{border-color:var(--green);color:var(--green)}
 .btn-sm{padding:7px 12px;font-size:13px;border-radius:10px}
@@ -62,10 +64,11 @@ button{font-family:inherit}
 /* ---------- Oshxona buyurtmasi: tarkibi jadvali va qabul qilish tugmasi ---------- */
 .kitchen-order .item-body { gap: 4px; }
 .kitchen-order .order-items-table { margin: 6px 0; }
-.kitchen-order .item-end { align-self: center; }
+.kitchen-order .item-end { align-self: center; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+.kitchen-order .cell-act { width: 44px; text-align: right; }
 .kitchen-order .muted { color: var(--muted); }
 /* 3 ustunli buyurtma jadvali (menyu + oshxona bir xil ko'rinish) */
-.order-items-table { width: 100%; border-collapse: collapse; font-size: 13px; background: #fff; border: 1px solid var(--line); border-radius: var(--radius-sm); overflow: hidden; }
+.order-items-table { width: 100%; border-collapse: collapse; font-size: 13px; background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: var(--radius-sm); overflow: hidden; }
 .order-items-table th, .order-items-table td { padding: 8px 11px; text-align: left; border-bottom: 1px solid var(--line); }
 .order-items-table thead th { background: var(--green-soft); color: var(--green-dark); font-size: 11px; letter-spacing: .5px; text-transform: uppercase; }
 .order-items-table .cell-qty { white-space: nowrap; font-variant-numeric: tabular-nums; }
@@ -378,4 +381,11 @@ html[data-theme='dark'] .ai-msg--bot>div:not(.ai-msg__head){background:#1d232b}
 html[data-theme='dark'] .ai-msg__stats{background:#222a33;color:#9aa5b1}
 html[data-theme='dark'] .ai-composer .ctl{background:#1d232b}
 html[data-theme='dark'] .ai-table th{background:#222a33;color:#9aa5b1}
+/* Oshxona buyurtma jadvali (order-items-table) tun rejimda: oq fon qolib ketmasligi uchun */
+html[data-theme='dark'] .order-items-table{background:#1d232b;border-color:#2c333d;color:var(--ink)}
+html[data-theme='dark'] .order-items-table thead th{background:#222a33;color:#9aa5b1}
+html[data-theme='dark'] .order-items-table th,
+html[data-theme='dark'] .order-items-table td{border-bottom-color:#2c333d;color:var(--ink)}
+html[data-theme='dark'] .order-items-table tfoot td{border-top-color:#2c333d;color:var(--ink)}
+html[data-theme='dark'] .kitchen-order .item-body strong{color:var(--ink)}
 

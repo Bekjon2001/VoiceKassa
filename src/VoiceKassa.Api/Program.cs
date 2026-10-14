@@ -79,13 +79,12 @@ if (frontendDir is not null)
     app.UseStaticFiles(new StaticFileOptions { FileProvider = frontendProvider, RequestPath = "/frontend" });
 }
 
-app.UseCors();
-app.UseAuthorization();
-app.MapControllers();
-
 // === So'rov vaqti va marshrutini log qilish ===
 // Har bir HTTP so'rov uchun: method, path, controller/action, status, vaqt.
 // Log: "[12:54:30] GET /Query/SpeakSuper/speak-super → 200 (1.23 s)"
+// Eslatma: bu UseRouting'dan keyin, endpoint ishga tushishidan oldin bo'lishi
+// shart — MapControllers'dan keyin yozilsa hech qachon ishlamaydi.
+app.UseRouting();
 app.Use(async (ctx, next) =>
 {
     var sw = System.Diagnostics.Stopwatch.StartNew();
@@ -111,5 +110,9 @@ app.Use(async (ctx, next) =>
         tokenShort,
         shortRoute);
 });
+
+app.UseCors();
+app.UseAuthorization();
+app.MapControllers();
 
 app.Run();

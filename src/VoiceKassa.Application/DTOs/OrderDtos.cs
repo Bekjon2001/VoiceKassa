@@ -55,6 +55,11 @@ public class CloseOrderRequest
     public PaymentType PaymentType { get; set; }
 }
 
+public class CancelOrderRequest
+{
+    public string? Reason { get; set; }
+}
+
 public class OrderItemResponse
 {
     public long Id { get; set; }

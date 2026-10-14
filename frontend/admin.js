@@ -343,7 +343,7 @@ function renderKitchenOrders() {
     const [label, cls] = kitchenPill(order.status);
     const table = order.tableName || (order.tableId ? `Stol ${order.tableId}` : "—");
     const itemRows = (order.items || []).map(i =>
-      `<tr><td class="cell-name">${esc(i.productNameSpoken)}</td><td class="cell-qty">${i.quantity}</td><td class="cell-sum">${fmtSum(i.lineTotal)} so'm</td></tr>`
+      `<tr><td class="cell-name">${esc(i.productNameSpoken)}</td><td class="cell-qty">${i.quantity}</td><td class="cell-sum">${fmtSum(i.lineTotal)} so'm</td><td class="cell-act"><button class="btn btn-ghost btn-sm" type="button" data-kitchen-remove-item="${i.id}" data-kitchen-order="${order.id}" title="Bu taomni buyurtmadan o'chirish">✕</button></td></tr>`
     ).join("");
     const canStart = Number(order.status) === 0;
     return `<div class="item kitchen-order">
@@ -351,13 +351,14 @@ function renderKitchenOrders() {
         <strong>${esc(table)} — buyurtma №${order.id}</strong>
         <small class="muted">${fmtOrderTime(order.createdAt)} · <span class="pill ${cls}">${label}</span></small>
         <table class="order-items-table">
-          <thead><tr><th>Nomi</th><th>Soni</th><th>Sumasi</th></tr></thead>
+          <thead><tr><th>Nomi</th><th>Soni</th><th>Sumasi</th><th></th></tr></thead>
           <tbody>${itemRows}</tbody>
-          <tfoot><tr><td colspan="2">Jami</td><td>${fmtSum(order.totalAmount)} so'm</td></tr></tfoot>
+          <tfoot><tr><td colspan="2">Jami</td><td colspan="2">${fmtSum(order.totalAmount)} so'm</td></tr></tfoot>
         </table>
       </div>
       <span class="item-end">
         ${canStart ? `<button class="btn btn-primary btn-sm" type="button" data-kitchen-start="${order.id}">Qabul qildim</button>` : ""}
+        <button class="btn btn-danger btn-sm" type="button" data-kitchen-cancel="${order.id}">Bekor qilish</button>
       </span>
     </div>`;
   }).join("");
@@ -366,11 +367,61 @@ function renderKitchenOrders() {
     btn.addEventListener("click", async () => {
       btn.disabled = true;
       try {
+        // Controller: [Route("[controller]/[action]")] + [HttpPost("{orderId:long}/start")]
+        // → /Order/Start/{id}/start
         await api(`/Order/Start/${btn.dataset.kitchenStart}/start`, { method: "POST" });
         flash("Buyurtma oshxonaga qabul qilindi.");
         await loadKitchenOrders();
       } catch (error) {
         flash("Buyurtmani boshlab bo‘lmadi: " + error.message, true);
+        btn.disabled = false;
+      }
+    });
+  });
+
+  listEl.querySelectorAll("[data-kitchen-cancel]").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const orderId = btn.dataset.kitchenCancel;
+      const reasonInput = prompt("Buyurtma bekor qilinmoqda. Sababini yozing (masalan: taom tugadi):", "Taom tugadi");
+      if (reasonInput === null) return; // prompt yopildi — hech narsa qilmaymiz
+      const reason = reasonInput;
+      btn.disabled = true;
+      try {
+        // Controller: [HttpPost("{orderId:long}/cancel")] + action "Cancel"
+        // → /Order/Cancel/{id}/cancel
+        await api(`/Order/Cancel/${orderId}/cancel`, {
+          method: "POST",
+          body: JSON.stringify({ reason }),
+        });
+        flash(`Buyurtma №${orderId} bekor qilindi.`);
+        await loadKitchenOrders();
+      } catch (error) {
+        flash("Bekor qilib bo‘lmadi: " + error.message, true);
+        btn.disabled = false;
+      }
+    });
+  });
+
+  listEl.querySelectorAll("[data-kitchen-remove-item]").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const orderId = btn.dataset.kitchenOrder;
+      const itemId = btn.dataset.kitchenRemoveItem;
+      // Ba'zan API javobi camelCase bo'lmasa ham — bo'sh/undefined id bilan
+      // so'rov yuborilsa ASP.NET 404 qaytaradi. Oldindan tekshiramiz.
+      if (!orderId || !itemId || itemId === "undefined") {
+        flash("O'chirib bo‘lmadi: taom qatori ID topilmadi. Sahifani yangilab qayta urining.", true);
+        return;
+      }
+      if (!confirm("Bu taom buyurtmadan o'chirilsinmi?")) return;
+      btn.disabled = true;
+      try {
+        // Controller: [HttpDelete("{orderId:long}/items/{orderItemId:long}")] + action "RemoveItem"
+        // → /Order/RemoveItem/{orderId}/items/{itemId}
+        await api(`/Order/RemoveItem/${orderId}/items/${itemId}`, { method: "DELETE" });
+        flash("Taom buyurtmadan o'chirildi.");
+        await loadKitchenOrders();
+      } catch (error) {
+        flash("O'chirib bo‘lmadi: " + error.message + " (API qayta ishga tushmagan bo'lsa — dotnet run qiling).", true);
         btn.disabled = false;
       }
     });

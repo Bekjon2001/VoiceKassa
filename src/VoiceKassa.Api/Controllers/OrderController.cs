@@ -52,6 +52,24 @@ public class OrderController : ControllerBase
         return success ? Ok(order) : BadRequest(new { error });
     }
 
+    /// <summary>Oshxona: butun ochiq buyurtmani bekor qiladi (taom tugadi, mijoz
+    /// fikridan qaytdi va h.k.). Body ixtiyoriy: { "reason": "..." }.</summary>
+    [HttpPost("{orderId:long}/cancel")]
+    public async Task<IActionResult> Cancel(long orderId, [FromBody] CancelOrderRequest? request, CancellationToken ct)
+    {
+        var (success, error, order) = await _orderService.CancelOrderAsync(orderId, request, ct);
+        return success ? Ok(order) : BadRequest(new { error });
+    }
+
+    /// <summary>Oshxona: buyurtmadagi bitta qatorni o'chiradi (masalan bitta
+    /// taom tugagan bo'lsa — qolganlari oshxonada qoladi).</summary>
+    [HttpDelete("{orderId:long}/items/{orderItemId:long}")]
+    public async Task<IActionResult> RemoveItem(long orderId, long orderItemId, CancellationToken ct)
+    {
+        var (success, error, order) = await _orderService.RemoveOrderItemAsync(orderId, orderItemId, ct);
+        return success ? Ok(order) : BadRequest(new { error });
+    }
+
     [HttpGet("{orderId:long}")]
     public async Task<IActionResult> GetById(long orderId, CancellationToken ct)
     {

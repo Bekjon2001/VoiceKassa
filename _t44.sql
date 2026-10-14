@@ -1,0 +1,5 @@
+\echo === TABLES for business 44 ===
+SELECT "ID","BUSINESS_ID","NAME","STATUS" FROM voicekassa."TABLES" WHERE "BUSINESS_ID"=44 ORDER BY "ID";
+
+\echo === OPEN ORDER + TABLE for business 44 ===
+SELECT "ID","TABLE_ID","STATUS" FROM voicekassa."ORDERS" WHERE "BUSINESS_ID"=44 AND "STATUS" IN (0,1) ORDER BY "ID";

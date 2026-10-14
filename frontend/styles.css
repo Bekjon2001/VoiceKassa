@@ -5,7 +5,7 @@ html[data-theme='dark'] { color-scheme: dark; }
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
 body { margin: 0; min-width: 320px; color: var(--ink); background-color: #eef2e6; background-image: radial-gradient(1100px 620px at 100% -12%, rgba(233,187,118,.30), transparent 58%), radial-gradient(980px 720px at -12% 112%, rgba(29,104,77,.22), transparent 56%), radial-gradient(760px 520px at 78% 108%, rgba(217,111,83,.16), transparent 60%), linear-gradient(165deg, #f8f4ec 0%, #eff3e6 52%, #e4eadb 100%); background-attachment: fixed; font-family: 'DM Sans', sans-serif; }
-body::before { content: ''; position: fixed; inset: 0; pointer-events: none; opacity: .5; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.32'/%3E%3C/svg%3E"); }
+body::before { content: ''; position: fixed; inset: 0; z-index: 0; pointer-events: none; opacity: .5; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.32'/%3E%3C/svg%3E"); }
 .shell { position: relative; display: grid; grid-template-columns: minmax(280px, .9fr) minmax(360px, 1.1fr); max-width: 1100px; min-height: 680px; margin: 5vh auto; overflow: hidden; background: var(--paper); border-radius: 22px; box-shadow: 0 30px 70px -22px rgba(16, 54, 40, .38), 0 2px 10px rgba(16, 54, 40, .10); }
 .intro-panel { display: flex; flex-direction: column; justify-content: space-between; padding: clamp(30px, 6vw, 72px); background: radial-gradient(520px 320px at 85% 6%, rgba(233,187,118,.20), transparent 60%), linear-gradient(160deg, #22734f 0%, #134c39 100%); color: #f7f4e9; position: relative; overflow: hidden; }
 .intro-panel::after { content: ''; position: absolute; width: 340px; height: 340px; right: -150px; bottom: -130px; border: 1px solid rgba(255,255,255,.25); border-radius: 50%; box-shadow: 0 0 0 34px rgba(255,255,255,.07), 0 0 0 68px rgba(255,255,255,.05); }
@@ -27,9 +27,10 @@ body::before { content: ''; position: fixed; inset: 0; pointer-events: none; opa
 /* Menyu sahifasi: chapda scroll bo'luvchi menyu, o'ngda doimiy (sticky) buyurtma
    qutisi. Menyu o'zi ichkarida aylanadi — butun sahqa tepa/pastga sakramaydi. */
 .menu-page .shell { overflow: visible; }
-/* Yuqoridagi doimiy panel: chapda "Stolni almashtirish", o'ngda kun/tun tugmasi.
-   Sticky — menyu aylanganda ham tepada qotib turadi va foydalanuvchi istalgan
-   paytda stolni almashtirib ro'yxatga qayta oladi. */
+/* Yuqoridagi doimiy panel: chapda "Stolni almashtirish", o'rtada VK brendi,
+   o'ngda kun/tun tugmasi. Sticky — menyu aylanganda ham tepada qotib turadi.
+   "Stolni almashtirish" havolasi FAQAT buyurtma qutisi bo'sh va buyurtma hali
+   yuborilmagan bo'lsa ko'rinadi (quti to'lsa yoki yuborilgach yashiriladi). */
 .menu-topbar {
   position: sticky;
   top: 0;
@@ -53,6 +54,10 @@ body::before { content: ''; position: fixed; inset: 0; pointer-events: none; opa
   white-space: nowrap;
 }
 .menu-back-link:hover { text-decoration: underline; }
+/* Havola yashirilganda (hidden) ham uning joyi saqlanib qolsin — aks holda
+   VK brendi chapga siljib, taom tanlaganda panel sakrab ketadi. Faqat menu
+   sahifasidagi havolaga tegishli. */
+.menu-topbar .menu-back-link[hidden] { display: block !important; visibility: hidden; }
 /* Topbar ichidagi kun/tun tugmasi oqimda (static) turadi — ekran burchagida suzmaydi. */
 .menu-topbar .theme-toggle {
   position: static;
@@ -170,6 +175,24 @@ input:focus, textarea:focus { border-color: var(--green); box-shadow: 0 0 0 3px 
 .primary-button strong { font-size: 22px; font-weight: 400; }
 .primary-button:hover { background: #bf5942; }
 .form-message, .voice-note { margin: 3px 0 0; color: var(--muted); font-size: 12px; }
+/* Mijozga oshxona bekor qilgani haqidagi xabar (menu.html #order-status). */
+.order-status { margin-top: 12px; padding: 12px 14px; border-radius: 12px; font-size: 14px; line-height: 1.6; border: 1px solid #e8b23f; background: #fdf3dd; color: #7a5410; }
+.order-status--cancelled { border-color: #d96f53; background: #fbe9e2; color: #8a3b26; }
+.order-status--warn { border-color: #e8b23f; background: #fdf3dd; color: #7a5410; }
+.order-status--paid { border-color: #7bb07a; background: #eaf5e9; color: #2f6b34; }
+html[data-theme='dark'] .order-status { background: #2a2415; border-color: #8a6d2b; color: #f0d48a; }
+html[data-theme='dark'] .order-status--cancelled { background: #38211b; border-color: #a05a44; color: #f0b6a3; }
+html[data-theme='dark'] .order-status--paid { background: #1d2a1e; border-color: #4c7a4f; color: #9fd3a2; }
+/* Mijoz to'lash bloki (menu.html #order-pay): ochiq buyurtma uchun Naqd/Karta/Onlayn. */
+.order-pay { margin-top: 12px; padding: 12px 14px; border: 1px dashed var(--green); border-radius: 12px; background: #f3f8f2; }
+.order-pay-title { margin: 0 0 8px; font-size: 13px; font-weight: 700; color: var(--ink); }
+.order-pay-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.pay-btn { flex: 1; min-width: 90px; padding: 10px 8px; border: 1px solid var(--green); border-radius: 10px; background: #fff; color: var(--green); font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
+.pay-btn:hover { background: var(--green); color: #fff; }
+html[data-theme='dark'] .order-pay { background: #1c241b; border-color: #4c7a4f; }
+html[data-theme='dark'] .order-pay-title { color: var(--ink); }
+html[data-theme='dark'] .pay-btn { background: #232d22; color: #9fd3a2; border-color: #4c7a4f; }
+html[data-theme='dark'] .pay-btn:hover { background: var(--green); color: #fff; }
 @media (max-width: 700px) { .shell { grid-template-columns: 1fr; min-height: 100vh; margin: 0; box-shadow: none; } .intro-panel { min-height: 285px; padding: 28px 24px 30px; } .intro-panel h1 { margin: 14px 0 12px; font-size: 43px; } .intro-copy { font-size: 13px; } .entry-panel { padding: 38px 24px 44px; max-width: none; } .panel-heading p { margin-bottom: 24px; } }
 @media (max-width: 900px) { .tables-page .table-list { grid-template-columns: repeat(4, minmax(0, 1fr)); } .menu-page .menu-list { grid-template-columns: repeat(2, minmax(0, 1fr)); } .menu-layout { grid-template-columns: 1fr; gap: 20px; } .menu-page .menu-section { max-height: 60vh; } .order-side { position: static; } }
 @media (max-width: 500px) { .menu-list { grid-template-columns: 1fr; } }

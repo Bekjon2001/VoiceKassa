@@ -1,0 +1,5 @@
+﻿/Order/CreateFromVoice/voice
+/Order/Close/{orderId}/close
+/Order/GetOpen/open/{businessId}
+/Order/Start/{orderId}/start
+/Order/GetById/{orderId}

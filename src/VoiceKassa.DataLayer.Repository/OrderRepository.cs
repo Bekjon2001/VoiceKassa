@@ -214,10 +214,119 @@ public class OrderRepository : IOrderRepository
             order.ClosedAt = DateTime.UtcNow;
             order.PaymentType = paymentType;
 
-            if (order.TableId.HasValue)
+            await FreeTableIfNoOpenAsync(order.TableId, order.Id, ct);
+
+            await _db.SaveChangesAsync(ct);
+            await tx.CommitAsync(ct);
+            return (true, null, order);
+        }
+        catch
+        {
+            await tx.RollbackAsync(ct);
+            throw;
+        }
+    }
+
+    public async Task<(bool Success, string? Error, Order? Order)> CancelAtomicallyAsync(
+        long orderId, string? reason, CancellationToken ct = default)
+    {
+        await using var tx = await _db.Database.BeginTransactionAsync(ct);
+        try
+        {
+            var order = await _db.Orders
+                .Include(o => o.Items)
+                .FirstOrDefaultAsync(o => o.Id == orderId, ct);
+
+            if (order is null)
             {
-                var table = await _db.Tables.FindAsync(new object[] { order.TableId.Value }, ct);
-                if (table is not null) table.Status = TableStatus.Free;
+                await tx.RollbackAsync(ct);
+                return (false, "Buyurtma topilmadi.", null);
+            }
+
+            if (order.Status is OrderStatus.Completed or OrderStatus.Cancelled)
+            {
+                await tx.RollbackAsync(ct);
+                return (false, "Buyurtma allaqachon yopilgan.", null);
+            }
+
+            var logReason = string.IsNullOrWhiteSpace(reason)
+                ? "Bekor qilindi (oshxona)"
+                : $"Bekor qilindi (oshxona): {reason.Trim()}";
+            await RestoreStockAsync(order, logReason, ct);
+
+            order.Status = OrderStatus.Cancelled;
+            order.ClosedAt = DateTime.UtcNow;
+
+            await FreeTableIfNoOpenAsync(order.TableId, order.Id, ct);
+
+            await _db.SaveChangesAsync(ct);
+            await tx.CommitAsync(ct);
+            return (true, null, order);
+        }
+        catch
+        {
+            await tx.RollbackAsync(ct);
+            throw;
+        }
+    }
+
+    public async Task<(bool Success, string? Error, Order? Order)> RemoveItemAtomicallyAsync(
+        long orderId, long orderItemId, CancellationToken ct = default)
+    {
+        await using var tx = await _db.Database.BeginTransactionAsync(ct);
+        try
+        {
+            var order = await _db.Orders
+                .Include(o => o.Items)
+                .FirstOrDefaultAsync(o => o.Id == orderId, ct);
+
+            if (order is null)
+            {
+                await tx.RollbackAsync(ct);
+                return (false, "Buyurtma topilmadi.", null);
+            }
+
+            if (order.Status is OrderStatus.Completed or OrderStatus.Cancelled)
+            {
+                await tx.RollbackAsync(ct);
+                return (false, "Buyurtma allaqachon yopilgan.", null);
+            }
+
+            var item = order.Items.FirstOrDefault(i => i.Id == orderItemId);
+            if (item is null)
+            {
+                await tx.RollbackAsync(ct);
+                return (false, "Buyurtma qatori topilmadi.", null);
+            }
+
+            if (item.ProductId.HasValue)
+            {
+                var product = await _db.Products.FindAsync(new object[] { item.ProductId.Value }, ct);
+                if (product?.StockQuantity is not null)
+                {
+                    product.StockQuantity += item.Quantity;
+                    product.UpdatedAt = DateTime.UtcNow;
+                    _db.InventoryTransactions.Add(new InventoryTransaction
+                    {
+                        BusinessId = order.BusinessId,
+                        ProductId = product.Id,
+                        Type = InventoryTransactionType.In,
+                        Quantity = item.Quantity,
+                        Reason = $"Tarkibdan o'chirildi (oshxona): {item.ProductNameSpoken}",
+                        CreatedAt = DateTime.UtcNow,
+                    });
+                }
+            }
+
+            _db.OrderItems.Remove(item);
+            order.Items.Remove(item);
+            order.TotalAmount = order.Items.Sum(i => i.LineTotal);
+
+            if (order.Items.Count == 0)
+            {
+                order.Status = OrderStatus.Cancelled;
+                order.ClosedAt = DateTime.UtcNow;
+                await FreeTableIfNoOpenAsync(order.TableId, order.Id, ct);
             }
 
             await _db.SaveChangesAsync(ct);
@@ -229,5 +338,38 @@ public class OrderRepository : IOrderRepository
             await tx.RollbackAsync(ct);
             throw;
         }
+    }
+
+    private async Task RestoreStockAsync(Order order, string reason, CancellationToken ct)
+    {
+        foreach (var item in order.Items)
+        {
+            if (!item.ProductId.HasValue) continue;
+            var product = await _db.Products.FindAsync(new object[] { item.ProductId.Value }, ct);
+            if (product?.StockQuantity is null) continue;
+
+            product.StockQuantity += item.Quantity;
+            product.UpdatedAt = DateTime.UtcNow;
+            _db.InventoryTransactions.Add(new InventoryTransaction
+            {
+                BusinessId = order.BusinessId,
+                ProductId = product.Id,
+                Type = InventoryTransactionType.In,
+                Quantity = item.Quantity,
+                Reason = reason,
+                CreatedAt = DateTime.UtcNow,
+            });
+        }
+    }
+
+    private async Task FreeTableIfNoOpenAsync(long? tableId, long excludeOrderId, CancellationToken ct)
+    {
+        if (!tableId.HasValue) return;
+        var hasOtherOpen = await _db.Orders.AnyAsync(o =>
+            o.TableId == tableId.Value && o.Id != excludeOrderId &&
+            (o.Status == OrderStatus.Open || o.Status == OrderStatus.InProgress), ct);
+        if (hasOtherOpen) return;
+        var table = await _db.Tables.FindAsync(new object[] { tableId.Value }, ct);
+        if (table is not null) table.Status = TableStatus.Free;
     }
 }

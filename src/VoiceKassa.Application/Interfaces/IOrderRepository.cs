@@ -44,4 +44,15 @@ public interface IOrderRepository
     /// <summary>Faqat Open/InProgress buyurtmani yopadi; ombor va stol bitta tranzaksiyada.</summary>
     Task<(bool Success, string? Error, Order? Order)> CloseAtomicallyAsync(
         long orderId, PaymentType paymentType, CancellationToken ct = default);
+
+    /// <summary>Oshxona: butun ochiq buyurtmani bekor qiladi (Cancelled), omborni
+    /// qaytaradi va stolni bo'shatadi — hammasi bitta tranzaksiyada.</summary>
+    Task<(bool Success, string? Error, Order? Order)> CancelAtomicallyAsync(
+        long orderId, string? reason, CancellationToken ct = default);
+
+    /// <summary>Oshxona: buyurtmadagi bitta qatorni o'chiradi (taom tugadi va h.k.).
+    /// Ombor qaytariladi, jami qayta hisoblanadi. Oxirgi qator o'chsa — buyurtma
+    /// bekor qilinadi va stol bo'shatiladi.</summary>
+    Task<(bool Success, string? Error, Order? Order)> RemoveItemAtomicallyAsync(
+        long orderId, long orderItemId, CancellationToken ct = default);
 }

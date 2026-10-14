@@ -161,6 +161,22 @@ public class OrderService
         return (success, error, order is null ? null : ToOrderResponse(order));
     }
 
+    /// <summary>Oshxona: butun ochiq buyurtmani bekor qiladi (Cancelled).</summary>
+    public async Task<(bool Success, string? Error, OrderResponse? Order)> CancelOrderAsync(
+        long orderId, CancelOrderRequest? request, CancellationToken ct = default)
+    {
+        var (success, error, order) = await _orderRepo.CancelAtomicallyAsync(orderId, request?.Reason, ct);
+        return (success, error, order is null ? null : ToOrderResponse(order));
+    }
+
+    /// <summary>Oshxona: buyurtmadagi bitta qatorni o'chiradi.</summary>
+    public async Task<(bool Success, string? Error, OrderResponse? Order)> RemoveOrderItemAsync(
+        long orderId, long orderItemId, CancellationToken ct = default)
+    {
+        var (success, error, order) = await _orderRepo.RemoveItemAtomicallyAsync(orderId, orderItemId, ct);
+        return (success, error, order is null ? null : ToOrderResponse(order));
+    }
+
     public async Task<OrderResponse?> GetOrderAsync(long orderId, CancellationToken ct = default)
     {
         var order = await _orderRepo.GetByIdAsync(orderId, ct);
