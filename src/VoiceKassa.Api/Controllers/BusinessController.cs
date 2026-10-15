@@ -196,7 +196,13 @@ public class BusinessController : ControllerBase
     public async Task<IActionResult> UpdateTableStatus(long tableId, [FromBody] UpdateTableStatusRequest request, CancellationToken ct)
     {
         var (success, error) = await _businessService.UpdateTableStatusAsync(tableId, request, ct);
-        return success ? NoContent() : NotFound(new { error });
+        if (success) return NoContent();
+        // Faol buyurtma borligi sababli bloklangan bo'lsa — 409 (Conflict),
+        // stol topilmasa — 404 qaytadi. Frontend ikkalasida ham error matnini ko'rsatadi.
+        var statusCode = string.Equals(error, "Bunday stol topilmadi.", StringComparison.Ordinal)
+            ? StatusCodes.Status404NotFound
+            : StatusCodes.Status409Conflict;
+        return StatusCode(statusCode, new { error });
     }
 
     /// <summary>Ega login/parolini restoranni qayta yaratmasdan tiklash (faqat Super Admin).</summary>

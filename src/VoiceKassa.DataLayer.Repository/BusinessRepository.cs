@@ -239,4 +239,13 @@ public class BusinessRepository : IBusinessRepository
         await _db.SaveChangesAsync(ct);
         return true;
     }
+
+    /// <summary>
+    /// Shu stolda hozir ochiq (Open/InProgress) buyurtma bormi — holatni qo'lda
+    /// o'zgartirishni bloklash uchun tekshiriladi. Yopilgan/bekor qilingan
+    /// buyurtmalar hisobga olinmaydi (ular bo'lsa stolni o'zgartirish mumkin).
+    /// </summary>
+    public Task<bool> HasOpenOrderForTableAsync(long tableId, CancellationToken ct = default) =>
+        _db.Orders.AnyAsync(o => o.TableId == tableId &&
+            (o.Status == OrderStatus.Open || o.Status == OrderStatus.InProgress), ct);
 }

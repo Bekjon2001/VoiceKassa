@@ -615,6 +615,43 @@ function selectTable(table) {
 
   // Stol profili alohida sahifada ochiladi
   setOwnerView("table-detail");
+  // Faol buyurtmasi bor stolni tekshirib, Saqlash'ni bloklaymiz
+  updateTableStatusLock(table);
+}
+
+// Stol profili ochilganda: shu stolda faol (Open/InProgress) buyurtma bo'lsa —
+// holatni qo'lda o'zgartirib bo'lmaydi. Select + Saqlash bloklanadi va sababi
+// ko'rsatiladi. Yopilgan/bekor qilingan buyurtma bo'lsa — bloklanmaydi.
+async function updateTableStatusLock(table) {
+  const selectEl = $("table-status-select");
+  const saveBtn = $("table-status-save");
+  let noteEl = $("table-status-lock-note");
+  if (!noteEl) {
+    noteEl = document.createElement("p");
+    noteEl.id = "table-status-lock-note";
+    noteEl.className = "form-message";
+    noteEl.style.margin = "8px 0 0";
+    saveBtn.insertAdjacentElement("afterend", noteEl);
+  }
+  noteEl.textContent = "";
+  noteEl.classList.remove("err");
+  if (selectEl) selectEl.disabled = false;
+  if (saveBtn) saveBtn.disabled = false;
+
+  // Holat hali tanlanmagan bo'lsa ham — profil ochilishi bilan tekshiramiz.
+  let hasActive = Number(table.status) === 1;
+  try {
+    const orders = await api(`/Order/GetOpen/open/${encodeURIComponent(activeBusinessId)}`);
+    hasActive = (Array.isArray(orders) ? orders : [])
+      .some(o => Number(o.tableId) === Number(table.id));
+  } catch { /* API xatosida — tables.status dagi holatni ishlatamiz */ }
+
+  if (!hasActive) return;
+
+  if (selectEl) selectEl.disabled = true;
+  if (saveBtn) saveBtn.disabled = true;
+  noteEl.textContent = "⚠️ Bu stolda faol buyurtma bor (oshxonaga yuborilgan yoki kutilmoqda) — holatni o'zgartirib bo'lmaydi. Avval buyurtmani yoping (to'lov) yoki bekor qiling.";
+  noteEl.classList.add("err");
 }
 
 function renderProducts() {
@@ -881,11 +918,18 @@ async function createTable(name, capacity, image, form) {
   }
 }
 
-// Stol holatini (status) saqlash — detail kartadagi "Saqlash" tugmasi
+// Stol holatini (status) saqlash — detail kartadagi "Saqlash" tugmasi.
+// Faol buyurtmasi bor stol backend'da ham bloklanadi (409) — xabari ko'rsatiladi.
 $("table-status-save").addEventListener("click", async () => {
   const person = findTableById(selectedTableId);
   if (!person || !requireOwner()) return;
   const newStatus = Number($("table-status-select").value);
+  if (newStatus === Number(person.status ?? 0)) {
+    flash("Holat o'zgarmadi — saqlash shart emas.");
+    return;
+  }
+  const saveBtn = $("table-status-save");
+  if (saveBtn) saveBtn.disabled = true;
   try {
     await api(`/Business/UpdateTableStatus/tables/${person.id}/status`, {
       method: "PUT",
@@ -898,6 +942,14 @@ $("table-status-save").addEventListener("click", async () => {
     flash("Stol holati yangilandi.");
   } catch (error) {
     flash("Holatni yangilab bo‘lmadi: " + error.message, true);
+  } finally {
+    // Bloklanmagan stol bo'lsa — tugma qayta yoqiladi; bloklangan bo'lsa
+    // selectTable ichidagi updateTableStatusLock yana o'chiradi.
+    const current = findTableById(selectedTableId);
+    if (current && Number(current.status) !== 1) {
+      const btn = $("table-status-save");
+      if (btn) btn.disabled = false;
+    }
   }
 }); 
 // ---------- CRUD: Mahsulot (taom/ichimlik) ----------

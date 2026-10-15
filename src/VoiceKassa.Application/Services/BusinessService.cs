@@ -409,6 +409,19 @@ public class BusinessService
     public async Task<(bool Success, string? Error)> UpdateTableStatusAsync(
         long tableId, UpdateTableStatusRequest request, CancellationToken ct = default)
     {
+        var table = await _repo.GetTableByIdAsync(tableId, ct);
+        if (table is null) return (false, "Bunday stol topilmadi.");
+
+        // Bir xil holatga qayta saqlash — hech narsani tekshirmaymiz.
+        if (table.Status == request.Status) return (true, null);
+
+        // Muhim qoida: stolda faol (Open/InProgress) buyurtma bo'lsa — holatni
+        // qo'lda o'zgartirib bo'lmaydi. Avval buyurtma yopilishi (to'lov) yoki
+        // bekor qilinishi kerak — shunda OrderRepository stolni o'zi bo'shatadi.
+        // Yopilgan/bekor qilingan buyurtma bo'lsa — o'zgartirishga ruxsat.
+        if (await _repo.HasOpenOrderForTableAsync(tableId, ct))
+            return (false, "Bu stolda faol buyurtma bor (oshxonaga yuborilgan yoki kutilmoqda). Avval buyurtmani yoping yoki bekor qiling — shunda stolni o'zgartira olasiz.");
+
         var updated = await _repo.UpdateTableStatusAsync(tableId, request.Status, ct);
         return updated ? (true, null) : (false, "Bunday stol topilmadi.");
     }

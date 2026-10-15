@@ -526,6 +526,10 @@ async function pollCustomerOrder() {
     if (status === 3) {
       stopCustomerPolling();
       hidePayActions(); // bekor qilingan buyurtma to'lab bo'lmaydi
+      // Bekor qilingan buyurtmaning taomlar ro'yxati o'chiriladi —
+      // faqat ogohlantirish xabari qoladi (customercancel bilan bir xil).
+      const receipt = message.querySelector(".receipt");
+      if (receipt) receipt.remove();
       if (statusBox) {
         statusBox.hidden = false;
         statusBox.className = "order-status order-status--cancelled";
@@ -549,8 +553,18 @@ async function pollCustomerOrder() {
         statusBox.className = "order-status order-status--warn";
         statusBox.innerHTML = `⚠️ <strong>Bekor qilingan taom:</strong> ${names}.`
           + `<br/>Bu taom tugagan bo'lishi mumkin — qolgan taomlaringiz tayyorlanmoqda.`
-          + (order.totalAmount != null ? `<br/>Yangilangan jami: <strong>${Number(order.totalAmount).toLocaleString("uz-UZ")} so'm</strong>` : "");
+          + (order.totalAmount != null ? `<br/>Yangilangan jami: <strong>${Number(order.totalAmount).toLocaleString("uz-UZ")} so'm</strong>` : "")
+          // Oshxona bir taomni o'chirganda mijozdan keyingi qadam so'raladi:
+          // buyurtmaga qo'shishmi yoki butunlay bekor qilishmi.
+          + `<span class="order-status-ask">Buyurtmaga nimadir qo'shasizmi yoki bekor qilasizmi?</span>`
+          + `<span class="order-status-actions">`
+          + `<button type="button" class="status-action-btn status-action-btn--add" id="order-add-more">➕ Yana qo'shish</button>`
+          + `<button type="button" class="status-action-btn status-action-btn--cancel" id="order-cancel-own">❌ Bekor qilish</button>`
+          + `</span>`;
       }
+      // Savol tugmalari — har bir xabar qayta chizilganda qayta ulanadi.
+      document.getElementById("order-add-more")?.addEventListener("click", startAddMoreItems);
+      document.getElementById("order-cancel-own")?.addEventListener("click", cancelOwnOrder);
       // Keyingi polling'da qayta xabar chiqmasligi uchun snapshot'ni yangilaymiz
       customerOrderSnapshot = items.map(i => ({ name: i.productNameSpoken, qty: Number(i.quantity) }));
       // Qabul qilingan chek jadvalini ham yangilab qo'yamiz (qatorlar + jami summa)
@@ -644,12 +658,68 @@ document.querySelectorAll("#order-pay .pay-btn").forEach((btn) => {
   btn.addEventListener("click", () => payActiveOrder(Number(btn.dataset.pay)));
 });
 
+// ---------- Oshxona bir taomni o'chirgandan keyingi savol ----------
+// "Yana qo'shish" — mijoz menyuga qaytadi, tanlaydi va yuborganda backend
+// CreateFromTextAsync mavjud ochiq buyurtmaga (GetOpenOrderByTableAsync)
+// yangi taomlarni QO'SHADI — alohida buyurtma yaratilmaydi.
+function startAddMoreItems() {
+  const statusBox = document.getElementById("order-status");
+  if (statusBox) statusBox.hidden = true; // eski ogohlantirish aralashmasin
+  const menuList = document.getElementById("menu-list");
+  if (menuList) menuList.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+// "Bekor qilish" — mijoz o'z buyurtmasini bekor qiladi: /Order/Cancel/{id}/cancel
+// (sabab bilan) — stol bo'shatiladi, polling to'xtaydi, back-link qaytadi.
+async function cancelOwnOrder() {
+  if (!customerOrderId) return;
+  if (!window.confirm("Buyurtmangiz bekor qilinsinmi? Taomlar tayyorlanishni to'xtatadi.")) return;
+  const statusBox = document.getElementById("order-status");
+  try {
+    // Controller: [HttpPost("{orderId:long}/cancel")] + action "Cancel"
+    // → /Order/Cancel/{orderId}/cancel
+    const res = await fetch(`${API_BASE}/Order/Cancel/${encodeURIComponent(customerOrderId)}/cancel`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reason: "Mijoz bekor qildi" }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || "Bekor qilib bo'lmadi.");
+    stopCustomerPolling();
+    clearActiveOrderId(); // stol bo'sh — yangi buyurtma uchun ID tozalanadi
+    hidePayActions();
+    orderSent = false; // "Stolni almashtirish" back-linki qaytadi
+    updateSelectionSummary();
+    // Chekdagi taomlar ro'yxati ENDI O'CHIRILADI — aks holda bekor qilingan
+    // buyurtmaning ro'yxati joyida qolib ketardi. #form-message ichiga faqat
+    // qisqa xabar qoladi; to'liq xabar #order-status'da ko'rsatiladi.
+    const message = document.getElementById("form-message");
+    if (message) message.textContent = "Buyurtmangiz bekor qilindi ❌";
+    if (statusBox) {
+      statusBox.hidden = false;
+      statusBox.className = "order-status order-status--cancelled";
+      statusBox.innerHTML = `ℹ️ <strong>Buyurtmangiz bekor qilindi.</strong> Stol bo'shatildi — yangi buyurtma bera olasiz.`;
+    }
+  } catch (error) {
+    if (statusBox) {
+      statusBox.hidden = false;
+      statusBox.className = "order-status order-status--warn";
+      statusBox.textContent = `Bekor qilib bo'lmadi: ${error.message}`;
+    }
+  }
+}
+
 // Buyurtmani chek ko'rinishida ko'rsatadi — yuborilgandan KEYIN va sahifa
 // qayta yuklanganda (restoreActiveOrder) ikkala holatda ham shu funksiya ishlaydi.
 function showCustomerReceipt(order) {
   const items = Array.isArray(order.items) ? order.items : [];
   // Stol band: "Stolni almashtirish" back-linki yashiriladi, menyu tanlovi tozalanadi.
   orderSent = true;
+  // Chek qayta chizilganda eski ogohlantirish/savol (taom o'chirilgani va h.k.)
+  // qolmasligi uchun — faqat chek ko'rinadi. To'lov/bekorlik xabarlari alohida
+  // paytlarda (payActiveOrder / cancelOwnOrder) qayta chiziladi.
+  const statusBox = document.getElementById("order-status");
+  if (statusBox) statusBox.hidden = true;
   selectedMenuItems.clear();
   document.querySelectorAll(".menu-item.selected").forEach((el) => {
     el.classList.remove("selected");

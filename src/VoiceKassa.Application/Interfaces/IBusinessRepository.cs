@@ -66,4 +66,8 @@ public interface IBusinessRepository
     Task<List<Table>> GetTablesByBusinessAsync(long businessId, CancellationToken ct = default);
     Task<Table?> GetTableByIdAsync(long tableId, CancellationToken ct = default);
     Task<bool> UpdateTableStatusAsync(long tableId, TableStatus status, CancellationToken ct = default);
+
+    /// <summary>Shu stolda hozir ochiq (Open/InProgress) buyurtma bormi —
+    /// holatni qo'lda o'zgartirishni bloklash uchun tekshiriladi.</summary>
+    Task<bool> HasOpenOrderForTableAsync(long tableId, CancellationToken ct = default);
 }

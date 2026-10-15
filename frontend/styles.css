@@ -193,6 +193,19 @@ html[data-theme='dark'] .order-pay { background: #1c241b; border-color: #4c7a4f;
 html[data-theme='dark'] .order-pay-title { color: var(--ink); }
 html[data-theme='dark'] .pay-btn { background: #232d22; color: #9fd3a2; border-color: #4c7a4f; }
 html[data-theme='dark'] .pay-btn:hover { background: var(--green); color: #fff; }
+/* Oshxona bir taomni o'chirganda mijozga beriladigan savol va tugmalari
+   (menu.html #order-status ichidagi #order-add-more / #order-cancel-own). */
+.order-status-ask { display: block; margin-top: 8px; font-weight: 700; }
+.order-status-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.status-action-btn { flex: 1; min-width: 130px; padding: 9px 10px; border-radius: 10px; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
+.status-action-btn--add { border: 1px solid var(--green); background: #fff; color: var(--green); }
+.status-action-btn--add:hover { background: var(--green); color: #fff; }
+.status-action-btn--cancel { border: 1px solid var(--coral); background: #fff; color: var(--coral); }
+.status-action-btn--cancel:hover { background: var(--coral); color: #fff; }
+html[data-theme='dark'] .status-action-btn--add { background: #232d22; color: #9fd3a2; border-color: #4c7a4f; }
+html[data-theme='dark'] .status-action-btn--add:hover { background: var(--green); color: #fff; }
+html[data-theme='dark'] .status-action-btn--cancel { background: #38211b; color: #f0b6a3; border-color: #a05a44; }
+html[data-theme='dark'] .status-action-btn--cancel:hover { background: var(--coral); color: #fff; }
 @media (max-width: 700px) { .shell { grid-template-columns: 1fr; min-height: 100vh; margin: 0; box-shadow: none; } .intro-panel { min-height: 285px; padding: 28px 24px 30px; } .intro-panel h1 { margin: 14px 0 12px; font-size: 43px; } .intro-copy { font-size: 13px; } .entry-panel { padding: 38px 24px 44px; max-width: none; } .panel-heading p { margin-bottom: 24px; } }
 @media (max-width: 900px) { .tables-page .table-list { grid-template-columns: repeat(4, minmax(0, 1fr)); } .menu-page .menu-list { grid-template-columns: repeat(2, minmax(0, 1fr)); } .menu-layout { grid-template-columns: 1fr; gap: 20px; } .menu-page .menu-section { max-height: 60vh; } .order-side { position: static; } }
 @media (max-width: 500px) { .menu-list { grid-template-columns: 1fr; } }
