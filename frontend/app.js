@@ -770,7 +770,9 @@ async function restoreActiveOrder(businessId, tableId) {
   //    bu asosiy yo'l: refresh yoki yangi tab ochilsa ham ishlaydi.
   let active = null;
   try {
-    const res = await fetch(`${API_BASE}/Order/GetOpen/open/${encodeURIComponent(businessId)}`);
+    const res = await fetch(`${API_BASE}/Order/GetOpen/open/${encodeURIComponent(businessId)}`, {
+      headers: tableTokenHeaders(),
+    });
     if (res.ok) {
       const orders = await res.json();
       active = (Array.isArray(orders) ? orders : [])
@@ -790,7 +792,9 @@ async function restoreActiveOrder(businessId, tableId) {
   const savedId = readActiveOrderId();
   if (!savedId) return;
   try {
-    const res = await fetch(`${API_BASE}/Order/GetById/${encodeURIComponent(savedId)}`);
+    const res = await fetch(`${API_BASE}/Order/GetById/${encodeURIComponent(savedId)}`, {
+      headers: tableTokenHeaders(),
+    });
     if (!res.ok) { clearActiveOrderId(); return; }
     const order = await res.json();
     const status = Number(order.status);
@@ -845,7 +849,7 @@ document.getElementById("entry-form")?.addEventListener("submit", async (event) 
   try {
     const response = await fetch(`${API_BASE}/Order/CreateFromVoice/voice`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: Object.assign({ "Content-Type": "application/json" }, tableTokenHeaders()),
       body: JSON.stringify({
         businessId: Number(businessId),
         tableId: Number(tableId),

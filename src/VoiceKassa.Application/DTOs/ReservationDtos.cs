@@ -21,6 +21,9 @@ public class CreateReservationRequest
 
     public string? CustomerName { get; set; }
     public string? CustomerPhone { get; set; }
+
+    /// <summary>Mehmonlar soni (stol sig'imidan oshsa ogohlantirish beriladi, lekin bron bloklanmaydi).</summary>
+    public int GuestCount { get; set; } = 1;
 }
 
 /// <summary>Joyida bron (walk-in): mijoz hozir stolga o'tirdi — sana bugun.</summary>
@@ -69,5 +72,9 @@ public class ReservationResponse
 
     /// <summary>Mijoz hozir sessiya ochganmi (token mavjudmi).</summary>
     public bool HasActiveSession { get; set; }
+
+    /// <summary>Ogohlantirish (masalan: mehmonlar soni stol sig'imidan ortiq).</summary>
+    public string? Warning { get; set; }
+
     public DateTime CreatedAt { get; set; }
 }

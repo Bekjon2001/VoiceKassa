@@ -32,6 +32,12 @@ public class ReservationService
         var (timeOk, timeError) = ValidateTimes(request.StartTime, request.EndTime);
         if (!timeOk) return (false, timeError, null);
 
+        // Majburiy maydonlar: ism va telefon bo'sh bo'lmasa kerak.
+        if (string.IsNullOrWhiteSpace(request.CustomerName))
+            return (false, "Ism bo'sh bo'lishi mumkin emas.", null);
+        if (string.IsNullOrWhiteSpace(request.CustomerPhone))
+            return (false, "Telefon raqam bo'sh bo'lishi mumkin emas.", null);
+
         // UNIQUE(BUSINESS_ID, TABLE_ID, BOOKING_DATE) — bir stolga bir sanada bitta bron.
         if (await _repo.HasActiveForTableOnDateAsync(table!.Id, bookingDate, ct))
             return (false, "Bu stol shu sanaga allaqachon bron qilingan.", null);
@@ -44,14 +50,20 @@ public class ReservationService
             BookingDate = bookingDate,
             StartTime = request.StartTime,
             EndTime = request.EndTime,
-            CustomerName = Normalize(request.CustomerName),
-            CustomerPhone = Normalize(request.CustomerPhone),
+            CustomerName = Normalize(request.CustomerName)!,
+            CustomerPhone = Normalize(request.CustomerPhone)!,
             Code = code,
             Status = ReservationStatus.Waiting,
             CreatedAt = DateTime.UtcNow,
         };
         await _repo.AddAsync(reservation, ct);
-        return (true, null, ToResponse(reservation, table.Name));
+
+        // Mehmonlar soni stol sig'imidan oshsa — ogohlantirish, lekin bronni bloklamaydi.
+        string? warning = null;
+        if (request.GuestCount > table.Capacity)
+            warning = $"E'tibor bering: mehmonlar soni ({request.GuestCount}) stollar sig'imidan ({table.Capacity}) ortiq.";
+
+        return (true, null, ToResponse(reservation, table.Name, warning));
     }
 
     /// <summary>
@@ -211,6 +223,32 @@ public class ReservationService
         return result;
     }
 
+    /// <summary>
+    /// Mijoz uchun: berilgan sanada bronda bo'lmagan (faol bron yoki ochiq
+    /// buyurtma yo'q) va sig'imi yetishadigan stollar. Token shart emas.
+    /// </summary>
+    public async Task<List<TableResponse>> GetAvailableTablesAsync(
+        long businessId, DateTime bookingDate, int minGuests, CancellationToken ct = default)
+    {
+        var tables = await _businessRepo.GetTablesByBusinessAsync(businessId, ct);
+        var date = bookingDate.Date;
+        var result = new List<TableResponse>();
+        foreach (var table in tables)
+        {
+            if (table.Capacity < minGuests) continue;
+            if (!await _repo.IsTableFreeAsync(table.Id, date, ct)) continue;
+            result.Add(new TableResponse
+            {
+                Id = table.Id,
+                BusinessId = table.BusinessId,
+                Name = table.Name,
+                Capacity = table.Capacity,
+                Status = table.Status,
+            });
+        }
+        return result.OrderBy(t => t.Name).ToList();
+    }
+
     // ---------- Yordamchi metodlar ----------
 
     private async Task<(bool Ok, string? Error, Table? Table, DateTime BookingDate)> ValidateTableAndDateAsync(
@@ -254,7 +292,7 @@ public class ReservationService
         throw new InvalidOperationException("Bron kodini generatsiya qilib bo'lmadi — qayta urinib ko'ring.");
     }
 
-    private static ReservationResponse ToResponse(Reservation r, string tableName) => new()
+    private static ReservationResponse ToResponse(Reservation r, string tableName, string? warning = null) => new()
     {
         Id = r.Id,
         BusinessId = r.BusinessId,
@@ -268,6 +306,7 @@ public class ReservationService
         Code = r.Code,
         Status = r.Status,
         HasActiveSession = !string.IsNullOrEmpty(r.SessionToken),
+        Warning = warning,
         CreatedAt = r.CreatedAt,
     };
 }

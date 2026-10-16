@@ -45,6 +45,7 @@ const VIEW_TITLES = {
   shop: ["Do‘kon", "Tovarlar, narxlar va sotuvlar shu bo‘limda boshqariladi."],
   organization: ["Tashkilot", "Umumiy tashkilot ma’lumotlari shu bo‘limda boshqariladi."],
   ai: ["AI yordamchi", "Jarvis — ovozli buyruqlar va savollar (faqat sizning biznesingiz haqida)."],
+  reservations: ["Bronlar", "Stol bronlarini boshqaring."],
 };
 const ROLE_NAMES = { 0: "Ega", 1: "Menejer", 2: "Kassir", 3: "Ofitsiant", 4: "Oshpaz" };
 const ROLE_META = {
@@ -57,7 +58,7 @@ const ROLE_META = {
 const STAFF_VIEWS = ["staff", "tables", "kitchen", "meals"];
 // Restoran guruhiga tegishli barcha ko‘rinishlar (flyout bo‘limlari + ularning qo'shish/profil sahifalari)
 const RESTAURANT_VIEWS = [...STAFF_VIEWS, "staff-detail", "table-detail", "staff-add", "table-add",
-  "meals-food", "meals-drink", "meals-fruit", "meals-dessert", "meals-add"];
+  "meals-food", "meals-drink", "meals-fruit", "meals-dessert", "meals-add", "reservations"];
 // Menyu kategoriyalari — "Ovqatlar" flyout bo'limlari
 const MEALS_VIEWS = ["meals-food", "meals-drink", "meals-fruit", "meals-dessert", "meals-add"];
 
@@ -475,6 +476,8 @@ function setOwnerView(view) {
 
   // Oxirgi ochilgan sahifani yodda saqlash (refresh'da ham o'sha sahifa ochiladi)
   try { sessionStorage.setItem(VIEW_STORAGE_KEY, view); } catch { /* ignore */ }
+
+  if (view === "reservations") setupReservations();
 }
 
 // Refresh'da o'sha sahifa ochilib qolishi uchun eslab qolingan ko'rinishni tiklash.
@@ -1725,5 +1728,138 @@ if (aiChatEl && !aiChatEl.children.length) {
   aiAddMessage("bot",
     "Salom! Men Jarvis — sizning yordamchingizman. Ovozli buyruqlar uchun pastdagi Jarvis switchni yoqing yoki 🎤 ni bosing. " +
     "Masalan: “stollarni och”, “yangi xodim qo‘sh”, “bugun qancha savdo bo‘ldi?”");
+}
+// ---------- Bronlar (admin panel) ----------
+let selectedReservationTableId = null;
+
+function setupReservations() {
+  const form = $("reservation-form");
+  const dateInput = $("res-date");
+  const guestsInput = $("res-guests");
+  const chips = $("available-tables");
+  const message = $("reservation-message");
+  const listBody = $("reservation-list");
+  if (!form) return;
+
+  dateInput.addEventListener("change", async () => {
+    const date = dateInput.value;
+    if (!date) return;
+    selectedReservationTableId = null;
+    chips.innerHTML = "";
+    listBody.innerHTML = "";
+    message.textContent = "";
+    await loadAvailableAndReservations(Number(activeBusinessId), date, Number(guestsInput.value || 1));
+  });
+
+  guestsInput.addEventListener("change", async () => {
+    const date = dateInput.value;
+    if (!date) return;
+    selectedReservationTableId = null;
+    chips.innerHTML = "";
+    await loadAvailableAndReservations(Number(activeBusinessId), date, Number(guestsInput.value || 1));
+  });
+
+  form.addEventListener("submit", async event => {
+    event.preventDefault();
+    if (!requireOwner()) return;
+    const date = dateInput.value;
+    const guests = Number(guestsInput.value || 1);
+    const name = $("res-name") ? $("res-name").value.trim() : "";
+    const phone = $("res-phone") ? $("res-phone").value.trim() : "";
+    const start = $("res-start") ? ($("res-start").value || null) : null;
+    const end = $("res-end") ? ($("res-end").value || null) : null;
+    if (!date) { setMsg(message, "Sanani tanlang.", "err"); return; }
+    if (!name) { setMsg(message, "Ism majburiy.", "err"); return; }
+    if (!phone) { setMsg(message, "Telefon raqami majburiy.", "err"); return; }
+    if (!selectedReservationTableId) { setMsg(message, "Avval bo'sh stollardan birini tanlang.", "err"); return; }
+
+    message.textContent = "Bron yaratilmoqda...";
+    try {
+      await api("/Reservation/create", {
+        method: "POST",
+        headers: { "X-Owner-Token": ownerToken },
+        body: JSON.stringify({
+          businessId: Number(activeBusinessId),
+          tableId: selectedReservationTableId,
+          bookingDate: date,
+          startTime: start,
+          endTime: end,
+          customerName: name,
+          customerPhone: phone,
+          guestCount: guests,
+        }),
+      });
+      if ($("res-guests")) $("res-guests").value = guests;
+      selectedReservationTableId = null;
+      if (chips) chips.innerHTML = "";
+      message.textContent = "Bron yaratildi.";
+      await loadAvailableAndReservations(Number(activeBusinessId), date, guests);
+    } catch (error) {
+      message.textContent = "Bronni yaratib bo'lmadi: " + error.message;
+    }
+  });
+}
+
+async function loadAvailableAndReservations(businessId, date, guests) {
+  const chips = $("available-tables");
+  const listBody = $("reservation-list");
+  const message = $("reservation-message");
+  try {
+    const tables = await api(`/Reservation/available?businessId=${encodeURIComponent(businessId)}&date=${encodeURIComponent(date)}&guests=${encodeURIComponent(guests)}`, {
+      headers: { "X-Owner-Token": ownerToken },
+    });
+    renderAvailableTables(tables || []);
+  } catch (error) {
+    chips.innerHTML = `<span style="color:var(--red)">${error.message}</span>`;
+  }
+  try {
+    const list = await api(`/Reservation/list/${encodeURIComponent(businessId)}?bookingDate=${encodeURIComponent(date)}`, {
+      headers: { "X-Owner-Token": ownerToken },
+    });
+    renderReservations(list || []);
+  } catch (error) {
+    message.textContent = "Bronlar ro'yxatini yuklab bo'lmadi: " + error.message;
+  }
+}
+
+function renderAvailableTables(tables) {
+  const chips = $("available-tables");
+  if (!chips) return;
+  chips.innerHTML = "";
+  if (!tables.length) {
+    chips.innerHTML = "<span style='color:var(--muted);font-size:0.9rem'>Bu sanada mavjud bo'sh stol yo'q.</span>";
+    return;
+  }
+  tables.forEach(t => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "chip";
+    btn.textContent = `${t.name} (${t.capacity} kishi)`;
+    btn.title = `Sig'imi: ${t.capacity}`;
+    btn.addEventListener("click", () => {
+      document.querySelectorAll("#available-tables .chip").forEach(c => c.classList.remove("chip--active"));
+      btn.classList.add("chip--active");
+      selectedReservationTableId = t.id;
+    });
+    chips.appendChild(btn);
+  });
+}
+
+function renderReservations(list) {
+  const body = $("reservation-list");
+  if (!body) return;
+  body.innerHTML = "";
+  if (!list.length) {
+    body.innerHTML = "<tr><td colspan=\"7\" style=\"text-align:center;color:var(--muted)\">Bu sana uchun bronlar yo'q.</td></tr>";
+    return;
+  }
+  const statusText = { 0: "Kutilmoqda", 1: "Keldi", 2: "Yopilgan", 3: "Bekor" };
+  const statusColor = { 0: "#1e7a55", 1: "#1e7a55", 2: "#b3771f", 3: "#bb3a30" };
+  list.forEach(r => {
+    const tr = document.createElement("tr");
+    const st = Number(r.status ?? 0);
+    tr.innerHTML = `<td>${fmtDate(r.bookingDate)}</td><td>${r.tableName}</td><td>${r.customerName || "—"}</td><td>${r.customerPhone || "—"}</td><td>${r.guestCount ?? "—"}</td><td style="letter-spacing:2px;font-family:monospace">${r.code}</td><td><span style="display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:600;color:${statusColor[st] ?? '#667085'}">${statusText[st] ?? st}</span></td>`;
+    body.appendChild(tr);
+  });
 }
 

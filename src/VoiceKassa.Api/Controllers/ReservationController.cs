@@ -103,4 +103,16 @@ public class ReservationController : ControllerBase
         var (success, error, reservation) = await _reservationService.RegenerateCodeAsync(reservationId, ct);
         return success ? Ok(reservation) : BadRequest(new { error });
     }
+
+    /// <summary>
+    /// Mijoz uchun: berilgan sanada bronda bo'lmagan va sig'imi yetishadigan stollar.
+    /// (Token shart emas — QR/skaner yoki menyudan stol tanlash uchun.)
+    /// </summary>
+    [HttpGet("available")]
+    public async Task<IActionResult> GetAvailable(
+        [FromQuery] long businessId, [FromQuery] DateTime date, [FromQuery] int guests = 1, CancellationToken ct = default)
+    {
+        var list = await _reservationService.GetAvailableTablesAsync(businessId, date, guests, ct);
+        return Ok(list);
+    }
 }

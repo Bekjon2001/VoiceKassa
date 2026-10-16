@@ -63,6 +63,7 @@
               <button class="nav-item sub" type="button" data-owner-view="staff"><span class="icon-chip">👤</span><span>Xodimlar</span></button>
               <button class="nav-item sub" type="button" data-owner-view="tables"><span class="icon-chip">▰</span><span>Stollar</span></button>
               <button class="nav-item sub" type="button" data-owner-view="kitchen"><span class="icon-chip">🍳</span><span>Oshxona</span></button>
+              <button class="nav-item sub" type="button" data-owner-view="reservations"><span class="icon-chip">📅</span><span>Bronlar</span></button>
               <div class="nav-group nav-group--nested" data-owner-group="meals">
                 <button class="nav-item sub" type="button" data-owner-toggle="meals"><span class="icon-chip">🍽</span><span>Ovqatlar</span><b class="chev">▸</b></button>
                 <div class="subnav">
@@ -413,6 +414,40 @@
             </div>
           </article>
         </div>
+
+        <!-- ======================= BRONLAR ======================= -->
+        <section class="cards-grid" data-owner-panel="reservations" hidden>
+          <article class="card card--wide">
+            <div class="card-head"><div>
+              <span class="step-label">BRONLAR</span><h3>Stol bronlarini boshqaring</h3>
+              <p class="sub">Admin sifatida stolni bron qiling: sana, mehmonlar soni, mijoz ismi va telefoni majburiy. Bo'sh stollar ro'yxatidan tanlanadi.</p>
+            </div></div>
+            <div class="table-wrap">
+              <form id="reservation-form" novalidate>
+                <div class="field-row" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">
+                  <div class="field" style="min-width:150px"><label>Bron sanasi (yyyy-MM-dd)</label><input class="ctl" id="res-date" type="date" required /></div>
+                  <div class="field" style="min-width:130px"><label>Mehmonlar soni</label><input class="ctl" id="res-guests" type="number" min="1" value="1" required /></div>
+                  <div class="field" style="min-width:200px"><label>Mijoz ismi (majburiy)</label><input class="ctl" id="res-name" placeholder="Ism Familya" required /></div>
+                  <div class="field" style="min-width:200px"><label>Telefon raqami (majburiy)</label><input class="ctl" id="res-phone" placeholder="+998 90 123 45 67" required /></div>
+                </div>
+                <div class="field-row" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">
+                  <div class="field" style="min-width:200px"><label>Boshlanish vaqti (ixtiyoriy)</label><input class="ctl" id="res-start" type="time" /></div>
+                  <div class="field" style="min-width:200px"><label>Tugash vaqti (ixtiyoriy)</label><input class="ctl" id="res-end" type="time" /></div>
+                </div>
+                <div class="field" style="margin-bottom:10px"><label>Mavjud bo'sh stollar</label><div id="available-tables" class="chip-group"></div></div>
+                <p class="form-message" id="reservation-message"></p>
+                <button class="btn btn-primary btn-block" type="submit" id="reservation-submit">Bronni yaratish →</button>
+              </form>
+              <div style="margin-top:16px">
+                <h4 style="margin:0 0 8px">Sana bo'yicha bronlar</h4>
+                <table class="data-table">
+                  <thead><tr><th>Sana</th><th>Stol</th><th>Mijoz</th><th>Tel</th><th>Mehmonlar</th><th>Kod</th><th>Holati</th></tr></thead>
+                  <tbody id="reservation-list"></tbody>
+                </table>
+              </div>
+            </div>
+          </article>
+        </section>
 
         <!-- ======================= AI YORDAMCHI (ovozli) ======================= -->
         <section class="cards-grid" data-owner-panel="ai" hidden>
