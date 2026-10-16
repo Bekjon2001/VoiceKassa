@@ -1775,7 +1775,7 @@ function setupReservations() {
 
     message.textContent = "Bron yaratilmoqda...";
     try {
-      await api("/Reservation/create", {
+      await api("/Reservation/Create/create", {
         method: "POST",
         headers: { "X-Owner-Token": ownerToken },
         body: JSON.stringify({
@@ -1805,7 +1805,7 @@ async function loadAvailableAndReservations(businessId, date, guests) {
   const listBody = $("reservation-list");
   const message = $("reservation-message");
   try {
-    const tables = await api(`/Reservation/available?businessId=${encodeURIComponent(businessId)}&date=${encodeURIComponent(date)}&guests=${encodeURIComponent(guests)}`, {
+    const tables = await api(`/Reservation/GetAvailable/available?businessId=${encodeURIComponent(businessId)}&date=${encodeURIComponent(date)}&guests=${encodeURIComponent(guests)}`, {
       headers: { "X-Owner-Token": ownerToken },
     });
     renderAvailableTables(tables || []);
@@ -1813,7 +1813,7 @@ async function loadAvailableAndReservations(businessId, date, guests) {
     chips.innerHTML = `<span style="color:var(--red)">${error.message}</span>`;
   }
   try {
-    const list = await api(`/Reservation/list/${encodeURIComponent(businessId)}?bookingDate=${encodeURIComponent(date)}`, {
+    const list = await api(`/Reservation/GetList/list/${encodeURIComponent(businessId)}?bookingDate=${encodeURIComponent(date)}`, {
       headers: { "X-Owner-Token": ownerToken },
     });
     renderReservations(list || []);
