@@ -15,6 +15,7 @@ public class AppDbContext : DbContext
     public DbSet<Table> Tables => Set<Table>();
     public DbSet<Order> Orders => Set<Order>();
     public DbSet<OrderItem> OrderItems => Set<OrderItem>();
+    public DbSet<Reservation> Reservations => Set<Reservation>();
     public DbSet<InventoryTransaction> InventoryTransactions => Set<InventoryTransaction>();
     public DbSet<RestaurantOwner> RestaurantOwners => Set<RestaurantOwner>();
     public DbSet<UserAccount> UserAccounts => Set<UserAccount>();
@@ -43,6 +44,15 @@ public class AppDbContext : DbContext
         {
             e.HasIndex(x => new { x.BusinessId, x.CreatedAt });
             e.HasIndex(x => new { x.BusinessId, x.Status });
+            e.HasIndex(x => x.ReservationId);
+        });
+
+        modelBuilder.Entity<Reservation>(e =>
+        {
+            // Bir stolga bir sanada faqat bitta bron (SQL fayldagi UNIQUE bilan bir xil).
+            e.HasIndex(x => new { x.BusinessId, x.TableId, x.BookingDate }).IsUnique();
+            // 6 raqamli kod butun tizimda yagona — takrorlanmasligi shart.
+            e.HasIndex(x => x.Code).IsUnique();
         });
 
         modelBuilder.Entity<Staff>(e =>

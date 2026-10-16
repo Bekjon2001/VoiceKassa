@@ -30,6 +30,34 @@ const MENU_CATEGORIES = [
   { key: "dessert", title: "Shirinliklar" },
 ];
 
+// ---------- Bron sessiyasi (kod bilan kirish) ----------
+// enter'dan kelgan SESSION_TOKEN localStorage'da saqlanadi (sessionStorage
+// emas — tab yopilsa ham qoladi; stol hisobi yopilganda server tomonidan
+// bekor qilinadi). Barcha mijoz fetch'lari shu token bilan X-Table-Token
+// headerini yuboradi — server faqat o'z stoliga ruxsat beradi.
+const TABLE_SESSION_KEY = "vk_table_session";
+
+function saveTableSession(session) {
+  try { localStorage.setItem(TABLE_SESSION_KEY, JSON.stringify(session)); } catch { /* ignore */ }
+}
+
+function loadTableSession() {
+  try {
+    const raw = localStorage.getItem(TABLE_SESSION_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+
+function clearTableSession() {
+  try { localStorage.removeItem(TABLE_SESSION_KEY); } catch { /* ignore */ }
+}
+
+// Mijoz fetch'lari uchun X-Table-Token (sessiya bo'lmasa — bo'sh obyekt).
+function tableTokenHeaders() {
+  const session = loadTableSession();
+  return session && session.token ? { "X-Table-Token": session.token } : {};
+}
+
 // Mahsulot turini aniqlaydi. API'dan kelgan mahsulotda bu "aliases" ro'yxatida
 // saqlanadi (admin paneldagi mantiq bilan bir xil), demo mahsulotlarda "kind".
 function productKind(product) {
@@ -193,119 +221,107 @@ async function pickRestaurant(biz) {
   window.location.href = `tables.html?${params.toString()}`;
 }
 
-async function loadTables(businessId) {
-  const tableList = document.getElementById("table-list");
-  const tableSection = document.getElementById("table-section");
-  const response = await fetch(`${API_BASE}/Business/GetTables/${encodeURIComponent(businessId)}/tables`);
-
-  if (!response.ok) {
-    throw new Error("Stollar ro‘yxatini yuklab bo‘lmadi.");
-  }
-
-  const tables = await response.json();
-  tableList.innerHTML = "";
-  tables.forEach((table) => {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "table-button";
-    button.innerHTML = `<img src="${table.image || "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=500&q=80"}" alt="${table.name || `Stol ${table.id}`} rasmi"><span class="table-info"><strong>${table.name || `Stol ${table.id}`}</strong><small>${table.status === 0 ? "Bo'sh" : "Band"}</small></span>`;
-    button.disabled = table.status !== 0;
-    button.addEventListener("click", () => selectTable(businessId, table, button));
-    tableList.appendChild(button);
-  });
-  tableSection.querySelector("h3").textContent = "Stolni tanlang";
-}
-
-function renderTables(tables, businessId) {
-  const tableList = document.getElementById("table-list");
-  const tableSection = document.getElementById("table-section");
-  tableList.innerHTML = "";
-  tables.forEach((table) => {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "table-button";
-    button.innerHTML = `<img src="https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=500&q=80" alt="${table.name || `Stol ${table.id}`} rasmi"><span class="table-info"><strong>${table.name || `Stol ${table.id}`}</strong><small>${table.status === 0 ? "Bo'sh" : "Band"}</small></span>`;
-    button.disabled = table.status !== 0;
-    button.addEventListener("click", () => selectTable(businessId, table, button));
-    tableList.appendChild(button);
-  });
-  tableSection.querySelector("h3").textContent = "Stolni tanlang";
-}
-
-async function selectTable(businessId, table, button) {
-  // Restoran nomi URL'dan olinadi (index.html'da emas, shu sahifada saqlanmagan).
-  const restaurantName = new URLSearchParams(window.location.search).get("restaurantName") || "";
-  const params = new URLSearchParams({
-    businessId: String(businessId),
-    tableId: String(table.id),
-    tableName: table.name || `Stol ${table.id}`,
-  });
-  if (restaurantName) params.set("restaurantName", restaurantName);
-  window.location.href = `menu.html?${params.toString()}`;
-}
-
-// ---------- tables.html: stol tanlash (alohida sahifa) ----------
+// ---------- tables.html: bron kodi bilan stolga ulanish ----------
+// Eski oqim (stollar ro'yxatidan tanlash) o'rniga mijoz 6 raqamli bron
+// kodini kiritadi. Server kodni tekshirib SESSION_TOKEN qaytaradi — u
+// localStorage'da saqlanib, menu.html'ga o'tkaziladi. Menyu faqat shu
+// stolning bo'ladi (barcha so'rovlar X-Table-Token bilan ketadi).
 async function initTablesPage() {
   const params = new URLSearchParams(window.location.search);
-  const businessId = params.get("businessId");
   const restaurantName = params.get("restaurantName") || "Restoran";
   const restaurantTitle = document.getElementById("restaurant-title");
   const locationNote = document.getElementById("location-note");
-  const businessInput = document.getElementById("business-id");
-
   if (restaurantTitle) restaurantTitle.textContent = restaurantName;
-  if (businessInput) businessInput.value = businessId || "";
-  if (locationNote) locationNote.textContent = `${restaurantName} · stolni tanlang.`;
+  if (locationNote) locationNote.textContent = `${restaurantName} · bron kodingizni kiriting.`;
 
-  // Restoran tanlanmagan bo'lsa — orqaga, tanlash sahifasiga qaytaramiz.
-  if (!businessId) {
-    if (locationNote) locationNote.textContent = "Avval restoranni tanlang.";
-    window.location.href = "index.html";
+  // Enter'dan kelgan sessiya bo'lsa — stol allaqachon ulangan, menyuga o'tamiz.
+  const existingSession = loadTableSession();
+  if (existingSession && existingSession.token) {
+    window.location.replace("menu.html");
     return;
   }
 
+  // Faqat raqamlar kiritilsin (6 ta).
+  const codeInput = document.getElementById("booking-code");
+  codeInput?.addEventListener("input", () => {
+    codeInput.value = codeInput.value.replace(/\D/g, "").slice(0, 6);
+  });
+
+  document.getElementById("entry-form")
+    ?.addEventListener("submit", handleBookingCodeSubmit);
+}
+
+async function handleBookingCodeSubmit(event) {
+  event.preventDefault();
+  const message = document.getElementById("form-message");
+  const codeInput = document.getElementById("booking-code");
+  const code = (codeInput?.value || "").trim();
+  if (code.length !== 6) {
+    if (message) message.textContent = "Bron kodi 6 raqamdan iborat bo'lishi kerak.";
+    return;
+  }
+  if (message) message.textContent = "Tekshirilmoqda...";
   try {
-    await loadTables(businessId);
-    const tableList = document.getElementById("table-list");
-    if (tableList && tableList.children.length === 0 && locationNote) {
-      locationNote.textContent = `${restaurantName} — hozircha stol qo‘shilmagan.`;
-    }
+    // Controller: [Route("[controller]/[action]")] + [HttpPost("enter")]
+    // → /Reservation/Enter/enter
+    const response = await fetch(`${API_BASE}/Reservation/Enter/enter`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code }),
+    });
+    const result = await response.json().catch(() => null);
+    if (!response.ok) throw new Error((result && result.error) || "Kod qabul qilinmadi.");
+    // Sessiya saqlanadi va menyu sahifasiga o'tamiz.
+    saveTableSession({
+      token: result.sessionToken,
+      reservationId: result.reservationId,
+      businessId: result.businessId,
+      tableId: result.tableId,
+      tableName: result.tableName || "",
+    });
+    window.location.replace("menu.html");
   } catch (error) {
-    document.getElementById("form-message").textContent = error.message;
+    if (message) message.textContent = `Ulanib bo'lmadi: ${error.message}`;
   }
 }
 
 async function initMenuPage() {
-  const params = new URLSearchParams(window.location.search);
-  const businessId = params.get("businessId");
-  const tableId = params.get("tableId");
-  const tableName = params.get("tableName") || `Stol ${tableId || ""}`;
-  const locationNote = document.getElementById("location-note");
-
-  if (!businessId || !tableId) {
-    locationNote.textContent = "Avval stol sahifasidan stolni tanlang.";
+  // Sessiya localStorage'dan o'qiladi (kod kirish sahifasida saqlangan).
+  const session = loadTableSession();
+  if (!session || !session.token) {
+    const locationNote = document.getElementById("location-note");
+    if (locationNote) locationNote.textContent = "Avval bron kodingiz bilan kiring.";
+    window.location.replace("tables.html");
     return;
   }
+  const businessId = String(session.businessId || "");
+  const tableId = String(session.tableId || "");
+  const tableName = session.tableName || `Stol ${tableId}`;
+  const locationNote = document.getElementById("location-note");
 
   document.getElementById("business-id").value = businessId;
   document.getElementById("table-id").value = tableId;
-  const restaurantName = params.get("restaurantName") || "Restoran";
   const titleEl = document.getElementById("restaurant-title");
-  if (titleEl) titleEl.textContent = restaurantName;
-  locationNote.textContent = `${restaurantName} · ${tableName} tanlandi.`;
+  if (titleEl) titleEl.textContent = tableName;
+  if (locationNote) locationNote.textContent = `${tableName} tanlandi. Menyudan taom tanlang.`;
 
-  // "Stolni almashtirish" linki (yuqoridagi topbar'da) — shu restoranni stol
-  // tanlash sahifasiga qaytaradi. Link FAQAT buyurtma qutisi butunlay bo'sh
-  // bo'lganda ko'rinadi. Qutida taom bo'lsa yoki buyurtma oshxonaga
-  // yuborilgan bo'lsa (stol band) — yashirin qoladi. Buni updateSelectionSummary()
-  // boshqaradi; bu yerda faqat manzil (href) o'rnatiladi.
+  // "Stolni almashtirish" linki — sessiyani tozalab, kod oynasiga qaytaradi.
+  // Link FAQAT buyurtma qutisi butunlay bo'sh bo'lganda ko'rinadi
+  // (updateSelectionSummary() boshqaradi).
   const backLink = document.getElementById("menu-back-link");
   if (backLink) {
-    backLink.href = `tables.html?businessId=${encodeURIComponent(businessId)}&restaurantName=${encodeURIComponent(restaurantName)}`;
+    backLink.addEventListener("click", (event) => {
+      // Savatda taom bor yoki buyurtma yuborilgan — almashtirishga ruxsat yo'q.
+      if (orderSent || selectedMenuItems.size > 0) {
+        event.preventDefault();
+        return;
+      }
+      clearTableSession();
+    });
   }
 
   try {
-    await loadMenu(businessId, params.get("demo") === "1");
+    await loadMenu(businessId, false);
     document.getElementById("menu-section").hidden = false;
   } catch (error) {
     document.getElementById("form-message").textContent = error.message;
@@ -515,8 +531,10 @@ async function pollCustomerOrder() {
   if (!message) return;
   try {
     // Controller: [Route("[controller]/[action]")] + GetById action
-    // → /Order/GetById/{orderId}
-    const res = await fetch(`${API_BASE}/Order/GetById/${customerOrderId}`);
+    // → /Order/GetById/{orderId} — X-Table-Token bilan (faqat o'z stoli).
+    const res = await fetch(`${API_BASE}/Order/GetById/${customerOrderId}`, {
+      headers: tableTokenHeaders(),
+    });
     if (!res.ok) return; // buyurtma hali ko'rinmasa — jim kutamiz
     const order = await res.json();
     const status = Number(order.status);
@@ -625,10 +643,10 @@ async function payActiveOrder(paymentType) {
   const statusBox = document.getElementById("order-status");
   try {
     // Controller yo'li: [controller]/[action] + [HttpPost("{orderId}/close")]
-    // → /Order/Close/{orderId}/close
+    // → /Order/Close/{orderId}/close — X-Table-Token bilan.
     const res = await fetch(`${API_BASE}/Order/Close/${encodeURIComponent(customerOrderId)}/close`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: Object.assign({ "Content-Type": "application/json" }, tableTokenHeaders()),
       body: JSON.stringify({ paymentType: Number(paymentType) }),
     });
     const data = await res.json().catch(() => ({}));
@@ -677,10 +695,10 @@ async function cancelOwnOrder() {
   const statusBox = document.getElementById("order-status");
   try {
     // Controller: [HttpPost("{orderId:long}/cancel")] + action "Cancel"
-    // → /Order/Cancel/{orderId}/cancel
+    // → /Order/Cancel/{orderId}/cancel — X-Table-Token bilan.
     const res = await fetch(`${API_BASE}/Order/Cancel/${encodeURIComponent(customerOrderId)}/cancel`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: Object.assign({ "Content-Type": "application/json" }, tableTokenHeaders()),
       body: JSON.stringify({ reason: "Mijoz bekor qildi" }),
     });
     const data = await res.json().catch(() => ({}));

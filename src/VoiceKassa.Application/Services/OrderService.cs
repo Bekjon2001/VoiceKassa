@@ -13,12 +13,18 @@ public class OrderService
 {
     private readonly IOrderRepository _orderRepo;
     private readonly IBusinessRepository _businessRepo;
+    private readonly IReservationRepository _reservationRepo;
     private readonly IAiExtractionService _aiExtraction;
 
-    public OrderService(IOrderRepository orderRepo, IBusinessRepository businessRepo, IAiExtractionService aiExtraction)
+    public OrderService(
+        IOrderRepository orderRepo,
+        IBusinessRepository businessRepo,
+        IReservationRepository reservationRepo,
+        IAiExtractionService aiExtraction)
     {
         _orderRepo = orderRepo;
         _businessRepo = businessRepo;
+        _reservationRepo = reservationRepo;
         _aiExtraction = aiExtraction;
     }
 
@@ -34,11 +40,26 @@ public class OrderService
             return (false, "Biznes topilmadi yoki faol emas.", null);
 
         var isRestaurantFlow = request.TableId.HasValue;
+        long? reservationId = null;
         if (isRestaurantFlow)
         {
             var table = await _businessRepo.GetTableByIdAsync(request.TableId!.Value, ct);
             if (table is null || table.BusinessId != request.BusinessId)
                 return (false, "Stol shu biznesga tegishli emas.", null);
+
+            // Mijoz faqat o'z stoliga buyurtma bera oladi: sessiya tokendan
+            // bron topiladi va stol shu bronga tegishli ekan tekshiriladi.
+            if (!string.IsNullOrWhiteSpace(request.SessionToken))
+            {
+                var reservation = await _reservationRepo.GetBySessionTokenAsync(request.SessionToken.Trim(), ct);
+                if (reservation is null)
+                    return (false, "Sessiya yaroqsiz — bron kodi bilan qayta kiring.", null);
+                if (reservation.TableId != request.TableId.Value || reservation.BusinessId != request.BusinessId)
+                    return (false, "Bu sessiya boshqa stolga tegishli.", null);
+                if (reservation.Status is ReservationStatus.Cancelled or ReservationStatus.Closed)
+                    return (false, "Bron yopilgan yoki bekor qilingan.", null);
+                reservationId = reservation.Id;
+            }
         }
 
         // Qo'shimcha matn bo'lsa — AI orqali qo'shimcha itemlar ajratiladi
@@ -77,6 +98,7 @@ public class OrderService
                         BusinessId = request.BusinessId,
                         TableId = request.TableId,
                         StaffId = request.StaffId,
+                        ReservationId = reservationId,
                         Status = OrderStatus.Open,
                     };
         }
@@ -154,19 +176,44 @@ public class OrderService
         return (true, null, ToOrderResponse(saved));
     }
 
+    /// <summary>Mijoz/to'lov: buyurtmani yopadi. Bron bog'langan bo'lsa — bron "Yopilgan"ga o'tadi, token o'chadi.</summary>
     public async Task<(bool Success, string? Error, OrderResponse? Order)> CloseOrderAsync(
         long orderId, CloseOrderRequest request, CancellationToken ct = default)
     {
         var (success, error, order) = await _orderRepo.CloseAtomicallyAsync(orderId, request.PaymentType, ct);
+        // Hisob yopildi — bron ham yopiladi va sessiya kaliti o'chiriladi
+        // (kod endi ishlamaydi, stol bo'sh bo'ladi).
+        if (success && order?.ReservationId is long reservationId)
+            await CloseReservationQuietlyAsync(reservationId, ct);
         return (success, error, order is null ? null : ToOrderResponse(order));
     }
 
-    /// <summary>Oshxona: butun ochiq buyurtmani bekor qiladi (Cancelled).</summary>
+    /// <summary>Oshxona yoki mijoz: butun ochiq buyurtmani bekor qiladi. Bron ham yopiladi.</summary>
     public async Task<(bool Success, string? Error, OrderResponse? Order)> CancelOrderAsync(
         long orderId, CancelOrderRequest? request, CancellationToken ct = default)
     {
         var (success, error, order) = await _orderRepo.CancelAtomicallyAsync(orderId, request?.Reason, ct);
+        if (success && order?.ReservationId is long reservationId)
+            await CloseReservationQuietlyAsync(reservationId, ct);
         return (success, error, order is null ? null : ToOrderResponse(order));
+    }
+
+    /// <summary>Xatolik bronni yopishga xalaqit bermasligi uchun (yopish asosiy amal).</summary>
+    private async Task CloseReservationQuietlyAsync(long reservationId, CancellationToken ct)
+    {
+        try
+        {
+            var reservation = await _reservationRepo.GetByIdAsync(reservationId, ct);
+            if (reservation is null) return;
+            if (reservation.Status is Domain.Enums.ReservationStatus.Closed or Domain.Enums.ReservationStatus.Cancelled) return;
+            reservation.Status = Domain.Enums.ReservationStatus.Closed;
+            reservation.SessionToken = null;
+            await _reservationRepo.SaveChangesAsync(ct);
+        }
+        catch
+        {
+            // Bronni yopib bo'lmasa — buyurtma yopilishi bekor qilinmaydi.
+        }
     }
 
     /// <summary>Oshxona: buyurtmadagi bitta qatorni o'chiradi.</summary>
@@ -181,6 +228,22 @@ public class OrderService
     {
         var order = await _orderRepo.GetByIdAsync(orderId, ct);
         return order is null ? null : ToOrderResponse(order);
+    }
+
+    /// <summary>
+    /// Mijoz uchun: sessiya tokendan o'z buyurtmasini oladi (GET Order/Mine).
+    /// Token yaroqsiz bo'lsa null — controller 401/404 qaytaradi.
+    /// </summary>
+    public async Task<OrderResponse?> GetMineAsync(string? sessionToken, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(sessionToken)) return null;
+        var reservation = await _reservationRepo.GetBySessionTokenAsync(sessionToken.Trim(), ct);
+        if (reservation is null) return null;
+
+        var order = await _orderRepo.GetOpenOrderByTableAsync(reservation.TableId, ct);
+        // Ochiq buyurtma shu bronga tegishli emas bo'lsa — mijozniki emas.
+        if (order is null || order.ReservationId != reservation.Id) return null;
+        return ToOrderResponse(order);
     }
 
     /// <summary>Oshxona uchun: biznesdagi ochiq (Open/InProgress) buyurtmalar
@@ -220,6 +283,7 @@ public class OrderService
     private static OrderResponse ToOrderResponse(Order o) => new()
     {
         Id = o.Id, BusinessId = o.BusinessId, TableId = o.TableId, TableName = o.Table?.Name,
+        ReservationId = o.ReservationId,
         StaffId = o.StaffId,
         Status = o.Status, TotalAmount = o.TotalAmount, PaymentType = o.PaymentType,
         CreatedAt = o.CreatedAt, ClosedAt = o.ClosedAt,

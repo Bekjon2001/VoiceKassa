@@ -32,12 +32,16 @@ builder.Services.AddSingleton<JarvisConversationMemory>();
 builder.Services.AddScoped<IOrderRepository, OrderRepository>();
 builder.Services.AddScoped<IBusinessRepository, BusinessRepository>();
 builder.Services.AddScoped<IAuthRepository, AuthRepository>();
+builder.Services.AddScoped<IReservationRepository, ReservationRepository>();
 builder.Services.AddScoped<IAiExtractionService, GeminiExtractionService>();
 builder.Services.AddScoped<IAiQueryService, GeminiQueryService>();
 builder.Services.AddScoped<OrderService>();
 builder.Services.AddScoped<QueryService>();
 builder.Services.AddScoped<BusinessService>();
 builder.Services.AddScoped<AuthService>();
+builder.Services.AddScoped<ReservationService>();
+// Bron kodi bilan kirish (enter) cheklovi — singleton: butun ilova bo'ylab bitta hisob.
+builder.Services.AddSingleton<ReservationEnterLimiter>();
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();

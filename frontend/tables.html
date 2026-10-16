@@ -28,19 +28,25 @@
       <div class="panel-heading">
         <span class="step-label">02 / STOL</span>
         <h2 id="restaurant-title">Restoran</h2>
-        <p>Stolingizni tanlang.</p>
+        <p>Bron kodingizni kiriting — stolingizga ulaniladi.</p>
       </div>
 
       <form id="entry-form" novalidate>
-        <section class="table-section" id="table-section" aria-labelledby="table-title">
-          <h3 id="table-title">Stolni tanlang</h3>
-          <div class="table-list" id="table-list"></div>
+        <section class="table-section" aria-labelledby="table-title">
+          <h3 id="table-title">Bron kodi</h3>
+          <p class="intro-copy" style="margin:0 0 10px">Ofitsiantdan olgan 6 raqamli bron kodingizni kiriting.</p>
+          <div class="search-row">
+            <input id="booking-code" name="code" type="text" inputmode="numeric" pattern="[0-9]*"
+                   maxlength="6" placeholder="Masalan: 123456" autocomplete="off"
+                   aria-label="6 raqamli bron kodi" style="letter-spacing:6px;text-align:center;font-size:22px;font-weight:700" />
+          </div>
         </section>
 
-        <p class="location-note" id="location-note">Stollar ro‘yxati yuklanmoqda...</p>
+        <p class="location-note" id="location-note">Kodni kiriting va stolingizga ulaning.</p>
 
         <input id="business-id" name="businessId" type="hidden" />
         <p class="form-message" id="form-message" role="status"></p>
+        <button class="primary-button" type="submit" id="code-submit"><span>Stolga ulanish</span><strong>→</strong></button>
       </form>
     </section>
   </main>

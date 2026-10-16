@@ -48,6 +48,12 @@ public class CreateOrderFromTextRequest
     public long? StaffId { get; set; }
     public string TranscriptText { get; set; } = string.Empty;
     public List<SelectedOrderItem>? Items { get; set; }
+
+    /// <summary>
+    /// Mijoz bron kodidan kirgan bo'lsa — sessiya kaliti. Server uni
+    /// X-Table-Token headeridan ham qabul qiladi (body emas, header asosiy).
+    /// </summary>
+    public string? SessionToken { get; set; }
 }
 
 public class CloseOrderRequest
@@ -76,6 +82,7 @@ public class OrderResponse
     public long BusinessId { get; set; }
     public long? TableId { get; set; }
     public string? TableName { get; set; }
+    public long? ReservationId { get; set; }
     public long? StaffId { get; set; }
     public OrderStatus Status { get; set; }
     public decimal TotalAmount { get; set; }

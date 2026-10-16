@@ -24,6 +24,10 @@ public class Order
     [Column("TABLE_ID")]
     public long? TableId { get; set; }
 
+    /// <summary>Restoranda mijoz bron kodidan kirgan bo'lsa — buyurtma shu bronga bog'lanadi.</summary>
+    [Column("RESERVATION_ID")]
+    public long? ReservationId { get; set; }
+
     [Column("STAFF_ID")]
     public long? StaffId { get; set; }
 
@@ -53,6 +57,9 @@ public class Order
 
     [ForeignKey(nameof(TableId))]
     public virtual Table? Table { get; set; }
+
+    [ForeignKey(nameof(ReservationId))]
+    public virtual Reservation? Reservation { get; set; }
 
     [ForeignKey(nameof(StaffId))]
     public virtual Staff? Staff { get; set; }
