@@ -33,6 +33,9 @@ public class WalkInReservationRequest
     public long TableId { get; set; }
     public string? CustomerName { get; set; }
     public string? CustomerPhone { get; set; }
+
+    /// <summary>Mehmonlar soni.</summary>
+    public int GuestCount { get; set; } = 1;
 }
 
 /// <summary>Kod bilan kirish (enter). Ochiq endpoint — urinishlar cheklanadi.</summary>

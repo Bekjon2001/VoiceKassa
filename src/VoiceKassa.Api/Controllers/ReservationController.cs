@@ -89,7 +89,7 @@ public class ReservationController : ControllerBase
         var access = await _businessService.AuthorizeOwnerAsync(businessId, Request.Headers["X-Owner-Token"].FirstOrDefault(), ct);
         if (!access.Success) return Unauthorized(new { error = access.Error ?? "Ruxsat yo'q." });
 
-        var (success, error, reservation) = await _reservationService.CancelAsync(reservationId, ct);
+        var (success, error, reservation) = await _reservationService.CancelAsync(reservationId, businessId, ct);
         return success ? Ok(reservation) : BadRequest(new { error });
     }
 
@@ -100,7 +100,7 @@ public class ReservationController : ControllerBase
         var access = await _businessService.AuthorizeOwnerAsync(businessId, Request.Headers["X-Owner-Token"].FirstOrDefault(), ct);
         if (!access.Success) return Unauthorized(new { error = access.Error ?? "Ruxsat yo'q." });
 
-        var (success, error, reservation) = await _reservationService.RegenerateCodeAsync(reservationId, ct);
+        var (success, error, reservation) = await _reservationService.RegenerateCodeAsync(reservationId, businessId, ct);
         return success ? Ok(reservation) : BadRequest(new { error });
     }
 

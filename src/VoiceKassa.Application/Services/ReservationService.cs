@@ -42,6 +42,10 @@ public class ReservationService
         if (await _repo.HasActiveForTableOnDateAsync(table!.Id, bookingDate, ct))
             return (false, "Bu stol shu sanaga allaqachon bron qilingan.", null);
 
+        // Mehmonlar soni 1 dan kam bo'lmasin.
+        if (request.GuestCount <= 0)
+            return (false, "Mehmonlar soni 1 dan kam bo'lmasin.", null);
+
         var code = await GenerateUniqueCodeAsync(ct);
         var reservation = new Reservation
         {
@@ -52,6 +56,7 @@ public class ReservationService
             EndTime = request.EndTime,
             CustomerName = Normalize(request.CustomerName)!,
             CustomerPhone = Normalize(request.CustomerPhone)!,
+            GuestCount = request.GuestCount,
             Code = code,
             Status = ReservationStatus.Waiting,
             CreatedAt = DateTime.UtcNow,
@@ -74,6 +79,12 @@ public class ReservationService
     public async Task<(bool Success, string? Error, EnterReservationResponse? Result)> WalkInAsync(
         WalkInReservationRequest request, CancellationToken ct = default)
     {
+        // Majburiy maydonlar: ism va telefon (SQL NOT NULL).
+        if (string.IsNullOrWhiteSpace(request.CustomerName))
+            return (false, "Ism bo'sh bo'lishi mumkin emas.", null);
+        if (string.IsNullOrWhiteSpace(request.CustomerPhone))
+            return (false, "Telefon raqam bo'sh bo'lishi mumkin emas.", null);
+
         var todayUtc = (DateTime.UtcNow + LocalClock.UzbekistanOffset).Date;
         var (ok, error, table, bookingDate) = await ValidateTableAndDateAsync(request.BusinessId, request.TableId, todayUtc, ct);
         if (!ok) return (false, error, null);
@@ -86,8 +97,9 @@ public class ReservationService
             BusinessId = request.BusinessId,
             TableId = table.Id,
             BookingDate = bookingDate,
-            CustomerName = Normalize(request.CustomerName),
-            CustomerPhone = Normalize(request.CustomerPhone),
+            CustomerName = Normalize(request.CustomerName)!,
+            CustomerPhone = Normalize(request.CustomerPhone)!,
+            GuestCount = request.GuestCount,
             Code = await GenerateUniqueCodeAsync(ct),
             SessionToken = AccessTokens.New(),
             Status = ReservationStatus.Arrived,
@@ -155,10 +167,11 @@ public class ReservationService
 
     /// <summary>Bekor qilish: sessiya tokeni o'chiriladi, status "Bekor" bo'ladi.</summary>
     public async Task<(bool Success, string? Error, ReservationResponse? Reservation)> CancelAsync(
-        long reservationId, CancellationToken ct = default)
+        long reservationId, long businessId, CancellationToken ct = default)
     {
         var reservation = await _repo.GetByIdAsync(reservationId, ct);
         if (reservation is null) return (false, "Bron topilmadi.", null);
+        if (reservation.BusinessId != businessId) return (false, "Bron topilmadi.", null);
         if (reservation.Status == ReservationStatus.Closed)
             return (false, "Yopilgan bronni bekor qilib bo'lmaydi.", null);
 
@@ -175,10 +188,11 @@ public class ReservationService
     /// generatsiya qilinadi. Sessiya saqlanib qoladi.
     /// </summary>
     public async Task<(bool Success, string? Error, ReservationResponse? Reservation)> RegenerateCodeAsync(
-        long reservationId, CancellationToken ct = default)
+        long reservationId, long businessId, CancellationToken ct = default)
     {
         var reservation = await _repo.GetByIdAsync(reservationId, ct);
         if (reservation is null) return (false, "Bron topilmadi.", null);
+        if (reservation.BusinessId != businessId) return (false, "Bron topilmadi.", null);
         if (reservation.Status is ReservationStatus.Closed or ReservationStatus.Cancelled)
             return (false, "Yopilgan/bekor qilingan bronning kodini qayta berib bo'lmaydi.", null);
 
