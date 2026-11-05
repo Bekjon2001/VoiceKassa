@@ -103,7 +103,7 @@ public class BusinessService
             PasswordHash = HashPassword(password), SubscriptionAmount = subscriptionAmount,
             PaymentPaidAt = paymentPaidAt.ToUniversalTime(),
             SubscriptionMonths = subscriptionMonths,
-            SubscriptionEndsAt = DateTime.UtcNow.AddMonths(subscriptionMonths),
+            SubscriptionEndsAt = paymentPaidAt.ToUniversalTime().AddMonths(subscriptionMonths),
             AccessToken = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)),
         }, ct);
         return (true, null, ToOwnerResponse(owner, business));
@@ -198,6 +198,28 @@ public class BusinessService
     private static string HashPassword(string password) => PasswordHasher.Hash(password);
 
     private static bool VerifyPassword(string password, string stored) => PasswordHasher.Verify(password, stored);
+
+
+    /// <summary>Super Admin uchun: tanlangan restoranga egasi sifatida kirish.
+    /// Ega access tokenini yangilaydi va owner sessiyasini qaytaradi.</summary>
+    public async Task<(bool Success, string? Error, OwnerLoginResponse? Result)> EnterRestaurantAsSuperAdminAsync(
+        long businessId, string? superAdminToken, CancellationToken ct = default)
+    {
+        if (!await IsSuperAdminTokenAsync(superAdminToken, ct))
+            return (false, "Super Admin sifatida kiring.", null);
+
+        var owner = await _repo.GetOwnerByBusinessIdAnyStateAsync(businessId, ct);
+        if (owner is null) return (false, "Restoran egasi topilmadi.", null);
+
+        var business = await _repo.GetBusinessByIdAsync(businessId, ct);
+        if (business is null) return (false, "Restoran topilmadi.", null);
+
+        var token = Guid.NewGuid().ToString("N") + Guid.NewGuid().ToString("N");
+        await _repo.UpdateOwnerAccessTokenAsync(owner.Id, token, ct);
+        owner.AccessToken = token;
+
+        return (true, null, ToOwnerResponse(owner, business));
+    }
 
     private static OwnerLoginResponse ToOwnerResponse(RestaurantOwner owner, Business business) => new()
     {

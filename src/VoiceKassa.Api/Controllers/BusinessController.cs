@@ -94,6 +94,17 @@ public class BusinessController : ControllerBase
         return owner is null ? NotFound() : Ok(owner);
     }
 
+    /// <summary>Super Admin uchun: tanlangan restoranga egasi sifatida kirish (admin.html uchun).</summary>
+    [HttpPost("enter-as-owner")]
+    public async Task<IActionResult> EnterAsOwner([FromBody] EnterAsOwnerRequest request, CancellationToken ct)
+    {
+        if (!await IsSuperAdmin(ct)) return Unauthorized(new { error = "Super Admin sifatida kiring." });
+        var (success, error, owner) = await _businessService.EnterRestaurantAsSuperAdminAsync(
+            request.BusinessId, Request.Headers["X-Super-Admin-Token"].FirstOrDefault(), ct);
+        return success ? Ok(owner) : BadRequest(new { error });
+    }
+
+
     // ---- Staff ----
 
     [HttpPost("staff")]

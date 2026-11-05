@@ -133,6 +133,12 @@ async function getJson(url) {
   });
   const data = await response.json().catch(() => null);
   if (!response.ok) {
+    if (response.status === 401) {
+      // Eski/yaroqsiz token — tozalab login ekraniga qaytamiz.
+      saveToken("");
+      try { sessionStorage.removeItem(SESSION_KEY); } catch { /* ignore */ }
+      if (location.pathname) location.reload();
+    }
     throw new Error((data && data.error) || "Ma’lumotni yuklab bo‘lmadi (" + response.status + ").");
   }
   return data;
@@ -202,6 +208,9 @@ $("super-login-form").addEventListener("submit", async event => {
   event.preventDefault();
   const message = $("super-auth-message");
   setMsg(message, "Kirilmoqda...");
+  // Eski/yaroqsiz tokenni tozalaymiz — 401 xatolikning oldini oladi.
+  try { sessionStorage.removeItem(SESSION_KEY); } catch { /* ignore */ }
+  superAdminToken = "";
   try {
     const result = await postJson("/Business/LoginSuperAdmin/super-admin/login", {
       login: $("sa-login").value.trim(),
@@ -219,6 +228,8 @@ $("first-super-form").addEventListener("submit", async event => {
   event.preventDefault();
   const message = $("super-auth-message");
   setMsg(message, "Yaratilmoqda...");
+  try { sessionStorage.removeItem(SESSION_KEY); } catch { /* ignore */ }
+  superAdminToken = "";
   try {
     const result = await postJson("/Business/CreateFirstSuperAdmin/super-admin/first", {
       fullName: event.target.elements.fullName.value.trim(),

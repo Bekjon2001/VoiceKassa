@@ -238,3 +238,8 @@ public class TableResponse
     public int Capacity { get; set; }
     public TableStatus Status { get; set; }
 }
+
+public class EnterAsOwnerRequest
+{
+    public long BusinessId { get; set; }
+}
