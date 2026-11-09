@@ -81,7 +81,7 @@ public class AuthService
         var token = GenerateToken();
         await _authRepo.UpdateUserAccessTokenAsync(account.Id, token, ct);
 
-        return (true, null, new SuperAdminLoginResponse { AccessToken = token, FullName = account.FullName, IsSuperAdmin = true });
+        return (true, null, new SuperAdminLoginResponse { AccessToken = token, FullName = account.FullName, IsSuperAdmin = true, Role = "super-admin" });
     }
 
     public async Task<UserAccount?> ValidateSuperAdminTokenAsync(string token, CancellationToken ct = default)
@@ -167,6 +167,7 @@ public class AuthService
             OwnerFullName = owner.FullName,
             IsSubscriptionActive = isSubscriptionActive,
             SubscriptionEndsAt = owner.SubscriptionEndsAt,
+            Role = "restaurant-admin"
         });
     }
 

@@ -68,9 +68,13 @@ builder.Services.AddCors(opt =>
 
 var app = builder.Build();
 
-// Swagger har doim ochiq (MVP bosqichi, oson ko'rib chiqish uchun).
-app.UseSwagger();
-app.UseSwaggerUI();
+// Swagger faqat Development dasturiy ta'minotida ochiq (MVP bosqichi,
+// oson ko'rib chiqish uchun). Production'da yopiq bo'lishi kerak.
+if (builder.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
 
 if (frontendDir is not null)
 {

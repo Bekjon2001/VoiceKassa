@@ -28,8 +28,13 @@ public class SuperAdminLoginResponse
     public string AccessToken { get; set; } = string.Empty;
     public string FullName { get; set; } = string.Empty;
 
-    // BusinessService ham shu DTO'ni ishlatadi, u yerda belgilanadi.
+    // Role: "restaurant-admin" or "super-admin"
     public bool IsSuperAdmin { get; set; }
+
+    /// <summary>
+    /// Role: "restaurant-admin" or "super-admin"
+    /// </summary>
+    public string Role { get; set; } = "super-admin";
 }
 
 // ---------- Restoran + Egasi yaratish (Super Admin amali) ----------
@@ -75,4 +80,9 @@ public class OwnerLoginResponse
 
     // Restoran yaratilganda to'lov sanasini ham ko'rsatish uchun (BusinessService).
     public DateTime PaymentPaidAt { get; set; }
+
+    /// <summary>
+    /// Role: "restaurant-admin" or "super-admin"
+    /// </summary>
+    public string Role { get; set; } = string.Empty;
 }

@@ -5,6 +5,7 @@ const API_BASE = location.protocol.startsWith("http")
 const SESSION_KEY = "vk_owner_session";
 const VIEW_STORAGE_KEY = "vk_owner_view";
 const JARVIS_KEY = "vk_owner_jarvis_enabled"; // Jarvis switch (doimiy eshitish) holati — refresh'da saqlanadi
+const RESTAURANT_SELECTION_KEY = "vk_selected_restaurant";
 const fallbackTableImage = "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=500&q=80";
 const fallbackFoodImage = "https://images.unsplash.com/photo-1547592180-85f173990554?auto=format&fit=crop&w=700&q=80";
 /* ---------- Kun/Tun rejimi ---------- */
@@ -162,8 +163,25 @@ function clearSession() {
 }
 
 function enterWorkspace(session) {
-  ownerToken = session.token || "";
-  activeBusinessId = String(session.businessId || "");
+  const role = session.role || "restaurant-admin";
+  try { sessionStorage.setItem( "vk_role", role ); } catch { /* ignore */ }
+  if (role === "super-admin") {
+    showSuperAdminRestaurantSelection();
+  } else {
+    $( "entry-stage" ).hidden = true;
+    $( "owner-area" ).hidden = false;
+    $( "owner-restaurant-name" ).textContent = session.restaurantName || "Restoran";
+    loadWorkspaceData();
+    setOwnerView( restoreOwnerView() );
+    const jarvisToggle = document.getElementById( "jarvis-toggle" );
+    if (jarvisToggle) {
+      let wasOn = false;
+      try { wasOn = localStorage.getItem( JARVIS_KEY ) === "1"; } catch { /* ignore */ }
+      jarvisToggle.checked = wasOn;
+      if (wasOn) startAlwaysListen();
+    }
+  }
+  
   $("entry-stage").hidden = true;
   $("owner-area").hidden = false;
   $("owner-restaurant-name").textContent = session.restaurantName || "Restoran";
@@ -199,6 +217,7 @@ $("owner-login-form").addEventListener("submit", async event => {
       }),
     });
     const session = {
+      role: result.role || "restaurant-admin",
       token: result.accessToken,
       businessId: result.businessId,
       restaurantName: result.restaurantName,
