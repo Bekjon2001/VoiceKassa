@@ -87,10 +87,10 @@ public class BusinessController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetAll(CancellationToken ct)
+    public async Task<IActionResult> GetAll([FromQuery] int page = 1, [FromQuery] int pageSize = 20, CancellationToken ct = default)
     {
         if (!await IsSuperAdmin(ct)) return Unauthorized();
-        var businesses = await _businessService.GetAllBusinessesAsync(ct);
+        var businesses = await _businessService.GetAllBusinessesAsync(page, pageSize, ct);
         return Ok(businesses);
     }
 
@@ -203,10 +203,10 @@ public class BusinessController : ControllerBase
     }
 
     [HttpGet("{businessId:long}/tables")]
-    public async Task<IActionResult> GetTables(long businessId, CancellationToken ct)
+    public async Task<IActionResult> GetTables(long businessId, [FromQuery] int page = 1, [FromQuery] int pageSize = 20, CancellationToken ct = default)
     {
-        var tables = await _businessService.GetTablesAsync(businessId, ct);
-        return Ok(tables.Select(t => new { t.Id, t.BusinessId, t.Name, t.Capacity, t.Status }));
+        var tables = await _businessService.GetTablesAsync(businessId, page, pageSize, ct);
+        return Ok(tables);
     }
 
     /// <summary>

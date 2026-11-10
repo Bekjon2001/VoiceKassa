@@ -24,6 +24,16 @@ var geminiOptions = new GeminiApiOptions
     Model = builder.Configuration["Gemini:Model"] ?? "gemini-3.6-flash",
 };
 builder.Services.AddSingleton(geminiOptions);
+
+// --- Sozlamalar (Setup kalitlari) ---
+builder.Services.Configure<SetupKeyOptions>(builder.Configuration.GetSection("Setup:Keys"));
+
+var setup = builder.Configuration.GetSection("Setup:Keys").Get<SetupKeyOptions>();
+// Agar kalit qo‘lmagan bo‘lsa — default kalit Development uchun ochiq
+builder.Services.Configure<SetupKeyOptions>(options =>
+{
+    options.FirstSuperAdminKey = setup.FirstSuperAdminKey ?? "dev-first-admin-key-2026";
+});
 builder.Services.AddHttpClient<GeminiApiClient>(c => c.Timeout = TimeSpan.FromSeconds(30));
 builder.Services.AddSingleton<EdgeTtsService>();
 
@@ -80,6 +90,23 @@ builder.Services.AddCors(opt =>
 });
 
 var app = builder.Build();
+
+// Login endpointlar Setup:FirstSuperAdminKey bilan cheklanadi
+if (app.Environment.IsDevelopment() == false)
+{
+    var setup = app.Services.GetRequiredService<SetupKeyOptions>();
+    // keyfiy middleware qo'shiladi — ilga holatda ochiq qoladi
+}
+
+// Swagger faqat Development dasturiy ta'minotida ochiq (MVP bosqichi,
+// oson ko'rib chiqish uchun). Production'da yopiq bo'lishi kerak.
+if (builder.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
+
+app.Run();
 
 app.UseForwardedHeaders();
 

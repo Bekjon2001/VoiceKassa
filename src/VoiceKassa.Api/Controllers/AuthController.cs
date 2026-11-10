@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 using VoiceKassa.Application.DTOs;
 using VoiceKassa.Application.Services;
 
@@ -10,11 +10,13 @@ public class AuthController : ControllerBase
 {
     private readonly AuthService _authService;
     private readonly AuthLimiter _authLimiter;
+    private readonly SetupKeyOptions _setupKeys;
 
-    public AuthController(AuthService authService, AuthLimiter authLimiter)
+    public AuthController(AuthService authService, AuthLimiter authLimiter, IOptions<SetupKeyOptions> setupKeys)
     {
         _authService = authService;
         _authLimiter = authLimiter;
+        _setupKeys = setupKeys.Value;
     }
 
     private string ClientIp => HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
@@ -30,8 +32,21 @@ public class AuthController : ControllerBase
     [HttpPost("super-admin/create-first")]
     public async Task<IActionResult> CreateFirstSuperAdmin([FromBody] CreateSuperAdminRequest request, CancellationToken ct)
     {
-        var (success, error, result) = await _authService.CreateFirstSuperAdminAsync(request, ct);
-        return success ? Ok(result) : BadRequest(new { error });
+        // Faqat sozlamadagi Setup:FirstSuperAdminKey bilan bo‘lishi mumkin
+        if (!_setupKeys.FirstSuperAdminKey.IsNullOrEmpty &&
+            request.Login == _setupKeys.FirstSuperAdminKey)
+        {
+            // Kalit to‘g‘ri bo‘lsa — oddiy yaratish folyati
+            var (success, error, result) = await _authService.CreateFirstSuperAdminAsync(request, ct);
+            return success ? Ok(result) : BadRequest(new { error });
+        }
+        // Key emas yoki noto‘g‘ri — faqat Development muhitida ochiq
+        if (app.Environment.IsDevelopment())
+        {
+            var (success, error, result) = await _authService.CreateFirstSuperAdminAsync(request, ct);
+            return success ? Ok(result) : BadRequest(new { error });
+        }
+        return Forbid(new { error = "Ikkinchi urinish cheklangan. Sozlamada Setup:FirstSuperAdminKey kiritilishi shart." });
     }
 
     [HttpPost("super-admin/login")]
