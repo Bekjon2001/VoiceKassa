@@ -1,4 +1,6 @@
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
+using VoiceKassa.Api;
 using VoiceKassa.Application.DTOs;
 using VoiceKassa.Application.Services;
 
@@ -11,12 +13,18 @@ public class AuthController : ControllerBase
     private readonly AuthService _authService;
     private readonly AuthLimiter _authLimiter;
     private readonly SetupKeyOptions _setupKeys;
+    private readonly IWebHostEnvironment _environment;
 
-    public AuthController(AuthService authService, AuthLimiter authLimiter, IOptions<SetupKeyOptions> setupKeys)
+    public AuthController(
+        AuthService authService,
+        AuthLimiter authLimiter,
+        IOptions<SetupKeyOptions> setupKeys,
+        IWebHostEnvironment environment)
     {
         _authService = authService;
         _authLimiter = authLimiter;
         _setupKeys = setupKeys.Value;
+        _environment = environment;
     }
 
     private string ClientIp => HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
@@ -33,7 +41,7 @@ public class AuthController : ControllerBase
     public async Task<IActionResult> CreateFirstSuperAdmin([FromBody] CreateSuperAdminRequest request, CancellationToken ct)
     {
         // Faqat sozlamadagi Setup:FirstSuperAdminKey bilan bo‘lishi mumkin
-        if (!_setupKeys.FirstSuperAdminKey.IsNullOrEmpty &&
+        if (!string.IsNullOrEmpty(_setupKeys.FirstSuperAdminKey) &&
             request.Login == _setupKeys.FirstSuperAdminKey)
         {
             // Kalit to‘g‘ri bo‘lsa — oddiy yaratish folyati
@@ -41,12 +49,13 @@ public class AuthController : ControllerBase
             return success ? Ok(result) : BadRequest(new { error });
         }
         // Key emas yoki noto‘g‘ri — faqat Development muhitida ochiq
-        if (app.Environment.IsDevelopment())
+        if (_environment.IsDevelopment())
         {
             var (success, error, result) = await _authService.CreateFirstSuperAdminAsync(request, ct);
             return success ? Ok(result) : BadRequest(new { error });
         }
-        return Forbid(new { error = "Ikkinchi urinish cheklangan. Sozlamada Setup:FirstSuperAdminKey kiritilishi shart." });
+        return StatusCode(StatusCodes.Status403Forbidden,
+            new { error = "Ikkinchi urinish cheklangan. Sozlamada Setup:FirstSuperAdminKey kiritilishi shart." });
     }
 
     [HttpPost("super-admin/login")]
