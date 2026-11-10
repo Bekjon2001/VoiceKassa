@@ -595,7 +595,7 @@ function renderTables() {
     return `<tr class="rowlink" data-table-id="${table.id}">
       <td class="table-num">${index + 1}</td>
       <td><div class="staff-cell">
-        <img class="item-thumb" src="${img}" alt="${esc(table.name)}">
+        <img class="item-thumb" src="${esc(img)}" alt="${esc(table.name)}">
         <div class="staff-name"><strong>${esc(table.name)}</strong><small>ID: ${esc(String(table.id))}</small></div>
       </div></td>
       <td><strong>${esc(String(table.capacity || 0))}</strong> <span class="muted">kishilik</span></td>
@@ -692,7 +692,7 @@ function renderProducts() {
   const badgeMap = { "food-count-badge": foods.length, "drink-count-badge": drinks.length, "fruit-count-badge": fruits.length, "dessert-count-badge": desserts.length };
   Object.entries(badgeMap).forEach(([id, n]) => { const el = $(id); if (el) el.textContent = String(n); });
   const rowHtml = product => `<div class="item">
-      <img class="item-thumb" src="${product.image}" alt="">
+      <img class="item-thumb" src="${esc(product.image)}" alt="">
       <div class="item-body"><strong>${esc(product.name)}</strong><small>${product.isAvailable ? "Mavjud" : "Vaqtincha yo‘q"}</small></div>
       <span class="item-end"><strong>${fmtSum(product.price)} so‘m</strong></span>
     </div>`;
@@ -1877,7 +1877,7 @@ function renderReservations(list) {
   list.forEach(r => {
     const tr = document.createElement("tr");
     const st = Number(r.status ?? 0);
-    tr.innerHTML = `<td>${fmtDate(r.bookingDate)}</td><td>${r.tableName}</td><td>${r.customerName || "—"}</td><td>${r.customerPhone || "—"}</td><td>${r.guestCount ?? "—"}</td><td style="letter-spacing:2px;font-family:monospace">${r.code}</td><td><span style="display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:600;color:${statusColor[st] ?? '#667085'}">${statusText[st] ?? st}</span></td>`;
+    tr.innerHTML = `<td>${fmtDate(r.bookingDate)}</td><td>${esc(r.tableName)}</td><td>${esc(r.customerName || "—")}</td><td>${esc(r.customerPhone || "—")}</td><td>${r.guestCount ?? "—"}</td><td style="letter-spacing:2px;font-family:monospace">${esc(r.code)}</td><td><span style="display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:600;color:${statusColor[st] ?? '#667085'}">${statusText[st] ?? st}</span></td>`;
     body.appendChild(tr);
   });
 }

@@ -398,7 +398,7 @@ function renderMenu(products) {
       item.className = "menu-item";
       item.dataset.name = product.name;
       item.setAttribute("aria-pressed", "false");
-      item.innerHTML = `<img src="${product.image || "https://images.unsplash.com/photo-1547592180-85f173990554?auto=format&fit=crop&w=700&q=80"}" alt="${product.name} rasmi"><span class="food-info"><strong>${product.name}</strong><small>Yangi tayyorlangan</small></span><b>${Number(product.price).toLocaleString()} so'm</b><span class="item-check" aria-hidden="true">✓</span>`;
+      item.innerHTML = `<img src="${escapeHtml(product.image || "https://images.unsplash.com/photo-1547592180-85f173990554?auto=format&fit=crop&w=700&q=80")}" alt="${escapeHtml(product.name)} rasmi"><span class="food-info"><strong>${escapeHtml(product.name)}</strong><small>Yangi tayyorlangan</small></span><b>${Number(product.price).toLocaleString()} so'm</b><span class="item-check" aria-hidden="true">✓</span>`;
       item.addEventListener("click", () => toggleMenuSelection(product, item));
       list.appendChild(item);
     });
