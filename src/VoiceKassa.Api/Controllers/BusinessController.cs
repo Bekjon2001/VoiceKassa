@@ -10,12 +10,16 @@ public class BusinessController : ControllerBase
 {
     private readonly BusinessService _businessService;
     private readonly AuthService _authService;
+    private readonly AuthLimiter _authLimiter;
 
-    public BusinessController(BusinessService businessService, AuthService authService)
+    public BusinessController(BusinessService businessService, AuthService authService, AuthLimiter authLimiter)
     {
         _businessService = businessService;
         _authService = authService;
+        _authLimiter = authLimiter;
     }
+
+    private string ClientIp => HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
 
     [HttpPost("super-admin/first")]
     public async Task<IActionResult> CreateFirstSuperAdmin([FromBody] CreateSuperAdminRequest request, CancellationToken ct)
@@ -27,6 +31,11 @@ public class BusinessController : ControllerBase
     [HttpPost("super-admin/login")]
     public async Task<IActionResult> LoginSuperAdmin([FromBody] LoginRequest request, CancellationToken ct)
     {
+        var ip = ClientIp;
+        if (!_authLimiter.TryEnter(ip))
+            return StatusCode(StatusCodes.Status429TooManyRequests,
+                new { error = "Juda ko'p urinish. Birozdan keyin qayta urinib ko'ring." });
+
         var (success, error, account) = await _authService.SuperAdminLoginAsync(request, ct);
         return success ? Ok(account) : Unauthorized(new { error });
     }
@@ -59,6 +68,11 @@ public class BusinessController : ControllerBase
     [HttpPost("owner/login")]
     public async Task<IActionResult> LoginOwner([FromBody] OwnerLoginRequest request, CancellationToken ct)
     {
+        var ip = ClientIp;
+        if (!_authLimiter.TryEnter(ip))
+            return StatusCode(StatusCodes.Status429TooManyRequests,
+                new { error = "Juda ko'p urinish. Birozdan keyin qayta urinib ko'ring." });
+
         var (success, error, owner) = await _businessService.LoginOwnerAsync(request, ct);
         return success ? Ok(owner) : Unauthorized(new { error });
     }

@@ -1,5 +1,8 @@
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
+using System.Net;
 using VoiceKassa.AiServices;
+using Microsoft.AspNetCore.Diagnostics;
 using VoiceKassa.Application.Interfaces;
 using VoiceKassa.Application.Services;
 using VoiceKassa.DataLayer;
@@ -21,7 +24,7 @@ var geminiOptions = new GeminiApiOptions
     Model = builder.Configuration["Gemini:Model"] ?? "gemini-3.6-flash",
 };
 builder.Services.AddSingleton(geminiOptions);
-builder.Services.AddHttpClient<GeminiApiClient>();
+builder.Services.AddHttpClient<GeminiApiClient>(c => c.Timeout = TimeSpan.FromSeconds(30));
 builder.Services.AddSingleton<EdgeTtsService>();
 
 // Jarvis suhbat xotirasi — Singleton: server qayta ishga tushmagan ekan
@@ -43,6 +46,16 @@ builder.Services.AddScoped<ReservationService>();
 // Bron kodi bilan kirish (enter) cheklovi — singleton: butun ilova bo'ylab bitta hisob.
 builder.Services.AddSingleton<ReservationEnterLimiter>();
 
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    // Ishonchli reverse proxy (nginx, IIS, k8s ingress) orqali kelgan so'rovlar
+    // uchun haqiqiy client IP-ni X-Forwarded-For / X-Forwarded-Proto dan olamiz.
+    options.KnownProxies.Add(IPAddress.Parse("127.0.0.1"));
+    options.KnownNetworks.Add(new Microsoft.AspNetCore.HttpOverrides.IPNetwork(IPAddress.Parse("127.0.0.1"), 32));
+});
+
+builder.Services.AddSingleton<AuthLimiter>();
+builder.Services.AddProblemDetails();
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
@@ -67,6 +80,28 @@ builder.Services.AddCors(opt =>
 });
 
 var app = builder.Build();
+
+app.UseForwardedHeaders();
+
+// Global xato boshqaruvi: barcha isnot tushgan xatolar ProblemDetails (RFC 7807)
+// ko'rinishida qaytariladi, stack trace mijozga berilmaydi.
+app.UseExceptionHandler(errorApp =>
+{
+    errorApp.Run(async ctx =>
+    {
+        var exHandlerPathFeature = ctx.Features.Get<IExceptionHandlerPathFeature>();
+        var exception = exHandlerPathFeature?.Error;
+        var problem = new Microsoft.AspNetCore.Mvc.ProblemDetails
+        {
+            Title = exception is not null ? exception.Message : "Xato yuz berdi.",
+            Status = StatusCodes.Status500InternalServerError,
+            Instance = ctx.Request.Path,
+        };
+        ctx.Response.StatusCode = problem.Status.Value;
+        ctx.Response.ContentType = "application/problem+json";
+        await ctx.Response.WriteAsJsonAsync(problem);
+    });
+});
 
 // Swagger faqat Development dasturiy ta'minotida ochiq (MVP bosqichi,
 // oson ko'rib chiqish uchun). Production'da yopiq bo'lishi kerak.

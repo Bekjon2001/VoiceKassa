@@ -65,7 +65,18 @@ public class OrderRepository : IOrderRepository
 
     public Task SaveChangesAsync(CancellationToken ct = default) => _db.SaveChangesAsync(ct);
 
-    public async Task<Product?> FindProductByNameAsync(long businessId, string spokenName, CancellationToken ct = default)
+    public async Task<bool> DecrementStockAsync(long productId, decimal quantity, CancellationToken ct = default)
+    {
+        var updated = await _db.Database.ExecuteSqlRawAsync(
+            $"UPDATE PRODUCTS SET STOCK_QUANTITY = STOCK_QUANTITY - {quantity}, UPDATED_AT = CURRENT_TIMESTAMP WHERE BUSINESS_ID = {productId} AND STOCK_QUANTITY >= {quantity}",
+            ct);
+        return updated > 0;
+    }
+
+    public Task<Product?> GetProductByIdAsync(long productId, CancellationToken ct = default)
+        => _db.Products.FirstOrDefaultAsync(p => p.Id == productId, ct);
+
+    public Task<Product?> FindProductByNameAsync(long businessId, string spokenName, CancellationToken ct = default)
     {
         // Fuzzy matching: "Lag'mon" -> "lagmon 100" kabi boshlanishlarni ham
         // ushlaydi. Avval aniq nom/alias, so'ng boshlanish (startsWith) bo'yicha.

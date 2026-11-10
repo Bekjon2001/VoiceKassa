@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using System.Text.Json;
 using VoiceKassa.Application.DTOs;
 using VoiceKassa.Application.Interfaces;
@@ -10,12 +11,14 @@ public class QueryService
     private readonly IOrderRepository _orderRepo;
     private readonly IAiQueryService _aiQuery;
     private readonly IBusinessRepository _businessRepo;
+    private readonly ILogger<QueryService> _logger;
 
-    public QueryService(IOrderRepository orderRepo, IAiQueryService aiQuery, IBusinessRepository businessRepo)
+    public QueryService(IOrderRepository orderRepo, IAiQueryService aiQuery, IBusinessRepository businessRepo, ILogger<QueryService> logger)
     {
         _orderRepo = orderRepo;
         _aiQuery = aiQuery;
         _businessRepo = businessRepo;
+        _logger = logger;
     }
 
     public async Task<AskQuestionResponse> AskAsync(AskQuestionRequest request, CancellationToken ct = default)

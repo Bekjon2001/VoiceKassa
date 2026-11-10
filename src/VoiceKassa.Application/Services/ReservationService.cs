@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using System.Security.Cryptography;
 using VoiceKassa.Application.DTOs;
 using VoiceKassa.Application.Interfaces;
@@ -15,11 +16,13 @@ public class ReservationService
 {
     private readonly IReservationRepository _repo;
     private readonly IBusinessRepository _businessRepo;
+    private readonly ILogger<ReservationService> _logger;
 
-    public ReservationService(IReservationRepository repo, IBusinessRepository businessRepo)
+    public ReservationService(IReservationRepository repo, IBusinessRepository businessRepo, ILogger<ReservationService> logger)
     {
         _repo = repo;
         _businessRepo = businessRepo;
+        _logger = logger;
     }
 
     /// <summary>Yangi bron yaratadi. Vaqt kiritilmasa — bron kun bo'yi stolni yopadi.</summary>
@@ -143,6 +146,18 @@ public class ReservationService
         if (reservation.Status == ReservationStatus.Closed)
             return (false, "Bu bron yopilgan (hisob allaqachon yopilgan).", null);
 
+        // Faqat bugungi sana bo'lgan bronga kirishga ruxsat (O'zbekiston vaqti, UTC+5).
+        var todayLocal = (DateTime.UtcNow + LocalClock.UzbekistanOffset).Date;
+        if (reservation.BookingDate.Date != todayLocal)
+            return (false, "Bron sanasi bugun emas.", null);
+
+        // Agar bron allaqachon "Kelgan" bo'lva va faol sessiya bor bo'lsa —
+        // boshqa qurilma kirishi taqiqlanadi. Kodni xodim "RegenerateCode" orqali
+        // qaytargandan so'ng faqat yangi kod bilan kirish mumkin.
+        if (reservation.Status == ReservationStatus.Arrived &&
+            !string.IsNullOrEmpty(reservation.SessionToken))
+            return (false, "Bron allaqachon boshqa qurilmada ochilgan. Kodni qaytaring.", null);
+
         var table = await _businessRepo.GetTableByIdAsync(reservation.TableId, ct);
         if (table is null)
             return (false, "Stol topilmadi.", null);
@@ -197,6 +212,7 @@ public class ReservationService
             return (false, "Yopilgan/bekor qilingan bronning kodini qayta berib bo'lmaydi.", null);
 
         reservation.Code = await GenerateUniqueCodeAsync(ct);
+        reservation.SessionToken = null; // eski sessiya bekor qilinadi — yangi kod bilan faqat yangi qurilma kirishi mumkin
         await _repo.SaveChangesAsync(ct);
 
         var table = await _businessRepo.GetTableByIdAsync(reservation.TableId, ct);

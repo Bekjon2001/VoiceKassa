@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using VoiceKassa.Application.DTOs;
 using VoiceKassa.Application.Interfaces;
 using VoiceKassa.Domain.Entities;
@@ -18,11 +19,13 @@ public class AuthService
 {
     private readonly IAuthRepository _authRepo;
     private readonly IBusinessRepository _businessRepo;
+    private readonly ILogger<AuthService> _logger;
 
-    public AuthService(IAuthRepository authRepo, IBusinessRepository businessRepo)
+    public AuthService(IAuthRepository authRepo, IBusinessRepository businessRepo, ILogger<AuthService> logger)
     {
         _authRepo = authRepo;
         _businessRepo = businessRepo;
+        _logger = logger;
     }
 
     // ---------- Super Admin ----------

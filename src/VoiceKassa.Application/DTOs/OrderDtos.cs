@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using VoiceKassa.Domain.Enums;
 
 namespace VoiceKassa.Application.DTOs;
@@ -30,7 +31,9 @@ public class OrderExtractionResult
 public class SelectedOrderItem
 {
     public long? ProductId { get; set; }
+    [StringLength(200, MinimumLength = 1)]
     public string Name { get; set; } = string.Empty;
+    [Range(0.001, double.MaxValue)]
     public decimal Quantity { get; set; } = 1;
 }
 
@@ -46,6 +49,7 @@ public class CreateOrderFromTextRequest
     public long BusinessId { get; set; }
     public long? TableId { get; set; }
     public long? StaffId { get; set; }
+    [StringLength(1000)]
     public string TranscriptText { get; set; } = string.Empty;
     public List<SelectedOrderItem>? Items { get; set; }
 
@@ -53,6 +57,7 @@ public class CreateOrderFromTextRequest
     /// Mijoz bron kodidan kirgan bo'lsa — sessiya kaliti. Server uni
     /// X-Table-Token headeridan ham qabul qiladi (body emas, header asosiy).
     /// </summary>
+    [StringLength(200)]
     public string? SessionToken { get; set; }
 }
 
@@ -63,6 +68,7 @@ public class CloseOrderRequest
 
 public class CancelOrderRequest
 {
+    [StringLength(500)]
     public string? Reason { get; set; }
 }
 

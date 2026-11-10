@@ -9,10 +9,15 @@ namespace VoiceKassa.Api.Controllers;
 public class AuthController : ControllerBase
 {
     private readonly AuthService _authService;
+    private readonly AuthLimiter _authLimiter;
 
-    public AuthController(AuthService authService) => _authService = authService;
+    public AuthController(AuthService authService, AuthLimiter authLimiter)
+    {
+        _authService = authService;
+        _authLimiter = authLimiter;
+    }
 
-    // ---------- Super Admin ----------
+    private string ClientIp => HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
 
     /// <summary>Frontend shu orqali "login" yoki "birinchi admin yaratish" ekranini tanlaydi.</summary>
     [HttpGet("super-admin/exists")]
@@ -32,6 +37,11 @@ public class AuthController : ControllerBase
     [HttpPost("super-admin/login")]
     public async Task<IActionResult> SuperAdminLogin([FromBody] LoginRequest request, CancellationToken ct)
     {
+        var ip = ClientIp;
+        if (!_authLimiter.TryEnter(ip))
+            return StatusCode(StatusCodes.Status429TooManyRequests,
+                new { error = "Juda ko'p urinish. Birozdan keyin qayta urinib ko'ring." });
+
         var (success, error, result) = await _authService.SuperAdminLoginAsync(request, ct);
         return success ? Ok(result) : BadRequest(new { error });
     }
@@ -41,6 +51,11 @@ public class AuthController : ControllerBase
     [HttpPost("owner/login")]
     public async Task<IActionResult> OwnerLogin([FromBody] LoginRequest request, CancellationToken ct)
     {
+        var ip = ClientIp;
+        if (!_authLimiter.TryEnter(ip))
+            return StatusCode(StatusCodes.Status429TooManyRequests,
+                new { error = "Juda ko'p urinish. Birozdan keyin qayta urinib ko'ring." });
+
         var (success, error, result) = await _authService.OwnerLoginAsync(request, ct);
         return success ? Ok(result) : BadRequest(new { error });
     }

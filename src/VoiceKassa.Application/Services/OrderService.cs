@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using VoiceKassa.Application.DTOs;
 using VoiceKassa.Application.Interfaces;
 using VoiceKassa.Domain.Entities;
@@ -15,17 +16,20 @@ public class OrderService
     private readonly IBusinessRepository _businessRepo;
     private readonly IReservationRepository _reservationRepo;
     private readonly IAiExtractionService _aiExtraction;
+    private readonly ILogger<OrderService> _logger;
 
     public OrderService(
         IOrderRepository orderRepo,
         IBusinessRepository businessRepo,
         IReservationRepository reservationRepo,
-        IAiExtractionService aiExtraction)
+        IAiExtractionService aiExtraction,
+        ILogger<OrderService> logger)
     {
         _orderRepo = orderRepo;
         _businessRepo = businessRepo;
         _reservationRepo = reservationRepo;
         _aiExtraction = aiExtraction;
+        _logger = logger;
     }
 
     public async Task<(bool Success, string? Error, OrderResponse? Order)> CreateFromTextAsync(
@@ -78,7 +82,9 @@ public class OrderService
         {
             var name = item.Name?.Trim() ?? string.Empty;
             if (item.ProductId is null && string.IsNullOrEmpty(name)) continue;
-            wanted.Add((item.ProductId, name, item.Quantity <= 0 ? 1 : item.Quantity, "dona"));
+            if (item.Quantity <= 0)
+                return (false, $"Mahsulot \"{name}\" miqdori nol yoki manfiy bo'lmasa kerak.", null);
+            wanted.Add((item.ProductId, name, item.Quantity, "dona"));
         }
         if (extraction.Success)
         {

@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using VoiceKassa.Application.DTOs;
 using VoiceKassa.Application.Interfaces;
 using VoiceKassa.Domain.Entities;
@@ -15,8 +16,13 @@ namespace VoiceKassa.Application.Services;
 public class BusinessService
 {
     private readonly IBusinessRepository _repo;
+    private readonly ILogger<BusinessService> _logger;
 
-    public BusinessService(IBusinessRepository repo) => _repo = repo;
+    public BusinessService(IBusinessRepository repo, ILogger<BusinessService> logger)
+    {
+        _repo = repo;
+        _logger = logger;
+    }
 
     public async Task<bool> IsSuperAdminTokenAsync(string? token, CancellationToken ct = default) =>
         !string.IsNullOrWhiteSpace(token) && await _repo.GetSuperAdminByTokenAsync(token, ct) is not null;
