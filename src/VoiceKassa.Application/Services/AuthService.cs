@@ -10,22 +10,26 @@ namespace VoiceKassa.Application.Services;
 /// Super Admin va Restoran Egasi autentifikatsiyasi, shuningdek Super
 /// Admin tomonidan yangi restoran+egasi yaratish oqimi.
 ///
-/// Token boshqaruvi: to'liq JWT o'rniga oddiy tasodifiy token ishlatiladi
-/// (Guid asosida), bazada saqlanadi va har so'rovda tekshiriladi. MVP
-/// bosqichi uchun yetarli - keyinchalik JWT'ga almashtirish oson (faqat
-/// shu servis ichida, tashqi controllerlar o'zgarmaydi).
+/// JWT tokenlari qisqa muddatli sessiya ID va foydalanuvchi huquqlarini
+/// saqlaydi; bazada faqat tasodifiy sessiya ID saqlanib, har so'rovda tekshiriladi.
 /// </summary>
 public class AuthService
 {
     private readonly IAuthRepository _authRepo;
     private readonly IBusinessRepository _businessRepo;
     private readonly ILogger<AuthService> _logger;
+    private readonly IAccessTokenIssuer _accessTokenIssuer;
 
-    public AuthService(IAuthRepository authRepo, IBusinessRepository businessRepo, ILogger<AuthService> logger)
+    public AuthService(
+        IAuthRepository authRepo,
+        IBusinessRepository businessRepo,
+        ILogger<AuthService> logger,
+        IAccessTokenIssuer accessTokenIssuer)
     {
         _authRepo = authRepo;
         _businessRepo = businessRepo;
         _logger = logger;
+        _accessTokenIssuer = accessTokenIssuer;
     }
 
     // ---------- Super Admin ----------
@@ -50,7 +54,6 @@ public class AuthService
         if (existing is not null)
             return (false, "Bu login band.", null);
 
-        var token = GenerateToken();
         var account = new UserAccount
         {
             FullName = request.FullName,
@@ -59,10 +62,15 @@ public class AuthService
             PasswordHash = PasswordHasher.Hash(request.Password),
             IsSuperAdmin = true,
             IsActive = true,
-            AccessToken = token,
+            AccessToken = AccessTokens.New(),
         };
 
         await _authRepo.CreateUserAccountAsync(account, ct);
+        var sessionId = AccessTokens.New();
+        var token = _accessTokenIssuer.CreateSuperAdminToken(account.Id, sessionId);
+        account.AccessToken = sessionId;
+        if (!await _authRepo.UpdateUserAccessTokenAsync(account.Id, sessionId, ct))
+            throw new InvalidOperationException("Super Admin sessiyasini saqlab bo'lmadi.");
         return (true, null, new SuperAdminLoginResponse
         {
             AccessToken = token,
@@ -81,8 +89,10 @@ public class AuthService
         if (!PasswordHasher.Verify(request.Password, account.PasswordHash))
             return (false, "Login yoki parol noto'g'ri.", null);
 
-        var token = GenerateToken();
-        await _authRepo.UpdateUserAccessTokenAsync(account.Id, token, ct);
+        var sessionId = AccessTokens.New();
+        var token = _accessTokenIssuer.CreateSuperAdminToken(account.Id, sessionId);
+        if (!await _authRepo.UpdateUserAccessTokenAsync(account.Id, sessionId, ct))
+            return (false, "Super Admin sessiyasini yangilab bo'lmadi.", null);
 
         return (true, null, new SuperAdminLoginResponse { AccessToken = token, FullName = account.FullName, IsSuperAdmin = true, Role = "super-admin" });
     }
@@ -152,15 +162,17 @@ public class AuthService
             return (false, "Login yoki parol noto'g'ri.", null);
 
         var business = await _businessRepo.GetBusinessByIdAsync(owner.BusinessId, ct);
-        if (business is null)
-            return (false, "Restoran topilmadi. Administrator bilan bog'laning.", null);
+        if (business is null || !business.IsActive)
+            return (false, "Restoran faol emas. Administrator bilan bog'laning.", null);
 
         var isSubscriptionActive = owner.SubscriptionEndsAt > DateTime.UtcNow;
         if (!isSubscriptionActive)
             return (false, "Obuna muddati tugagan. Administrator bilan bog'laning.", null);
 
-        var token = GenerateToken();
-        await _authRepo.UpdateOwnerAccessTokenAsync(owner.Id, token, ct);
+        var sessionId = AccessTokens.New();
+        var token = _accessTokenIssuer.CreateRestaurantAdminToken(owner.Id, owner.BusinessId, sessionId);
+        if (!await _authRepo.UpdateOwnerAccessTokenAsync(owner.Id, sessionId, ct))
+            return (false, "Admin sessiyasini yangilab bo'lmadi.", null);
 
         return (true, null, new OwnerLoginResponse
         {
@@ -179,8 +191,6 @@ public class AuthService
         var owner = await _authRepo.GetOwnerByTokenAsync(token, ct);
         return (owner is not null && owner.IsActive && owner.SubscriptionEndsAt > DateTime.UtcNow) ? owner : null;
     }
-
-    private static string GenerateToken() => Guid.NewGuid().ToString("N") + Guid.NewGuid().ToString("N");
 
     private static RestaurantOwnerSummaryResponse ToSummary(RestaurantOwner o, Business b) => new()
     {

@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 using VoiceKassa.AiServices;
 using VoiceKassa.Application.DTOs;
 using VoiceKassa.Application.Services;
@@ -7,7 +8,8 @@ namespace VoiceKassa.Api.Controllers;
 
 [Route("[controller]/[action]")]
 [ApiController]
-public class QueryController : ControllerBase
+[Authorize]
+public class QueryController : ApiControllerBase
 {
     private readonly QueryService _queryService;
     private readonly BusinessService _businessService;
@@ -28,9 +30,14 @@ public class QueryController : ControllerBase
     [HttpPost("ask")]
     public async Task<IActionResult> Ask([FromBody] AskQuestionRequest request, CancellationToken ct)
     {
-        var token = Request.Headers["X-Owner-Token"].FirstOrDefault();
-        var access = await _businessService.AuthorizeOwnerAsync(request.BusinessId, token, ct);
-        if (!access.Success) return Unauthorized(new { error = access.Error });
+        var accessError = EnsureBusinessReadAccess(request.BusinessId);
+        if (accessError is not null) return accessError;
+        if (!IsSuperAdminRole)
+        {
+            var access = await _businessService.AuthorizeOwnerAsync(
+                request.BusinessId, Request.Headers["X-Owner-Token"].FirstOrDefault(), ct);
+            if (!access.Success) return Unauthorized(new { error = access.Error });
+        }
         var response = await _queryService.AskAsync(request, ct);
         return Ok(response);
     }
@@ -59,6 +66,7 @@ public class QueryController : ControllerBase
     /// savol bo'lsa matn javobi qaytadi. Gemini function calling ishlatiladi.
     /// </summary>
     [HttpPost("jarvis")]
+    [SuperAdminReadOnly]
     public async Task<IActionResult> JarvisCommand([FromBody] JarvisCommandRequest request, CancellationToken ct)
     {
         if (!await IsSuperAdmin(ct))
@@ -125,10 +133,15 @@ public class QueryController : ControllerBase
     [HttpGet("speak-owner")]
     public async Task<IActionResult> SpeakOwner([FromQuery] long businessId, [FromQuery] string text, [FromQuery] string? voice, CancellationToken ct)
     {
-        var token = Request.Headers["X-Owner-Token"].FirstOrDefault();
-        var access = await _businessService.AuthorizeOwnerAsync(businessId, token, ct);
-        if (!access.Success)
-            return Unauthorized(new { error = access.Error ?? "Ruxsat yo'q." });
+        var accessError = EnsureBusinessReadAccess(businessId);
+        if (accessError is not null) return accessError;
+        if (!IsSuperAdminRole)
+        {
+            var access = await _businessService.AuthorizeOwnerAsync(
+                businessId, Request.Headers["X-Owner-Token"].FirstOrDefault(), ct);
+            if (!access.Success)
+                return Unauthorized(new { error = access.Error ?? "Ruxsat yo'q." });
+        }
 
         if (string.IsNullOrWhiteSpace(text))
             return BadRequest(new { error = "Matn bo'sh bo'lishi mumkin emas." });
@@ -164,6 +177,8 @@ public class QueryController : ControllerBase
         [FromQuery] DateTime? toDate,
         CancellationToken ct)
     {
+        var accessError = EnsureBusinessReadAccess(businessId);
+        if (accessError is not null) return accessError;
         // Sana berilmasa — bugungi kun O'zbekiston vaqti (UTC+5) bo'yicha olinadi,
         // shunda "bugungi savdo" mahalliy yarim tunda almashadi.
         var (todayFromUtc, todayToUtc) = LocalClock.TodayRangeUtc();

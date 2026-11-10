@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using VoiceKassa.Api;
@@ -7,6 +8,7 @@ using VoiceKassa.Application.Services;
 namespace VoiceKassa.Api.Controllers;
 
 [ApiController]
+[AllowAnonymous]
 [Route("api/auth")]
 public class AuthController : ControllerBase
 {
@@ -40,22 +42,15 @@ public class AuthController : ControllerBase
     [HttpPost("super-admin/create-first")]
     public async Task<IActionResult> CreateFirstSuperAdmin([FromBody] CreateSuperAdminRequest request, CancellationToken ct)
     {
-        // Faqat sozlamadagi Setup:FirstSuperAdminKey bilan bo‘lishi mumkin
-        if (!string.IsNullOrEmpty(_setupKeys.FirstSuperAdminKey) &&
-            request.Login == _setupKeys.FirstSuperAdminKey)
-        {
-            // Kalit to‘g‘ri bo‘lsa — oddiy yaratish folyati
-            var (success, error, result) = await _authService.CreateFirstSuperAdminAsync(request, ct);
-            return success ? Ok(result) : BadRequest(new { error });
-        }
-        // Key emas yoki noto‘g‘ri — faqat Development muhitida ochiq
-        if (_environment.IsDevelopment())
-        {
-            var (success, error, result) = await _authService.CreateFirstSuperAdminAsync(request, ct);
-            return success ? Ok(result) : BadRequest(new { error });
-        }
-        return StatusCode(StatusCodes.Status403Forbidden,
-            new { error = "Ikkinchi urinish cheklangan. Sozlamada Setup:FirstSuperAdminKey kiritilishi shart." });
+        if (!SetupKeyValidator.IsAuthorized(
+                _setupKeys.FirstSuperAdminKey,
+                Request.Headers["X-Setup-Key"].FirstOrDefault(),
+                _environment.IsDevelopment()))
+            return StatusCode(StatusCodes.Status403Forbidden,
+                new { error = "Birinchi Super Adminni yaratish uchun X-Setup-Key sozlanishi kerak." });
+
+        var (success, error, result) = await _authService.CreateFirstSuperAdminAsync(request, ct);
+        return success ? Ok(result) : BadRequest(new { error });
     }
 
     [HttpPost("super-admin/login")]
@@ -67,6 +62,8 @@ public class AuthController : ControllerBase
                 new { error = "Juda ko'p urinish. Birozdan keyin qayta urinib ko'ring." });
 
         var (success, error, result) = await _authService.SuperAdminLoginAsync(request, ct);
+        if (success) _authLimiter.RegisterSuccess(ip);
+        else _authLimiter.RegisterFailure(ip);
         return success ? Ok(result) : BadRequest(new { error });
     }
 
@@ -81,6 +78,8 @@ public class AuthController : ControllerBase
                 new { error = "Juda ko'p urinish. Birozdan keyin qayta urinib ko'ring." });
 
         var (success, error, result) = await _authService.OwnerLoginAsync(request, ct);
+        if (success) _authLimiter.RegisterSuccess(ip);
+        else _authLimiter.RegisterFailure(ip);
         return success ? Ok(result) : BadRequest(new { error });
     }
 }

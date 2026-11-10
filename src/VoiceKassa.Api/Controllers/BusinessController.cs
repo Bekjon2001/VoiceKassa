@@ -1,4 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.Extensions.Options;
 using VoiceKassa.Application.DTOs;
 using VoiceKassa.Application.Services;
 
@@ -6,29 +8,49 @@ namespace VoiceKassa.Api.Controllers;
 
 [Route("[controller]/[action]")]
 [ApiController]
-public class BusinessController : ControllerBase
+[Authorize]
+public class BusinessController : ApiControllerBase
 {
     private readonly BusinessService _businessService;
     private readonly AuthService _authService;
     private readonly AuthLimiter _authLimiter;
+    private readonly SetupKeyOptions _setupKeys;
+    private readonly IWebHostEnvironment _environment;
 
-    public BusinessController(BusinessService businessService, AuthService authService, AuthLimiter authLimiter)
+    public BusinessController(
+        BusinessService businessService,
+        AuthService authService,
+        AuthLimiter authLimiter,
+        IOptions<SetupKeyOptions> setupKeys,
+        IWebHostEnvironment environment)
     {
         _businessService = businessService;
         _authService = authService;
         _authLimiter = authLimiter;
+        _setupKeys = setupKeys.Value;
+        _environment = environment;
     }
 
     private string ClientIp => HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
 
     [HttpPost("super-admin/first")]
+    [AllowAnonymous]
+    [SuperAdminReadOnly]
     public async Task<IActionResult> CreateFirstSuperAdmin([FromBody] CreateSuperAdminRequest request, CancellationToken ct)
     {
+        if (!SetupKeyValidator.IsAuthorized(
+                _setupKeys.FirstSuperAdminKey,
+                Request.Headers["X-Setup-Key"].FirstOrDefault(),
+                _environment.IsDevelopment()))
+            return StatusCode(StatusCodes.Status403Forbidden,
+                new { error = "Birinchi Super Adminni yaratish uchun X-Setup-Key sozlanishi kerak." });
+
         var (success, error, account) = await _authService.CreateFirstSuperAdminAsync(request, ct);
         return success ? Ok(account) : BadRequest(new { error });
     }
 
     [HttpPost("super-admin/login")]
+    [AllowAnonymous]
     public async Task<IActionResult> LoginSuperAdmin([FromBody] LoginRequest request, CancellationToken ct)
     {
         var ip = ClientIp;
@@ -37,6 +59,8 @@ public class BusinessController : ControllerBase
                 new { error = "Juda ko'p urinish. Birozdan keyin qayta urinib ko'ring." });
 
         var (success, error, account) = await _authService.SuperAdminLoginAsync(request, ct);
+        if (success) _authLimiter.RegisterSuccess(ip);
+        else _authLimiter.RegisterFailure(ip);
         return success ? Ok(account) : Unauthorized(new { error });
     }
 
@@ -48,6 +72,7 @@ public class BusinessController : ControllerBase
     }
 
     [HttpPost("restaurant")]
+    [SuperAdminReadOnly]
     public async Task<IActionResult> CreateRestaurant([FromBody] CreateRestaurantWithOwnerRequest request, CancellationToken ct)
     {
         if (await _businessService.HasSuperAdminAsync(ct) && !await IsSuperAdmin(ct)) return Unauthorized();
@@ -58,6 +83,7 @@ public class BusinessController : ControllerBase
     /// <summary>Supermarket + egasini yaratadi (Super Admin). Backend bitta umumiy oqimdan
     /// foydalanadi — farq faqat Business turida (Market).</summary>
     [HttpPost("market")]
+    [SuperAdminReadOnly]
     public async Task<IActionResult> CreateMarket([FromBody] CreateMarketWithOwnerRequest request, CancellationToken ct)
     {
         if (await _businessService.HasSuperAdminAsync(ct) && !await IsSuperAdmin(ct)) return Unauthorized();
@@ -66,6 +92,7 @@ public class BusinessController : ControllerBase
     }
 
     [HttpPost("owner/login")]
+    [AllowAnonymous]
     public async Task<IActionResult> LoginOwner([FromBody] OwnerLoginRequest request, CancellationToken ct)
     {
         var ip = ClientIp;
@@ -73,12 +100,23 @@ public class BusinessController : ControllerBase
             return StatusCode(StatusCodes.Status429TooManyRequests,
                 new { error = "Juda ko'p urinish. Birozdan keyin qayta urinib ko'ring." });
 
+        var (isSuperAdmin, _, superAdmin) = await _authService.SuperAdminLoginAsync(
+            new LoginRequest { Login = request.Login, Password = request.Password }, ct);
+        if (isSuperAdmin)
+        {
+            _authLimiter.RegisterSuccess(ip);
+            return Ok(superAdmin);
+        }
+
         var (success, error, owner) = await _businessService.LoginOwnerAsync(request, ct);
+        if (success) _authLimiter.RegisterSuccess(ip);
+        else _authLimiter.RegisterFailure(ip);
         return success ? Ok(owner) : Unauthorized(new { error });
     }
 
     /// <summary>Yangi biznes ro'yxatdan o'tkazish (restoran, do'kon, market, ombor). Faqat Super Admin.</summary>
     [HttpPost]
+    [SuperAdminReadOnly]
     public async Task<IActionResult> Create([FromBody] CreateBusinessRequest request, CancellationToken ct)
     {
         if (!await IsSuperAdmin(ct)) return Unauthorized(new { error = "Super Admin sifatida kiring." });
@@ -96,8 +134,11 @@ public class BusinessController : ControllerBase
     }
 
     [HttpGet("{businessId:long}")]
+    [AllowAnonymous]
     public async Task<IActionResult> GetById(long businessId, CancellationToken ct)
     {
+        var accessError = EnsureBusinessReadAccess(businessId);
+        if (accessError is not null) return accessError;
         var business = await _businessService.GetBusinessAsync(businessId, ct);
         if (business is null) return NotFound();
         return Ok(new { business.Id, business.Name, business.Type, business.Address, business.PhoneNumber, business.CreatedAt });
@@ -111,20 +152,10 @@ public class BusinessController : ControllerBase
         return owner is null ? NotFound() : Ok(owner);
     }
 
-    /// <summary>Super Admin uchun: tanlangan restoranga egasi sifatida kirish (admin.html uchun).</summary>
-    [HttpPost("enter-as-owner")]
-    public async Task<IActionResult> EnterAsOwner([FromBody] EnterAsOwnerRequest request, CancellationToken ct)
-    {
-        if (!await IsSuperAdmin(ct)) return Unauthorized(new { error = "Super Admin sifatida kiring." });
-        var (success, error, owner) = await _businessService.EnterRestaurantAsSuperAdminAsync(
-            request.BusinessId, Request.Headers["X-Super-Admin-Token"].FirstOrDefault(), ct);
-        return success ? Ok(owner) : BadRequest(new { error });
-    }
-
-
     // ---- Staff ----
 
     [HttpPost("staff")]
+    [SuperAdminReadOnly]
     public async Task<IActionResult> CreateStaff([FromBody] CreateStaffRequest request, CancellationToken ct)
     {
         var ownerAccess = await _businessService.AuthorizeOwnerAsync(request.BusinessId, Request.Headers["X-Owner-Token"].FirstOrDefault(), ct);
@@ -136,6 +167,8 @@ public class BusinessController : ControllerBase
     [HttpGet("{businessId:long}/staff")]
     public async Task<IActionResult> GetStaff(long businessId, CancellationToken ct)
     {
+        var accessError = EnsureBusinessReadAccess(businessId);
+        if (accessError is not null) return accessError;
         // Owner o'z biznesining xodimlarini, Super Admin esa hammasini ko'ra oladi.
         if (!await IsSuperAdmin(ct))
         {
@@ -148,6 +181,7 @@ public class BusinessController : ControllerBase
 
     /// <summary>Xodim oyligini yangilash (owner). Tarixga avtomatik yoziladi.</summary>
     [HttpPut("staff/{staffId:long}/salary")]
+    [SuperAdminReadOnly]
     public async Task<IActionResult> UpdateStaffSalary(long staffId, [FromBody] UpdateStaffSalaryRequest request, CancellationToken ct)
     {
         var ownerAccess = await _businessService.AuthorizeStaffAsync(staffId, Request.Headers["X-Owner-Token"].FirstOrDefault(), ct);
@@ -158,6 +192,7 @@ public class BusinessController : ControllerBase
 
     /// <summary>Xodimni ishdan bo'shatish / faollashtirish (owner).</summary>
     [HttpPut("staff/{staffId:long}/active")]
+    [SuperAdminReadOnly]
     public async Task<IActionResult> SetStaffActive(long staffId, [FromBody] UpdateStaffStatusRequest request, CancellationToken ct)
     {
         var ownerAccess = await _businessService.AuthorizeStaffAsync(staffId, Request.Headers["X-Owner-Token"].FirstOrDefault(), ct);
@@ -167,6 +202,7 @@ public class BusinessController : ControllerBase
     }
 
     [HttpPut("staff/{staffId:long}/status")]
+    [SuperAdminReadOnly]
     public async Task<IActionResult> UpdateStaffStatus(long staffId, [FromBody] UpdateStaffStatusRequest request, CancellationToken ct)
     {
         if (!await IsSuperAdmin(ct)) return Unauthorized();
@@ -177,6 +213,7 @@ public class BusinessController : ControllerBase
     // ---- Category ----
 
     [HttpPost("categories")]
+    [SuperAdminReadOnly]
     public async Task<IActionResult> CreateCategory([FromBody] CreateCategoryRequest request, CancellationToken ct)
     {
         var access = await _businessService.AuthorizeOwnerAsync(request.BusinessId, Request.Headers["X-Owner-Token"].FirstOrDefault(), ct);
@@ -186,8 +223,11 @@ public class BusinessController : ControllerBase
     }
 
     [HttpGet("{businessId:long}/categories")]
+    [AllowAnonymous]
     public async Task<IActionResult> GetCategories(long businessId, CancellationToken ct)
     {
+        var accessError = EnsureBusinessReadAccess(businessId);
+        if (accessError is not null) return accessError;
         var categories = await _businessService.GetCategoriesAsync(businessId, ct);
         return Ok(categories);
     }
@@ -195,6 +235,7 @@ public class BusinessController : ControllerBase
     // ---- Table (restoran uchun) ----
 
     [HttpPost("tables")]
+    [SuperAdminReadOnly]
     public async Task<IActionResult> CreateTable([FromBody] CreateTableRequest request, CancellationToken ct)
     {
         var access = await _businessService.AuthorizeOwnerAsync(request.BusinessId, Request.Headers["X-Owner-Token"].FirstOrDefault(), ct);
@@ -204,8 +245,11 @@ public class BusinessController : ControllerBase
     }
 
     [HttpGet("{businessId:long}/tables")]
+    [AllowAnonymous]
     public async Task<IActionResult> GetTables(long businessId, [FromQuery] int page = 1, [FromQuery] int pageSize = 20, CancellationToken ct = default)
     {
+        var accessError = EnsureBusinessReadAccess(businessId);
+        if (accessError is not null) return accessError;
         var tables = await _businessService.GetTablesAsync(businessId, ct);
         tables = tables.Skip((page - 1) * pageSize).Take(pageSize).ToList();
         return Ok(tables);
@@ -217,6 +261,7 @@ public class BusinessController : ControllerBase
     /// uchun — Super Admin tokeni shart emas.
     /// </summary>
     [HttpGet("public/search")]
+    [AllowAnonymous]
     public async Task<IActionResult> SearchPublicBusinesses([FromQuery] string? query, CancellationToken ct)
     {
         var businesses = await _businessService.SearchPublicBusinessesAsync(query, ct);
@@ -224,6 +269,7 @@ public class BusinessController : ControllerBase
     }
 
     [HttpPut("tables/{tableId:long}/status")]
+    [SuperAdminReadOnly]
     public async Task<IActionResult> UpdateTableStatus(long tableId, [FromBody] UpdateTableStatusRequest request, CancellationToken ct)
     {
         var table = await _businessService.GetTableByIdAsync(tableId, ct);
@@ -242,6 +288,7 @@ public class BusinessController : ControllerBase
 
     /// <summary>Ega login/parolini restoranni qayta yaratmasdan tiklash (faqat Super Admin).</summary>
     [HttpPut]
+    [SuperAdminReadOnly]
     public async Task<IActionResult> ResetOwnerCredentials([FromBody] ResetOwnerCredentialsRequest request, CancellationToken ct)
     {
         if (!await IsSuperAdmin(ct)) return Unauthorized(new { error = "Super Admin sifatida kiring." });
@@ -251,6 +298,7 @@ public class BusinessController : ControllerBase
 
     /// <summary>Restoran (egasi) akkountini passivlashtirish/faollashtirish (faqat Super Admin).</summary>
     [HttpPut]
+    [SuperAdminReadOnly]
     public async Task<IActionResult> UpdateOwnerStatus([FromBody] UpdateOwnerStatusRequest request, CancellationToken ct)
     {
         if (!await IsSuperAdmin(ct)) return Unauthorized(new { error = "Super Admin sifatida kiring." });

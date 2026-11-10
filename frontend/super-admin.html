@@ -57,6 +57,7 @@
             <div class="field"><label>Telefon</label><input class="ctl" name="phoneNumber" type="tel" placeholder="+998 90 123 45 67" /></div>
             <div class="field"><label>Yangi login</label><input class="ctl" name="login" autocomplete="username" placeholder="admin" required /></div>
             <div class="field"><label>Yangi parol</label><input class="ctl" name="password" type="password" autocomplete="new-password" placeholder="••••••••" required /></div>
+            <div class="field"><label>O‘rnatish kaliti (faqat production)</label><input class="ctl" name="setupKey" type="password" autocomplete="off" /></div>
           </div>
           <button class="btn btn-primary btn-block" type="submit" style="margin-top:14px">Yaratish</button>
         </form>
@@ -141,9 +142,38 @@
               <div style="display:flex;gap:8px;flex-wrap:wrap" id="owner-actions" hidden>
                 <button class="btn btn-ghost btn-sm" id="toggle-owner-status" type="button">Passiv qilish</button>
                 <button class="btn btn-ghost btn-sm" id="show-reset-form" type="button">🔑 Login/parolni tiklash</button>
+                <button class="btn btn-ghost btn-sm" id="edit-restaurant-owner" type="button">Egani tahrirlash</button>
+                <button class="btn btn-ghost btn-sm" id="edit-restaurant-business" type="button">Biznesni tahrirlash</button>
+                <button class="btn btn-ghost btn-sm" id="archive-restaurant-business" type="button">Arxivlash</button>
               </div>
             </div>
             <div id="payment-details"><p class="empty" style="margin-top:0">Restoran tanlansangiz, batafsil ma’lumot shu yerda chiqadi.</p></div>
+            <form id="restaurant-business-form" hidden novalidate>
+              <div class="form-grid" style="margin-top:14px">
+                <div class="field"><label for="restaurant-business-name">Restoran nomi</label><input class="ctl" id="restaurant-business-name" required /></div>
+                <div class="field"><label for="restaurant-business-phone">Telefon</label><input class="ctl" id="restaurant-business-phone" /></div>
+                <div class="field"><label for="restaurant-business-address">Manzil</label><input class="ctl" id="restaurant-business-address" /></div>
+              </div>
+              <div style="display:flex;gap:10px;margin-top:12px">
+                <button class="btn btn-primary btn-sm" type="submit">Saqlash</button>
+                <button class="btn btn-ghost btn-sm" type="button" id="cancel-restaurant-business-edit">Bekor qilish</button>
+              </div>
+              <p class="form-message" id="restaurant-business-message"></p>
+            </form>
+            <form id="restaurant-owner-form" hidden novalidate>
+              <div class="form-grid" style="margin-top:14px">
+                <div class="field"><label for="restaurant-owner-name">Ega F.I.SH</label><input class="ctl" id="restaurant-owner-name" required /></div>
+                <div class="field"><label for="restaurant-owner-phone">Ega telefoni</label><input class="ctl" id="restaurant-owner-phone" /></div>
+                <div class="field"><label for="restaurant-owner-amount">To‘lov summasi</label><input class="ctl" id="restaurant-owner-amount" type="number" min="0" required /></div>
+                <div class="field"><label for="restaurant-owner-paid-at">To‘lov sanasi</label><input class="ctl" id="restaurant-owner-paid-at" type="datetime-local" required /></div>
+                <div class="field"><label for="restaurant-owner-months">Obuna (oy)</label><input class="ctl" id="restaurant-owner-months" type="number" min="1" max="360" required /></div>
+              </div>
+              <div style="display:flex;gap:10px;margin-top:12px">
+                <button class="btn btn-primary btn-sm" type="submit">Saqlash</button>
+                <button class="btn btn-ghost btn-sm" type="button" id="cancel-restaurant-owner-edit">Bekor qilish</button>
+              </div>
+              <p class="form-message" id="restaurant-owner-message"></p>
+            </form>
             <form id="reset-credentials-form" hidden novalidate>
               <div class="form-grid" style="margin-top:14px">
                 <div class="field"><label for="new-owner-login">Yangi login (o‘zgarmasa bo‘sh qoldiring)</label><input class="ctl" id="new-owner-login" autocomplete="off" /></div>
@@ -202,9 +232,38 @@
               <div style="display:flex;gap:8px;flex-wrap:wrap" id="market-owner-actions" hidden>
                 <button class="btn btn-ghost btn-sm" id="market-toggle-status" type="button">Passiv qilish</button>
                 <button class="btn btn-ghost btn-sm" id="market-show-reset-form" type="button">🔑 Login/parolni tiklash</button>
+                <button class="btn btn-ghost btn-sm" id="edit-market-owner" type="button">Egani tahrirlash</button>
+                <button class="btn btn-ghost btn-sm" id="edit-market-business" type="button">Biznesni tahrirlash</button>
+                <button class="btn btn-ghost btn-sm" id="archive-market-business" type="button">Arxivlash</button>
               </div>
             </div>
             <div id="market-payment-details"><p class="empty" style="margin-top:0">Supermarket tanlansangiz, batafsil ma’lumot shu yerda chiqadi.</p></div>
+            <form id="market-business-form" hidden novalidate>
+              <div class="form-grid" style="margin-top:14px">
+                <div class="field"><label for="market-business-name">Supermarket nomi</label><input class="ctl" id="market-business-name" required /></div>
+                <div class="field"><label for="market-business-phone">Telefon</label><input class="ctl" id="market-business-phone" /></div>
+                <div class="field"><label for="market-business-address">Manzil</label><input class="ctl" id="market-business-address" /></div>
+              </div>
+              <div style="display:flex;gap:10px;margin-top:12px">
+                <button class="btn btn-primary btn-sm" type="submit">Saqlash</button>
+                <button class="btn btn-ghost btn-sm" type="button" id="cancel-market-business-edit">Bekor qilish</button>
+              </div>
+              <p class="form-message" id="market-business-message"></p>
+            </form>
+            <form id="market-owner-form" hidden novalidate>
+              <div class="form-grid" style="margin-top:14px">
+                <div class="field"><label for="market-owner-name">Ega F.I.SH</label><input class="ctl" id="market-owner-name" required /></div>
+                <div class="field"><label for="market-owner-phone">Ega telefoni</label><input class="ctl" id="market-owner-phone" /></div>
+                <div class="field"><label for="market-owner-amount">To‘lov summasi</label><input class="ctl" id="market-owner-amount" type="number" min="0" required /></div>
+                <div class="field"><label for="market-owner-paid-at">To‘lov sanasi</label><input class="ctl" id="market-owner-paid-at" type="datetime-local" required /></div>
+                <div class="field"><label for="market-owner-months">Obuna (oy)</label><input class="ctl" id="market-owner-months" type="number" min="1" max="360" required /></div>
+              </div>
+              <div style="display:flex;gap:10px;margin-top:12px">
+                <button class="btn btn-primary btn-sm" type="submit">Saqlash</button>
+                <button class="btn btn-ghost btn-sm" type="button" id="cancel-market-owner-edit">Bekor qilish</button>
+              </div>
+              <p class="form-message" id="market-owner-message"></p>
+            </form>
             <form id="market-reset-credentials-form" hidden novalidate>
               <div class="form-grid" style="margin-top:14px">
                 <div class="field"><label for="new-market-login">Yangi login (o‘zgarmasa bo‘sh qoldiring)</label><input class="ctl" id="new-market-login" autocomplete="off" /></div>

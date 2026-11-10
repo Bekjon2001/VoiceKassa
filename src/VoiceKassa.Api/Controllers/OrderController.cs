@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 using VoiceKassa.Application.DTOs;
 using VoiceKassa.Application.Services;
 
@@ -6,7 +7,8 @@ namespace VoiceKassa.Api.Controllers;
 
 [Route("[controller]/[action]")]
 [ApiController]
-public class OrderController : ControllerBase
+[Authorize]
+public class OrderController : ApiControllerBase
 {
     private readonly OrderService _orderService;
     private readonly ReservationService _reservationService;
@@ -27,8 +29,13 @@ public class OrderController : ControllerBase
     /// mijoz faqat o'z stoliga buyurtma bera oladi.
     /// </summary>
     [HttpPost("voice")]
+    [AllowAnonymous]
+    [SuperAdminReadOnly]
     public async Task<IActionResult> CreateFromVoice([FromBody] CreateOrderFromTextRequest request, CancellationToken ct)
     {
+        if (IsRestaurantAdminRole && TokenRestaurantId != request.BusinessId)
+            return StatusCode(StatusCodes.Status403Forbidden, new { error = "Boshqa restoran uchun buyurtma berish mumkin emas." });
+
         if (request.TableId.HasValue)
         {
             // Header ustuvor; body'dagi SessionToken fallback sifatida qoldirildi.
@@ -37,6 +44,12 @@ public class OrderController : ControllerBase
 
             var (allowed, authError) = await AuthorizeTableAccessAsync(request.TableId.Value, request.BusinessId, request.SessionToken, ct);
             if (!allowed) return authError!;
+        }
+        else
+        {
+            var access = await _businessService.AuthorizeOwnerAsync(
+                request.BusinessId, Request.Headers["X-Owner-Token"].FirstOrDefault(), ct);
+            if (!access.Success) return Unauthorized(new { error = access.Error });
         }
 
         var (success, error, order) = await _orderService.CreateFromTextAsync(request, ct);
@@ -48,6 +61,7 @@ public class OrderController : ControllerBase
     /// X-Table-Token (mijoz — o'z stoli) YOKI X-Owner-Token (admin/oshxona).
     /// </summary>
     [HttpPost("{orderId:long}/close")]
+    [SuperAdminReadOnly]
     public async Task<IActionResult> Close(long orderId, [FromBody] CloseOrderRequest request, CancellationToken ct)
     {
         var order = await _orderService.GetOrderAsync(orderId, ct);
@@ -68,6 +82,10 @@ public class OrderController : ControllerBase
     [HttpGet("open/{businessId:long}")]
     public async Task<IActionResult> GetOpen(long businessId, CancellationToken ct)
     {
+        if (IsSuperAdminRole)
+            return Ok(await _orderService.GetOpenOrdersAsync(businessId, ct));
+        var accessError = EnsureBusinessReadAccess(businessId);
+        if (accessError is not null) return accessError;
         var access = await _businessService.AuthorizeOwnerAsync(businessId, Request.Headers["X-Owner-Token"].FirstOrDefault(), ct);
         if (!access.Success) return Unauthorized(new { error = access.Error ?? "Ruxsat yo'q." });
 
@@ -81,6 +99,7 @@ public class OrderController : ControllerBase
     /// ko'rsatmaydi.
     /// </summary>
     [HttpGet("mine")]
+    [AllowAnonymous]
     public async Task<IActionResult> Mine(CancellationToken ct)
     {
         var token = Request.Headers["X-Table-Token"].FirstOrDefault();
@@ -94,6 +113,7 @@ public class OrderController : ControllerBase
 
     /// <summary>Oshxona buyurtmani oldi: Open -> InProgress (X-Owner-Token).</summary>
     [HttpPost("{orderId:long}/start")]
+    [SuperAdminReadOnly]
     public async Task<IActionResult> Start(long orderId, CancellationToken ct)
     {
         var order = await _orderService.GetOrderAsync(orderId, ct);
@@ -111,6 +131,7 @@ public class OrderController : ControllerBase
     /// YOKI X-Owner-Token (oshxona). Body ixtiyoriy: { "reason": "..." }.
     /// </summary>
     [HttpPost("{orderId:long}/cancel")]
+    [SuperAdminReadOnly]
     public async Task<IActionResult> Cancel(long orderId, [FromBody] CancelOrderRequest? request, CancellationToken ct)
     {
         var order = await _orderService.GetOrderAsync(orderId, ct);
@@ -128,6 +149,7 @@ public class OrderController : ControllerBase
     /// tugagan bo'lsa — qolganlari oshxonada qoladi. X-Owner-Token yoki X-Table-Token.
     /// </summary>
     [HttpDelete("{orderId:long}/items/{orderItemId:long}")]
+    [SuperAdminReadOnly]
     public async Task<IActionResult> RemoveItem(long orderId, long orderItemId, CancellationToken ct)
     {
         var order = await _orderService.GetOrderAsync(orderId, ct);
@@ -145,6 +167,7 @@ public class OrderController : ControllerBase
     /// buyurtmasi; boshqa stolga so'rasa 403) YOKI X-Owner-Token (oshxona).
     /// </summary>
     [HttpGet("{orderId:long}")]
+    [AllowAnonymous]
     public async Task<IActionResult> GetById(long orderId, CancellationToken ct)
     {
         var order = await _orderService.GetOrderAsync(orderId, ct);
@@ -165,6 +188,11 @@ public class OrderController : ControllerBase
     /// </summary>
     private async Task<(bool Allowed, IActionResult? Error)> AuthorizeOrderAccessAsync(OrderResponse order, CancellationToken ct)
     {
+        if (IsRestaurantAdminRole && TokenRestaurantId != order.BusinessId)
+            return (false, StatusCode(StatusCodes.Status403Forbidden, new { error = "Boshqa restoran buyurtmasiga ruxsat yo'q." }));
+        if (IsSuperAdminRole)
+            return (true, null);
+
         var tableToken = Request.Headers["X-Table-Token"].FirstOrDefault();
         if (!string.IsNullOrWhiteSpace(tableToken))
         {

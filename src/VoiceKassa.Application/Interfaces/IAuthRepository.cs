@@ -12,6 +12,7 @@ public interface IAuthRepository
 {
     Task<bool> AnySuperAdminExistsAsync(CancellationToken ct = default);
     Task<UserAccount?> GetUserAccountByLoginAsync(string login, CancellationToken ct = default);
+    Task<UserAccount?> GetUserAccountByIdAsync(long userId, CancellationToken ct = default);
     Task<UserAccount?> GetUserAccountByTokenAsync(string token, CancellationToken ct = default);
     Task<UserAccount> CreateUserAccountAsync(UserAccount account, CancellationToken ct = default);
     Task<bool> UpdateUserAccessTokenAsync(long userId, string token, CancellationToken ct = default);

@@ -32,6 +32,7 @@
         <span class="step-label">Admin panel</span>
         <h2>Boshqaruvga kirish</h2>
         <p class="lead">Super Admin bergan login va parol bilan kiring.</p>
+        <p class="muted">Super Admin бўлсангиз, <a href="super-admin.html">Super Admin orqali kiring</a>.</p>
 
         <form id="owner-login-form" novalidate>
           <div class="field" style="margin-bottom:12px">
@@ -92,6 +93,12 @@
             <p class="topbar-sub" id="owner-view-subtitle">Stollar, menyutaomlar va xodimlar boshqaruvi.</p>
           </div>
           <span class="flash" id="workspace-flash" hidden></span>
+          <label id="super-admin-picker-wrap" hidden>
+            <span class="sr-only">Restoran tanlang</span>
+            <select class="ctl" id="super-admin-restaurant-picker" aria-label="Restoran tanlang">
+              <option value="">Restoran tanlang</option>
+            </select>
+          </label>
           <button class="btn btn-ghost btn-sm" id="theme-toggle" type="button" title="Kun/Tun rejimlarini almashtirish">☀️</button>
         </header>
 
@@ -487,4 +494,3 @@
 <script src="admin.js"></script>
 </body>
 </html>
-

@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 using VoiceKassa.Application.DTOs;
 using VoiceKassa.Application.Services;
 
@@ -6,7 +7,8 @@ namespace VoiceKassa.Api.Controllers;
 
 [Route("[controller]/[action]")]
 [ApiController]
-public class ProductController : ControllerBase
+[Authorize]
+public class ProductController : ApiControllerBase
 {
     private readonly BusinessService _businessService;
 
@@ -14,6 +16,7 @@ public class ProductController : ControllerBase
 
     /// <summary>Yangi mahsulot/taom qo'shish.</summary>
     [HttpPost]
+    [SuperAdminReadOnly]
     public async Task<IActionResult> Create([FromBody] CreateProductRequest request, CancellationToken ct)
     {
         var access = await _businessService.AuthorizeOwnerAsync(request.BusinessId, Request.Headers["X-Owner-Token"].FirstOrDefault(), ct);
@@ -23,8 +26,11 @@ public class ProductController : ControllerBase
     }
 
     [HttpGet]
+    [AllowAnonymous]
     public async Task<IActionResult> GetByBusiness([FromQuery] long businessId, CancellationToken ct)
     {
+        var accessError = EnsureBusinessReadAccess(businessId);
+        if (accessError is not null) return accessError;
         var products = await _businessService.GetProductsAsync(businessId, ct);
         return Ok(products);
     }
@@ -33,6 +39,10 @@ public class ProductController : ControllerBase
     [HttpGet("low-stock")]
     public async Task<IActionResult> GetLowStock([FromQuery] long businessId, CancellationToken ct)
     {
+        var accessError = EnsureBusinessReadAccess(businessId);
+        if (accessError is not null) return accessError;
+        if (IsSuperAdminRole)
+            return Ok(await _businessService.GetLowStockProductsAsync(businessId, ct));
         var token = Request.Headers["X-Owner-Token"].FirstOrDefault();
         var access = await _businessService.AuthorizeOwnerAsync(businessId, token, ct);
         if (!access.Success) return Unauthorized(new { error = access.Error });
@@ -41,6 +51,7 @@ public class ProductController : ControllerBase
     }
 
     [HttpPut("{productId:long}/stock")]
+    [SuperAdminReadOnly]
     public async Task<IActionResult> UpdateStock(long productId, [FromBody] UpdateStockRequest request, CancellationToken ct)
     {
         var product = await _businessService.GetProductByIdAsync(productId, ct);

@@ -47,6 +47,29 @@ cd src\VoiceKassa.Api
 dotnet user-secrets set "ConnectionStrings:Default" "Host=localhost;Port=5432;Database=voicekassa;Username=postgres;Password=SIZNING_PAROLINGIZ"
 ```
 
+API administratorlari uchun JWT kalitini ham User Secrets'da saqlang. Quyidagi buyruq
+PowerShell'da tasodifiy 64 baytli kalit yaratadi va uning qiymatini ekranga chiqarmaydi:
+
+```powershell
+$jwtKey = [Convert]::ToBase64String([System.Security.Cryptography.RandomNumberGenerator]::GetBytes(64))
+dotnet user-secrets set "Jwt:SigningKey" $jwtKey
+Remove-Variable jwtKey
+```
+
+Super Admin va restoran admini loginidan keyin 8 soat amal qiladigan JWT oladi.
+Eski tokenlar JWT emas, shuning uchun yangilanishdan so'ng qayta login qiling.
+JWT tarkibida UserId, Role va RestaurantId bor. `ACCESS_TOKEN` ustunida sessiya
+identifikatori saqlanadi; shu orqali keyingi login oldingi JWT'ni bekor qiladi.
+Baza sxemasi va jadvallar o'zgartirilmaydi.
+
+Super Admin asosiy CRUD paneli `frontend/super-admin.html` hisoblanadi.
+Restoran egasi paneli `frontend/admin.html` Super Admin uchun faqat o'qish
+rejimida ishlaydi; backend ham bu paneldagi umumiy o'zgartirish endpointlarini
+Super Admin uchun rad etadi. Super Admin CRUD amallari faqat `api/super-admin`
+endpointlari orqali bajariladi. Restoran/supermarketni o'chirish uning
+ma'lumotlarini saqlagan holda arxivlaydi; arxivlangan biznes egasi tizimga
+qayta kira olmaydi. Sxema yoki migration o'zgarishi talab qilinmaydi.
+
 Gemini AI kalitini ham shu qilish kerak:
 
 ```powershell

@@ -1,5 +1,8 @@
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
 using System.Net;
 using VoiceKassa.AiServices;
 using Microsoft.AspNetCore.Diagnostics;
@@ -11,11 +14,53 @@ using VoiceKassa.DataLayer.Repository;
 
 var builder = WebApplication.CreateBuilder(args);
 
+var jwtKeyValue = builder.Configuration["Jwt:SigningKey"]
+    ?? throw new InvalidOperationException(
+        "Jwt:SigningKey topilmadi. User Secrets yoki JWT_SIGNING_KEY muhit o'zgaruvchisiga kamida 32 baytli Base64 kalit qo'shing.");
+byte[] jwtSigningKey;
+try
+{
+    jwtSigningKey = Convert.FromBase64String(jwtKeyValue);
+}
+catch (FormatException exception)
+{
+    throw new InvalidOperationException("Jwt:SigningKey Base64 formatida bo'lishi kerak.", exception);
+}
+if (jwtSigningKey.Length < 32)
+    throw new InvalidOperationException("Jwt:SigningKey kamida 32 bayt bo'lishi kerak.");
+
 // --- Database ---
 var connectionString = builder.Configuration.GetConnectionString("Default")
     ?? throw new InvalidOperationException("ConnectionStrings:Default topilmadi (appsettings.json yoki user-secrets'ni tekshiring).");
 
 builder.Services.AddDbContext<AppDbContext>(opt => opt.UseNpgsql(connectionString));
+builder.Services.AddSingleton(jwtSigningKey);
+builder.Services.AddSingleton<IAccessTokenIssuer, JwtTokenService>();
+builder.Services
+    .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.MapInboundClaims = false;
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidIssuer = "VoiceKassa",
+            ValidateAudience = true,
+            ValidAudience = "VoiceKassa",
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new SymmetricSecurityKey(jwtSigningKey),
+            ValidateLifetime = true,
+            ClockSkew = TimeSpan.FromSeconds(30),
+            NameClaimType = JwtTokenService.UserIdClaim,
+            RoleClaimType = JwtTokenService.RoleClaim,
+        };
+    });
+builder.Services.AddAuthorization(options =>
+{
+    options.FallbackPolicy = new AuthorizationPolicyBuilder()
+        .RequireAuthenticatedUser()
+        .Build();
+});
 
 // --- Gemini AI client (bepul tarif) ---
 var geminiOptions = new GeminiApiOptions
@@ -150,21 +195,21 @@ app.Use(async (ctx, next) =>
     // qisqartiramiz: faqat Controller.Action.
     var shortRoute = route.Split(' ').FirstOrDefault() ?? route;
     // So'rov ID (token) — tokenning birinchi 6 belgisi, foydalanuvchini kuzatish uchun
-    var token = ctx.Request.Headers["X-Super-Admin-Token"].FirstOrDefault();
-    var tokenShort = string.IsNullOrEmpty(token) ? "-" : (token.Length > 6 ? token[..6] + "…" : token);
-
     app.Logger.LogInformation(
-        "[{Time}] {Method} {Path} → {Status} ({Ms:0.00} s) [token={Token}] {Route}",
+        "[{Time}] {Method} {Path} → {Status} ({Ms:0.00} s) [role={Role} user={UserId}] {Route}",
         DateTime.Now.ToString("HH:mm:ss.fff"),
         ctx.Request.Method,
         ctx.Request.Path.Value,
         ctx.Response.StatusCode,
         sw.Elapsed.TotalSeconds,
-        tokenShort,
+        ctx.User.FindFirst(JwtTokenService.RoleClaim)?.Value ?? "-",
+        ctx.User.FindFirst(JwtTokenService.UserIdClaim)?.Value ?? "-",
         shortRoute);
 });
 
 app.UseCors();
+app.UseAuthentication();
+app.UseMiddleware<JwtLegacyTokenMiddleware>();
 app.UseAuthorization();
 app.MapControllers();
 

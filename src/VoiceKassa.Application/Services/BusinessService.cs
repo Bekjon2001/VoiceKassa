@@ -17,11 +17,16 @@ public class BusinessService
 {
     private readonly IBusinessRepository _repo;
     private readonly ILogger<BusinessService> _logger;
+    private readonly IAccessTokenIssuer _accessTokenIssuer;
 
-    public BusinessService(IBusinessRepository repo, ILogger<BusinessService> logger)
+    public BusinessService(
+        IBusinessRepository repo,
+        ILogger<BusinessService> logger,
+        IAccessTokenIssuer accessTokenIssuer)
     {
         _repo = repo;
         _logger = logger;
+        _accessTokenIssuer = accessTokenIssuer;
     }
 
     public async Task<bool> IsSuperAdminTokenAsync(string? token, CancellationToken ct = default) =>
@@ -119,12 +124,20 @@ public class BusinessService
         OwnerLoginRequest request, CancellationToken ct = default)
     {
         var owner = await _repo.GetOwnerByLoginAsync(request.Login.Trim(), ct);
-        if (owner is null || !VerifyPassword(request.Password, owner.PasswordHash))
+        if (owner is null || !owner.IsActive || !VerifyPassword(request.Password, owner.PasswordHash))
             return (false, "Login yoki parol noto'g'ri.", null);
         if (owner.SubscriptionEndsAt <= DateTime.UtcNow)
             return (false, "Obuna muddati tugagan.", null);
         var business = await _repo.GetBusinessByIdAsync(owner.BusinessId, ct);
-        return business is null ? (false, "Restoran topilmadi.", null) : (true, null, ToOwnerResponse(owner, business));
+        if (business is null || !business.IsActive) return (false, "Restoran faol emas.", null);
+
+        var sessionId = AccessTokens.New();
+        var token = _accessTokenIssuer.CreateRestaurantAdminToken(owner.Id, owner.BusinessId, sessionId);
+        if (!await _repo.UpdateOwnerAccessTokenAsync(owner.Id, sessionId, ct))
+            return (false, "Admin sessiyasini yangilab bo'lmadi.", null);
+        var response = ToOwnerResponse(owner, business);
+        response.AccessToken = token;
+        return (true, null, response);
     }
 
     public async Task<OwnerAdminResponse?> GetOwnerAdminAsync(long businessId, CancellationToken ct = default)
@@ -201,37 +214,36 @@ public class BusinessService
         return (true, null, await GetOwnerAdminAsync(request.BusinessId, ct));
     }
 
+    public async Task<(bool Success, string? Error, OwnerAdminResponse? Owner)> UpdateOwnerDetailsAsync(
+        long businessId, UpdateOwnerDetailsRequest request, CancellationToken ct = default)
+    {
+        var owner = await _repo.GetOwnerByBusinessIdAnyStateAsync(businessId, ct);
+        if (owner is null) return (false, "Bu biznes uchun ega topilmadi.", null);
+        if (string.IsNullOrWhiteSpace(request.OwnerFullName) ||
+            request.SubscriptionAmount < 0 ||
+            request.SubscriptionMonths is < 1 or > 360 ||
+            request.PaymentPaidAt == default)
+            return (false, "Ega yoki obuna ma'lumotlari noto'g'ri.", null);
+
+        if (!await _repo.UpdateOwnerDetailsAsync(
+                owner.Id, request.OwnerFullName.Trim(), request.OwnerPhoneNumber?.Trim(),
+                request.SubscriptionAmount, request.PaymentPaidAt.ToUniversalTime(),
+                request.SubscriptionMonths, ct))
+            return (false, "Ega ma'lumotlarini saqlab bo'lmadi.", null);
+
+        return (true, null, await GetOwnerAdminAsync(businessId, ct));
+    }
+
     private static string HashPassword(string password) => PasswordHasher.Hash(password);
 
     private static bool VerifyPassword(string password, string stored) => PasswordHasher.Verify(password, stored);
 
 
-    /// <summary>Super Admin uchun: tanlangan restoranga egasi sifatida kirish.
-    /// Ega access tokenini yangilaydi va owner sessiyasini qaytaradi.</summary>
-    public async Task<(bool Success, string? Error, OwnerLoginResponse? Result)> EnterRestaurantAsSuperAdminAsync(
-        long businessId, string? superAdminToken, CancellationToken ct = default)
-    {
-        if (!await IsSuperAdminTokenAsync(superAdminToken, ct))
-            return (false, "Super Admin sifatida kiring.", null);
-
-        var owner = await _repo.GetOwnerByBusinessIdAnyStateAsync(businessId, ct);
-        if (owner is null) return (false, "Restoran egasi topilmadi.", null);
-
-        var business = await _repo.GetBusinessByIdAsync(businessId, ct);
-        if (business is null) return (false, "Restoran topilmadi.", null);
-
-        var token = Guid.NewGuid().ToString("N") + Guid.NewGuid().ToString("N");
-        await _repo.UpdateOwnerAccessTokenAsync(owner.Id, token, ct);
-        owner.AccessToken = token;
-
-        return (true, null, ToOwnerResponse(owner, business));
-    }
-
     private static OwnerLoginResponse ToOwnerResponse(RestaurantOwner owner, Business business) => new()
     {
         BusinessId = business.Id, RestaurantName = business.Name, OwnerFullName = owner.FullName,
         AccessToken = owner.AccessToken, SubscriptionEndsAt = owner.SubscriptionEndsAt,
-        PaymentPaidAt = owner.PaymentPaidAt,
+        PaymentPaidAt = owner.PaymentPaidAt, Role = "restaurant-admin",
     };
 
     public async Task<BusinessResponse> CreateBusinessAsync(CreateBusinessRequest request, CancellationToken ct = default)
@@ -259,6 +271,30 @@ public class BusinessService
         var businesses = await _repo.GetAllBusinessesAsync(ct);
         return businesses.Select(ToBusinessResponse).ToList();
     }
+
+    public async Task<(bool Success, string? Error, BusinessResponse? Business)> UpdateBusinessAsync(
+        long businessId, UpdateBusinessRequest request, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(request.Name))
+            return (false, "Biznes nomi bo'sh bo'lishi mumkin emas.", null);
+        var name = request.Name.Trim();
+        if (name.Length < 2)
+            return (false, "Biznes nomi kamida 2 ta belgidan iborat bo'lishi kerak.", null);
+
+        var existingBusinesses = await _repo.GetAllBusinessesAsync(ct);
+        if (existingBusinesses.Any(b => b.Id != businessId && b.IsActive &&
+                b.Name.Trim().Equals(name, StringComparison.OrdinalIgnoreCase)))
+            return (false, "Bu nomdagi faol biznes allaqachon mavjud.", null);
+
+        if (!await _repo.UpdateBusinessAsync(
+                businessId, name, request.Address?.Trim(), request.PhoneNumber?.Trim(), ct))
+            return (false, "Biznes topilmadi.", null);
+
+        return (true, null, await GetBusinessAsync(businessId, ct));
+    }
+
+    public Task<bool> SetBusinessActiveAsync(long businessId, bool isActive, CancellationToken ct = default) =>
+        _repo.SetBusinessActiveAsync(businessId, isActive, ct);
 
     public async Task<(bool Success, string? Error, StaffResponse? Staff)> CreateStaffAsync(
         CreateStaffRequest request, CancellationToken ct = default)
@@ -467,7 +503,7 @@ public class BusinessService
     private static BusinessResponse ToBusinessResponse(Business b) => new()
     {
         Id = b.Id, Name = b.Name, Type = b.Type, Address = b.Address,
-        PhoneNumber = b.PhoneNumber, CreatedAt = b.CreatedAt,
+        PhoneNumber = b.PhoneNumber, IsActive = b.IsActive, CreatedAt = b.CreatedAt,
     };
 
     private static StaffResponse ToStaffResponse(Staff s) => new()

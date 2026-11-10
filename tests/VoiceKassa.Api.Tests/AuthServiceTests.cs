@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Moq;
+using Microsoft.Extensions.Logging.Abstractions;
 using VoiceKassa.Application.DTOs;
 using VoiceKassa.Application.Interfaces;
 using VoiceKassa.Application.Services;
@@ -15,13 +16,24 @@ public class AuthServiceTests
 {
     private readonly Mock<IAuthRepository> _authRepoMock;
     private readonly Mock<IBusinessRepository> _businessRepoMock;
+    private readonly Mock<IAccessTokenIssuer> _accessTokenIssuerMock;
     private readonly AuthService _authService;
 
     public AuthServiceTests()
     {
         _authRepoMock = new Mock<IAuthRepository>();
         _businessRepoMock = new Mock<IBusinessRepository>();
-        _authService = new AuthService(_authRepoMock.Object, _businessRepoMock.Object);
+        _accessTokenIssuerMock = new Mock<IAccessTokenIssuer>();
+        _accessTokenIssuerMock.Setup(i => i.CreateSuperAdminToken(It.IsAny<long>(), It.IsAny<string>()))
+            .Returns("test-super-admin-jwt");
+        _accessTokenIssuerMock.Setup(i => i.CreateRestaurantAdminToken(
+                It.IsAny<long>(), It.IsAny<long>(), It.IsAny<string>()))
+            .Returns("test-restaurant-admin-jwt");
+        _authService = new AuthService(
+            _authRepoMock.Object,
+            _businessRepoMock.Object,
+            NullLogger<AuthService>.Instance,
+            _accessTokenIssuerMock.Object);
     }
 
     #region CheckSuperAdminExistsAsync
@@ -154,6 +166,32 @@ public class AuthServiceTests
 
         Assert.False(success);
         Assert.Contains("Obuna muddati tugagan", error);
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public async Task OwnerLoginAsync_ArchivedBusiness_ReturnsFalse()
+    {
+        var owner = new RestaurantOwner
+        {
+            Id = 10, BusinessId = 42, Login = "owner1",
+            PasswordHash = PasswordHasher.Hash("ownerpass"),
+            IsActive = true, SubscriptionEndsAt = DateTime.UtcNow.AddDays(30),
+        };
+        var business = new Business
+        {
+            Id = 42, Name = "Archived Restaurant", Type = BusinessType.Restaurant, IsActive = false,
+        };
+        _authRepoMock.Setup(r => r.GetOwnerByLoginAsync("owner1", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(owner);
+        _businessRepoMock.Setup(r => r.GetBusinessByIdAsync(42, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(business);
+
+        var (success, error, result) = await _authService.OwnerLoginAsync(
+            new LoginRequest { Login = "owner1", Password = "ownerpass" });
+
+        Assert.False(success);
+        Assert.Contains("faol emas", error);
         Assert.Null(result);
     }
 

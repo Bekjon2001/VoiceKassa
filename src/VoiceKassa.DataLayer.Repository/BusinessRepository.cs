@@ -39,6 +39,9 @@ public class BusinessRepository : IBusinessRepository
     public Task<RestaurantOwner?> GetOwnerByLoginAsync(string login, CancellationToken ct = default) =>
         _db.RestaurantOwners.FirstOrDefaultAsync(o => o.Login == login, ct);
 
+    public Task<RestaurantOwner?> GetOwnerByIdAsync(long ownerId, CancellationToken ct = default) =>
+        _db.RestaurantOwners.FirstOrDefaultAsync(o => o.Id == ownerId, ct);
+
     public async Task<bool> UpdateOwnerAccessTokenAsync(long ownerId, string token, CancellationToken ct = default)
     {
         var owner = await _db.RestaurantOwners.FindAsync(new object[] { ownerId }, ct);
@@ -59,6 +62,23 @@ public class BusinessRepository : IBusinessRepository
 
     public Task<bool> IsOwnerLoginTakenAsync(string login, long excludeBusinessId, CancellationToken ct = default) =>
         _db.RestaurantOwners.AnyAsync(o => o.Login == login && o.BusinessId != excludeBusinessId, ct);
+
+    public async Task<bool> UpdateOwnerDetailsAsync(
+        long ownerId, string fullName, string? phoneNumber, decimal subscriptionAmount,
+        DateTime paymentPaidAt, int subscriptionMonths, CancellationToken ct = default)
+    {
+        var owner = await _db.RestaurantOwners.FindAsync(new object[] { ownerId }, ct);
+        if (owner is null) return false;
+
+        owner.FullName = fullName;
+        owner.PhoneNumber = phoneNumber ?? string.Empty;
+        owner.SubscriptionAmount = subscriptionAmount;
+        owner.PaymentPaidAt = paymentPaidAt;
+        owner.SubscriptionMonths = subscriptionMonths;
+        owner.SubscriptionEndsAt = paymentPaidAt.AddMonths(subscriptionMonths);
+        await _db.SaveChangesAsync(ct);
+        return true;
+    }
 
     public async Task<bool> UpdateOwnerCredentialsAsync(
         long ownerId, string? newLogin, string? newPasswordHash, CancellationToken ct = default)
@@ -96,6 +116,36 @@ public class BusinessRepository : IBusinessRepository
 
     public Task<List<Business>> GetAllBusinessesAsync(CancellationToken ct = default) =>
         _db.Businesses.OrderBy(b => b.Name).ToListAsync(ct);
+
+    public async Task<bool> UpdateBusinessAsync(
+        long businessId, string name, string? address, string? phoneNumber, CancellationToken ct = default)
+    {
+        var business = await _db.Businesses.FirstOrDefaultAsync(b => b.Id == businessId, ct);
+        if (business is null) return false;
+
+        business.Name = name;
+        business.Address = address;
+        business.PhoneNumber = phoneNumber;
+        await _db.SaveChangesAsync(ct);
+        return true;
+    }
+
+    public async Task<bool> SetBusinessActiveAsync(long businessId, bool isActive, CancellationToken ct = default)
+    {
+        var business = await _db.Businesses.FirstOrDefaultAsync(b => b.Id == businessId, ct);
+        if (business is null) return false;
+
+        business.IsActive = isActive;
+        if (!isActive)
+        {
+            var owner = await _db.RestaurantOwners.FirstOrDefaultAsync(o => o.BusinessId == businessId, ct);
+            if (owner is not null)
+                owner.AccessToken = AccessTokens.New();
+        }
+
+        await _db.SaveChangesAsync(ct);
+        return true;
+    }
 
     public async Task<Staff> CreateStaffAsync(Staff staff, CancellationToken ct = default)
     {

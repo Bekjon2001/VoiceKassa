@@ -79,6 +79,20 @@ if (themeToggleBtn) {
   });
 }
 
+function tokenHeaders(headers = {}) {
+  if (superAdminToken) headers.Authorization = "Bearer " + superAdminToken;
+  return headers;
+}
+
+function openAdminWorkspace(token) {
+  superAdminToken = token || "";
+  try {
+    sessionStorage.setItem("vk_owner_session", JSON.stringify({ role: "super-admin", token: superAdminToken }));
+    sessionStorage.removeItem(SESSION_KEY);
+  } catch { /* ignore */ }
+  location.replace("admin.html");
+}
+
 function esc(value) {
   return String(value ?? "").replace(/[&<>"']/g, ch => ({
     "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
@@ -94,6 +108,12 @@ function formatDate(value) {
   return date && !Number.isNaN(date.getTime())
     ? date.toLocaleDateString("uz-UZ")
     : "-";
+}
+
+function toLocalDateTime(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
 }
 
 function setMsg(el, text, state) {
@@ -129,7 +149,7 @@ function restoreToken() {
 
 async function getJson(url) {
   const response = await fetch(`${API_BASE}${url}`, {
-    headers: { "X-Super-Admin-Token": superAdminToken },
+    headers: tokenHeaders({ "X-Super-Admin-Token": superAdminToken }),
   });
   const data = await response.json().catch(() => null);
   if (!response.ok) {
@@ -147,7 +167,7 @@ async function getJson(url) {
 async function postJson(url, body, headers = {}) {
   const response = await fetch(`${API_BASE}${url}`, {
     method: "POST",
-    headers: Object.assign({ "Content-Type": "application/json" }, headers),
+    headers: tokenHeaders(Object.assign({ "Content-Type": "application/json" }, headers)),
     body: JSON.stringify(body),
   });
   const data = await response.json().catch(() => null);
@@ -197,6 +217,13 @@ $("sa-logout-button").addEventListener("click", () => {
   location.reload();
 });
 
+document.querySelectorAll('a[href="admin.html"]').forEach(link => {
+  link.addEventListener("click", event => {
+    event.preventDefault();
+    openAdminWorkspace(superAdminToken);
+  });
+});
+
 // ---------- Auth: Super Admin kirishi va birinchi akkaunt ----------
 $("show-first-super-form").addEventListener("click", () => {
   const form = $("first-super-form");
@@ -217,7 +244,6 @@ $("super-login-form").addEventListener("submit", async event => {
       password: $("sa-password").value,
     });
     saveToken(result.accessToken);
-    setMsg(message, "", "");
     showDashboard();
   } catch (error) {
     setMsg(message, error.message, "err");
@@ -236,10 +262,12 @@ $("first-super-form").addEventListener("submit", async event => {
       phoneNumber: event.target.elements.phoneNumber.value.trim(),
       login: event.target.elements.login.value.trim(),
       password: event.target.elements.password.value,
-    });
+    }, event.target.elements.setupKey.value
+      ? { "X-Setup-Key": event.target.elements.setupKey.value }
+      : {});
     saveToken(result.accessToken);
-    setMsg(message, "Super Admin yaratildi.", "ok");
     showDashboard();
+    setMsg(message, "Super Admin yaratildi.", "ok");
   } catch (error) {
     setMsg(message, error.message, "err");
   }
@@ -252,7 +280,7 @@ $("restaurant-create-form").addEventListener("submit", async event => {
   setMsg(message, "Saqlanmoqda...");
   try {
     const elements = event.target.elements;
-    await postJson("/Business/CreateRestaurant/restaurant", {
+    await postJson("/api/super-admin/restaurants", {
       restaurantName: elements.restaurantName.value.trim(),
       ownerFullName: elements.ownerFullName.value.trim(),
       ownerPhoneNumber: elements.ownerPhoneNumber.value.trim(),
@@ -279,7 +307,7 @@ $("market-create-form").addEventListener("submit", async event => {
   setMsg(message, "Saqlanmoqda...");
   try {
     const elements = event.target.elements;
-    await postJson("/Business/CreateMarket/market", {
+    await postJson("/api/super-admin/markets", {
       marketName: elements.marketName.value.trim(),
       ownerFullName: elements.ownerFullName.value.trim(),
       ownerPhoneNumber: elements.ownerPhoneNumber.value.trim(),
@@ -303,7 +331,8 @@ $("market-create-form").addEventListener("submit", async event => {
 let currentFilter = "";
 
 // Holat pill: Passiv > obuna muddati ustuvorligi bilan.
-function statusPillHtml(owner) {
+function statusPillHtml(owner, business) {
+  if (business && business.isActive === false) return '<span class="pill pill--off">Arxivlangan</span>';
   if (owner.isActive === false) return '<span class="pill pill--off">Passiv</span>';
   const activeSub = new Date(owner.subscriptionEndsAt) > new Date();
   return activeSub
@@ -323,7 +352,7 @@ function ownerCellsHtml(restaurant) {
     + `<td>${fmtSum(owner.subscriptionAmount)} so‘m</td>`
     + `<td>${formatDate(owner.paymentPaidAt)}</td>`
     + `<td>${owner.subscriptionMonths || 0} oy</td>`
-    + `<td class="cell-status">${statusPillHtml(owner)}</td>`;
+    + `<td class="cell-status">${statusPillHtml(owner, restaurant)}</td>`;
 }
 
 // ---------- Sahifalash (pagination) ----------
@@ -419,7 +448,7 @@ async function loadRestaurants() {
   restaurantsCache = [];
   renderStatsBar(0, 0, 0);
   try {
-    const all = await getJson("/Business/GetAll");
+    const all = await getJson("/api/super-admin/businesses");
     // Faqat Restaurant (Type = 0) filtri — Supermarket alohida bo'limda.
     restaurantsCache = (Array.isArray(all) ? all : []).filter(b => Number(b.type) === 0);
   } catch (error) {
@@ -445,7 +474,7 @@ async function loadMarkets() {
   renderMarketStatsBar(0, 0, 0);
   marketsCache = [];
   try {
-    const all = await getJson("/Business/GetAll");
+    const all = await getJson("/api/super-admin/businesses");
     // Faqat Market (1) turi — Supermarketlar bo‘limi.
     marketsCache = (Array.isArray(all) ? all : []).filter(b => Number(b.type) === 1);
   } catch (error) {
@@ -464,7 +493,7 @@ async function loadMarkets() {
 
 async function enrichWithOwner(restaurant) {
   try {
-    restaurant._owner = await getJson(`/Business/GetOwner/${restaurant.id}/owner`);
+    restaurant._owner = await getJson(`/api/super-admin/businesses/${restaurant.id}/owner`);
   } catch {
     restaurant._owner = null; // ega topilmadi / xatolik
   }
@@ -476,7 +505,7 @@ function updateSuperStats() {
   let passive = 0;
   restaurantsCache.forEach(r => {
     if (!r._owner) return;
-    if (r._owner.isActive === false) passive++;
+    if (r.isActive === false || r._owner.isActive === false) passive++;
     else if (r._owner.subscriptionEndsAt) {
       new Date(r._owner.subscriptionEndsAt) > new Date() ? active++ : expired++;
     }
@@ -497,7 +526,7 @@ function updateMarketStats() {
   let passive = 0;
   marketsCache.forEach(m => {
     if (!m._owner) return;
-    if (m._owner.isActive === false) passive++;
+    if (m.isActive === false || m._owner.isActive === false) passive++;
     else if (m._owner.subscriptionEndsAt) {
       new Date(m._owner.subscriptionEndsAt) > new Date() ? active++ : expired++;
     }
@@ -525,7 +554,7 @@ function marketOwnerCellsHtml(market) {
     + `<td>${fmtSum(owner.subscriptionAmount)} so‘m</td>`
     + `<td>${formatDate(owner.paymentPaidAt)}</td>`
     + `<td>${owner.subscriptionMonths || 0} oy</td>`
-    + `<td class="cell-status">${statusPillHtml(owner)}</td>`;
+    + `<td class="cell-status">${statusPillHtml(owner, market)}</td>`;
 }
 
 function renderMarketRows() {
@@ -577,7 +606,7 @@ async function selectRestaurant(restaurant, row) {
   details.innerHTML = '<p class="empty" style="margin-top:0">Yuklanmoqda...</p>';
 
   try {
-    const owner = restaurant._owner || await getJson(`/Business/GetOwner/${restaurant.id}/owner`);
+    const owner = restaurant._owner || await getJson(`/api/super-admin/businesses/${restaurant.id}/owner`);
     restaurant._owner = owner;
     details.innerHTML = `<div class="detail-grid">
       <div class="detail-item"><small>Xo‘jayin</small><strong>${esc(owner.ownerFullName)}</strong></div>
@@ -587,12 +616,23 @@ async function selectRestaurant(restaurant, row) {
       <div class="detail-item"><small>To‘lov sanasi</small><strong>${formatDate(owner.paymentPaidAt)}</strong></div>
       <div class="detail-item"><small>Obuna</small><strong>${owner.subscriptionMonths || 0} oy</strong></div>
       <div class="detail-item"><small>Tugash sanasi</small><strong>${formatDate(owner.subscriptionEndsAt)}</strong></div>
-      <div class="detail-item"><small>Holati</small><strong>${statusPillHtml(owner)}</strong></div>
+      <div class="detail-item"><small>Holati</small><strong>${statusPillHtml(owner, restaurant)}</strong></div>
     </div>`;
     // Harakat tugmalari: Passiv/Faollashtirish + login/parolni tiklash.
     selectedRestaurant = restaurant;
     $("owner-actions").hidden = false;
     $("toggle-owner-status").textContent = owner.isActive === false ? "Faollashtirish" : "Passiv qilish";
+    $("archive-restaurant-business").textContent = restaurant.isActive === false ? "Arxivdan tiklash" : "Arxivlash";
+    $("restaurant-business-name").value = restaurant.name || "";
+    $("restaurant-business-address").value = restaurant.address || "";
+    $("restaurant-business-phone").value = restaurant.phoneNumber || "";
+    $("restaurant-business-form").hidden = true;
+    $("restaurant-owner-name").value = owner.ownerFullName || "";
+    $("restaurant-owner-phone").value = owner.ownerPhoneNumber || "";
+    $("restaurant-owner-amount").value = owner.subscriptionAmount ?? 0;
+    $("restaurant-owner-paid-at").value = toLocalDateTime(owner.paymentPaidAt);
+    $("restaurant-owner-months").value = owner.subscriptionMonths || 1;
+    $("restaurant-owner-form").hidden = true;
     $("new-owner-login").value = owner.login || "";
     $("new-owner-password").value = "";
     setMsg($("reset-credentials-message"), "");
@@ -616,7 +656,7 @@ async function selectMarket(market, row) {
   details.innerHTML = '<p class="empty" style="margin-top:0">Yuklanmoqda...</p>';
 
   try {
-    const owner = market._owner || await getJson(`/Business/GetOwner/${market.id}/owner`);
+    const owner = market._owner || await getJson(`/api/super-admin/businesses/${market.id}/owner`);
     market._owner = owner;
     details.innerHTML = `<div class="detail-grid">
       <div class="detail-item"><small>Xo‘jayin</small><strong>${esc(owner.ownerFullName)}</strong></div>
@@ -626,12 +666,23 @@ async function selectMarket(market, row) {
       <div class="detail-item"><small>To‘lov sanasi</small><strong>${formatDate(owner.paymentPaidAt)}</strong></div>
       <div class="detail-item"><small>Obuna</small><strong>${owner.subscriptionMonths || 0} oy</strong></div>
       <div class="detail-item"><small>Tugash sanasi</small><strong>${formatDate(owner.subscriptionEndsAt)}</strong></div>
-      <div class="detail-item"><small>Holati</small><strong>${statusPillHtml(owner)}</strong></div>
+      <div class="detail-item"><small>Holati</small><strong>${statusPillHtml(owner, market)}</strong></div>
     </div>`;
     // Harakat tugmalari: Passiv/Faollashtirish + login/parolni tiklash.
     selectedMarket = market;
     $("market-owner-actions").hidden = false;
     $("market-toggle-status").textContent = owner.isActive === false ? "Faollashtirish" : "Passiv qilish";
+    $("archive-market-business").textContent = market.isActive === false ? "Arxivdan tiklash" : "Arxivlash";
+    $("market-business-name").value = market.name || "";
+    $("market-business-address").value = market.address || "";
+    $("market-business-phone").value = market.phoneNumber || "";
+    $("market-business-form").hidden = true;
+    $("market-owner-name").value = owner.ownerFullName || "";
+    $("market-owner-phone").value = owner.ownerPhoneNumber || "";
+    $("market-owner-amount").value = owner.subscriptionAmount ?? 0;
+    $("market-owner-paid-at").value = toLocalDateTime(owner.paymentPaidAt);
+    $("market-owner-months").value = owner.subscriptionMonths || 1;
+    $("market-owner-form").hidden = true;
     $("new-market-login").value = owner.login || "";
     $("new-market-password").value = "";
     setMsg($("market-reset-message"), "");
@@ -667,7 +718,7 @@ function showDashboard() {
 // ---------- Boshlash: tokenni tiklash ----------
 const savedToken = restoreToken();
 if (savedToken) {
-  saveToken(savedToken);
+  superAdminToken = savedToken;
   showDashboard();
 }
 
@@ -675,7 +726,7 @@ if (savedToken) {
 async function putJson(url, body) {
   const response = await fetch(`${API_BASE}${url}`, {
     method: "PUT",
-    headers: { "Content-Type": "application/json", "X-Super-Admin-Token": superAdminToken },
+    headers: tokenHeaders({ "Content-Type": "application/json", "X-Super-Admin-Token": superAdminToken }),
     body: JSON.stringify(body),
   });
   const data = await response.json().catch(() => null);
@@ -685,13 +736,169 @@ async function putJson(url, body) {
   return data;
 }
 
+async function deleteJson(url) {
+  const response = await fetch(`${API_BASE}${url}`, {
+    method: "DELETE",
+    headers: tokenHeaders({ "X-Super-Admin-Token": superAdminToken }),
+  });
+  if (!response.ok) {
+    const data = await response.json().catch(() => null);
+    throw new Error((data && data.error) || "So‘rov bajarilmadi (" + response.status + ").");
+  }
+}
+
+function bindBusinessEditor(formId, nameId, addressId, phoneId, messageId, getBusiness, renderRows) {
+  const form = $(formId);
+  form.addEventListener("submit", async event => {
+    event.preventDefault();
+    const business = getBusiness();
+    if (!business) return;
+
+    const message = $(messageId);
+    setMsg(message, "Saqlanmoqda...");
+    try {
+      const updated = await putJson(`/api/super-admin/businesses/${business.id}`, {
+        name: $(nameId).value.trim(),
+        address: $(addressId).value.trim() || null,
+        phoneNumber: $(phoneId).value.trim() || null,
+      });
+      Object.assign(business, updated);
+      $(business.id === selectedRestaurantId ? "selected-restaurant" : "selected-market").textContent = business.name;
+      form.hidden = true;
+      renderRows();
+      setMsg(message, "Biznes ma’lumotlari saqlandi.", "ok");
+      flash("Biznes ma’lumotlari yangilandi.");
+    } catch (error) {
+      setMsg(message, error.message, "err");
+    }
+  });
+}
+
+function bindOwnerEditor(formId, fields, messageId, getBusiness, refreshSelection) {
+  const form = $(formId);
+  form.addEventListener("submit", async event => {
+    event.preventDefault();
+    const business = getBusiness();
+    if (!business) return;
+
+    const message = $(messageId);
+    setMsg(message, "Saqlanmoqda...");
+    try {
+      const owner = await putJson(`/api/super-admin/businesses/${business.id}/owner`, {
+        ownerFullName: $(fields.name).value.trim(),
+        ownerPhoneNumber: $(fields.phone).value.trim() || null,
+        subscriptionAmount: Number($(fields.amount).value),
+        paymentPaidAt: new Date($(fields.paidAt).value).toISOString(),
+        subscriptionMonths: Number($(fields.months).value),
+      });
+      business._owner = owner;
+      form.hidden = true;
+      setMsg(message, "Ega va obuna ma’lumotlari saqlandi.", "ok");
+      flash("Ega ma’lumotlari yangilandi.");
+      await refreshSelection(business);
+    } catch (error) {
+      setMsg(message, error.message, "err");
+    }
+  });
+}
+
+async function refreshRestaurantSelection(business) {
+  renderRestaurantRows();
+  const row = document.querySelector(`#restaurant-list tr[data-business="${business.id}"]`);
+  if (row) await selectRestaurant(business, row);
+}
+
+async function refreshMarketSelection(business) {
+  renderMarketRows();
+  const row = document.querySelector(`#market-list tr[data-business="${business.id}"]`);
+  if (row) await selectMarket(business, row);
+}
+
+async function toggleBusinessArchive(business, button, renderRows, refreshSelection) {
+  if (!business) return;
+  const archive = business.isActive !== false;
+  const action = archive ? "arxivlash" : "arxivdan tiklash";
+  if (!confirm(`"${business.name}" biznesini ${action}ni tasdiqlaysizmi?`)) return;
+
+  try {
+    if (archive)
+      await deleteJson(`/api/super-admin/businesses/${business.id}`);
+    else
+      await putJson(`/api/super-admin/businesses/${business.id}/restore`, {});
+    business.isActive = !archive;
+    button.textContent = business.isActive ? "Arxivlash" : "Arxivdan tiklash";
+    renderRows();
+    if (selectedRestaurant === business) {
+      updateSuperStats();
+      await refreshSelection(business);
+    }
+    if (selectedMarket === business) {
+      updateMarketStats();
+      await refreshSelection(business);
+    }
+    flash(archive ? "Biznes arxivlandi. Ma’lumotlar saqlandi." : "Biznes arxivdan tiklandi.");
+  } catch (error) {
+    flash(error.message, true);
+  }
+}
+
+$("edit-restaurant-business").addEventListener("click", () => {
+  $("restaurant-business-form").hidden = false;
+  $("restaurant-business-name").focus();
+});
+$("cancel-restaurant-business-edit").addEventListener("click", () => {
+  $("restaurant-business-form").hidden = true;
+  setMsg($("restaurant-business-message"), "");
+});
+bindBusinessEditor("restaurant-business-form", "restaurant-business-name", "restaurant-business-address",
+  "restaurant-business-phone", "restaurant-business-message", () => selectedRestaurant, renderRestaurantRows);
+$("edit-restaurant-owner").addEventListener("click", () => {
+  $("restaurant-owner-form").hidden = false;
+  $("restaurant-owner-name").focus();
+});
+$("cancel-restaurant-owner-edit").addEventListener("click", () => {
+  $("restaurant-owner-form").hidden = true;
+  setMsg($("restaurant-owner-message"), "");
+});
+bindOwnerEditor("restaurant-owner-form", {
+  name: "restaurant-owner-name", phone: "restaurant-owner-phone", amount: "restaurant-owner-amount",
+  paidAt: "restaurant-owner-paid-at", months: "restaurant-owner-months",
+}, "restaurant-owner-message", () => selectedRestaurant, refreshRestaurantSelection);
+$("archive-restaurant-business").addEventListener("click", () =>
+  toggleBusinessArchive(selectedRestaurant, $("archive-restaurant-business"), renderRestaurantRows, refreshRestaurantSelection));
+
+$("edit-market-business").addEventListener("click", () => {
+  $("market-business-form").hidden = false;
+  $("market-business-name").focus();
+});
+$("cancel-market-business-edit").addEventListener("click", () => {
+  $("market-business-form").hidden = true;
+  setMsg($("market-business-message"), "");
+});
+bindBusinessEditor("market-business-form", "market-business-name", "market-business-address",
+  "market-business-phone", "market-business-message", () => selectedMarket, renderMarketRows);
+$("edit-market-owner").addEventListener("click", () => {
+  $("market-owner-form").hidden = false;
+  $("market-owner-name").focus();
+});
+$("cancel-market-owner-edit").addEventListener("click", () => {
+  $("market-owner-form").hidden = true;
+  setMsg($("market-owner-message"), "");
+});
+bindOwnerEditor("market-owner-form", {
+  name: "market-owner-name", phone: "market-owner-phone", amount: "market-owner-amount",
+  paidAt: "market-owner-paid-at", months: "market-owner-months",
+}, "market-owner-message", () => selectedMarket, refreshMarketSelection);
+$("archive-market-business").addEventListener("click", () =>
+  toggleBusinessArchive(selectedMarket, $("archive-market-business"), renderMarketRows, refreshMarketSelection));
+
 // ---------- Passiv qilish / Faollashtirish ----------
 $("toggle-owner-status").addEventListener("click", async () => {
   if (!selectedRestaurant || !selectedRestaurant._owner) return;
   const owner = selectedRestaurant._owner;
   const makeActive = owner.isActive === false;
   try {
-    const updated = await putJson("/Business/UpdateOwnerStatus", {
+    const updated = await putJson("/api/super-admin/owners/status", {
       businessId: Number(selectedRestaurant.id),
       isActive: makeActive,
     });
@@ -730,7 +937,7 @@ $("reset-credentials-form").addEventListener("submit", async event => {
   }
   setMsg(message, "Saqlanmoqda...");
   try {
-    const updated = await putJson("/Business/ResetOwnerCredentials", {
+    const updated = await putJson("/api/super-admin/owners/credentials", {
       businessId: Number(selectedRestaurant.id),
       newLogin: newLogin || null,
       newPassword: newPassword || null,
@@ -753,7 +960,7 @@ $("market-toggle-status").addEventListener("click", async () => {
   const owner = selectedMarket._owner;
   const makeActive = owner.isActive === false;
   try {
-    const updated = await putJson("/Business/UpdateOwnerStatus", {
+    const updated = await putJson("/api/super-admin/owners/status", {
       businessId: Number(selectedMarket.id),
       isActive: makeActive,
     });
@@ -975,7 +1182,7 @@ async function performVoiceCommand(rawText) {
     }
     if (owner.isActive === false) {
       const selectedRow = document.querySelector("#restaurant-list .row-selected");
-      const updated = await putJson("/Business/UpdateOwnerStatus", {
+      const updated = await putJson("/api/super-admin/owners/status", {
         businessId: Number(selectedRestaurant.id),
         isActive: true,
       });
@@ -1009,7 +1216,7 @@ async function performVoiceCommand(rawText) {
     }
     if (owner.isActive !== false) {
       const selectedRow = document.querySelector("#restaurant-list .row-selected");
-      const updated = await putJson("/Business/UpdateOwnerStatus", {
+      const updated = await putJson("/api/super-admin/owners/status", {
         businessId: Number(selectedRestaurant.id),
         isActive: false,
       });
@@ -1587,7 +1794,9 @@ async function aiSpeak(text) {
   const fetchChunk = async chunk => {
     const doFetch = () =>
     fetch("/Query/SpeakSuper/speak-super?text=" + encodeURIComponent(chunk) + selectedAiVoice(chunk), {
-        headers: superAdminToken ? { "X-Super-Admin-Token": superAdminToken } : {},
+        headers: superAdminToken
+          ? tokenHeaders({ "X-Super-Admin-Token": superAdminToken })
+          : {},
         signal: control.signal,
       }).then(res => {
         if (!res.ok) throw new Error("tts-status-" + res.status);
@@ -1683,7 +1892,7 @@ async function askBackend(q) {
     try {
       const response = await fetch(`${API_BASE}/Query/AskSuperAdmin/ask-super`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "X-Super-Admin-Token": superAdminToken },
+        headers: tokenHeaders({ "Content-Type": "application/json", "X-Super-Admin-Token": superAdminToken }),
         body: JSON.stringify({ question: q }),
         signal: ctrl ? ctrl.signal : undefined,
       });
@@ -1750,7 +1959,7 @@ async function aiJarvisSmart(text) {
     try {
       const response = await fetch(`${API_BASE}/Query/JarvisCommand/jarvis`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "X-Super-Admin-Token": superAdminToken },
+        headers: tokenHeaders({ "Content-Type": "application/json", "X-Super-Admin-Token": superAdminToken }),
         body: JSON.stringify({ text }),
         signal: ctrl ? ctrl.signal : undefined,
       });
@@ -1835,7 +2044,7 @@ async function executeJarvisAction(res) {
       aiSpeak(`${target.name} ${isMarket ? "supermarketi" : "restorani"} allaqachon passiv.`);
       return;
     }
-    const updated = await putJson("/Business/UpdateOwnerStatus", { businessId, isActive });
+    const updated = await putJson("/api/super-admin/owners/status", { businessId, isActive });
     target._owner = updated;
     if (isMarket) renderMarketRows(); else renderRestaurantRows();
     updateSuperStats();
@@ -1991,7 +2200,7 @@ $("market-reset-credentials-form").addEventListener("submit", async event => {
   }
   setMsg(message, "Saqlanmoqda...");
   try {
-    const updated = await putJson("/Business/ResetOwnerCredentials", {
+    const updated = await putJson("/api/super-admin/owners/credentials", {
       businessId: Number(selectedMarket.id),
       newLogin: newLogin || null,
       newPassword: newPassword || null,

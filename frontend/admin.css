@@ -7,6 +7,15 @@
    ============================================================ */
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap');
 
+body.super-admin-readonly .content form,
+body.super-admin-readonly .content button:not(#theme-toggle){
+  display:none!important;
+}
+body.super-admin-readonly .content input,
+body.super-admin-readonly .content textarea{
+  pointer-events:none;
+}
+
 :root{
   --bg:#f2f4f7; --panel:#fff; --line:#e4e8ee; --ink:#182420; --muted:#667085;
   --green:#1e7a55; --green-dark:#135f41; --green-soft:#e8f4ee;
@@ -388,4 +397,3 @@ html[data-theme='dark'] .order-items-table th,
 html[data-theme='dark'] .order-items-table td{border-bottom-color:#2c333d;color:var(--ink)}
 html[data-theme='dark'] .order-items-table tfoot td{border-top-color:#2c333d;color:var(--ink)}
 html[data-theme='dark'] .kitchen-order .item-body strong{color:var(--ink)}
-

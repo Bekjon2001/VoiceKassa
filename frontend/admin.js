@@ -66,6 +66,8 @@ const MEALS_VIEWS = ["meals-food", "meals-drink", "meals-fruit", "meals-dessert"
 // ---------- Holat ----------
 let ownerToken = "";
 let activeBusinessId = "";
+let activeRole = "restaurant-admin";
+let superAdminBusinesses = [];
 const tables = [];
 const products = [];
 const staff = [];
@@ -139,9 +141,17 @@ function flash(text, isError) {
 
 async function api(url, options = {}) {
   const headers = Object.assign({ "Content-Type": "application/json" }, options.headers || {});
+  if (ownerToken) headers.Authorization = "Bearer " + ownerToken;
+  if (activeRole === "super-admin" && !["GET", "HEAD"].includes((options.method || "GET").toUpperCase()))
+    throw new Error("Super Admin faqat ko‘rish huquqiga ega.");
   const response = await fetch(`${API_BASE}${url}`, Object.assign({}, options, { headers }));
   const data = await response.json().catch(() => null);
   if (!response.ok) {
+    if (response.status === 401 && ownerToken) {
+      clearSession();
+      try { sessionStorage.removeItem("vk_super_session"); } catch { /* ignore */ }
+      location.reload();
+    }
     throw new Error((data && data.error) || "So‘rov bajarilmadi (" + response.status + ").");
   }
   return data;
@@ -162,40 +172,82 @@ function clearSession() {
   try { sessionStorage.removeItem(SESSION_KEY); } catch { /* ignore */ }
 }
 
-function enterWorkspace(session) {
-  const role = session.role || "restaurant-admin";
-  try { sessionStorage.setItem( "vk_role", role ); } catch { /* ignore */ }
-  if (role === "super-admin") {
-    showSuperAdminRestaurantSelection();
-  } else {
-    $( "entry-stage" ).hidden = true;
-    $( "owner-area" ).hidden = false;
-    $( "owner-restaurant-name" ).textContent = session.restaurantName || "Restoran";
-    loadWorkspaceData();
-    setOwnerView( restoreOwnerView() );
-    const jarvisToggle = document.getElementById( "jarvis-toggle" );
-    if (jarvisToggle) {
-      let wasOn = false;
-      try { wasOn = localStorage.getItem( JARVIS_KEY ) === "1"; } catch { /* ignore */ }
-      jarvisToggle.checked = wasOn;
-      if (wasOn) startAlwaysListen();
-    }
-  }
-  
+async function enterWorkspace(session) {
+  activeRole = session.role || "restaurant-admin";
+  ownerToken = session.token || "";
+  activeBusinessId = activeRole === "restaurant-admin" ? String(session.businessId || "") : "";
+  document.body.classList.toggle("super-admin-readonly", activeRole === "super-admin");
+  $("super-admin-picker-wrap").hidden = activeRole !== "super-admin";
   $("entry-stage").hidden = true;
   $("owner-area").hidden = false;
-  $("owner-restaurant-name").textContent = session.restaurantName || "Restoran";
-  loadWorkspaceData();
-  setOwnerView(restoreOwnerView());
+  try { sessionStorage.setItem("vk_role", activeRole); } catch { /* ignore */ }
 
-  // Jarvis switch holatini tiklash (sahifa yangilanganda ham saqlanadi)
-  const jarvisToggle = document.getElementById("jarvis-toggle");
+  if (activeRole === "super-admin") {
+    await showSuperAdminRestaurantSelection();
+    return;
+  }
+
+  $("owner-restaurant-name").textContent = session.restaurantName || "Restoran";
+  await loadWorkspaceData();
+  setOwnerView(restoreOwnerView());
+  const jarvisToggle = $("jarvis-toggle");
   if (jarvisToggle) {
     let wasOn = false;
     try { wasOn = localStorage.getItem(JARVIS_KEY) === "1"; } catch { /* ignore */ }
     jarvisToggle.checked = wasOn;
     if (wasOn) startAlwaysListen();
   }
+}
+
+async function showSuperAdminRestaurantSelection() {
+  const picker = $("super-admin-restaurant-picker");
+  try {
+    superAdminBusinesses = await loadAllBusinesses();
+    picker.replaceChildren(new Option("Restoran tanlang", ""));
+    superAdminBusinesses.forEach(business => picker.add(new Option(business.name, business.id)));
+    if (!superAdminBusinesses.length) {
+      flash("Restoranlar ro‘yxati bo‘sh.", true);
+      return;
+    }
+
+    picker.value = superAdminBusinesses.some(b => String(b.id) === String(activeBusinessId))
+      ? String(activeBusinessId)
+      : String(superAdminBusinesses[0].id);
+    await selectSuperAdminRestaurant(picker.value, superAdminBusinesses);
+  } catch (error) {
+    flash("Restoranlarni olib bo‘lmadi: " + error.message, true);
+  }
+}
+
+async function loadAllBusinesses() {
+  const businesses = [];
+  for (let page = 1; ; page++) {
+    const batch = await api(`/Business/GetAll?page=${page}&pageSize=100`);
+    businesses.push(...batch.filter(business => Number(business.type) === 0));
+    if (batch.length < 100) return businesses;
+  }
+}
+
+async function selectSuperAdminRestaurant(businessId, businesses) {
+  if (!businessId) return;
+  const selected = businesses.find(b => String(b.id) === String(businessId));
+  if (!selected) return;
+  activeBusinessId = String(selected.id);
+  $("owner-restaurant-name").textContent = selected.name;
+  $("owner-view-subtitle").textContent = "Super Admin — faqat ko‘rish rejimi.";
+  await loadWorkspaceData();
+  setOwnerView("tables");
+}
+
+const superAdminPicker = $("super-admin-restaurant-picker");
+if (superAdminPicker) {
+  superAdminPicker.addEventListener("change", async () => {
+  try {
+    await selectSuperAdminRestaurant(superAdminPicker.value, superAdminBusinesses);
+  } catch (error) {
+    flash("Restoran ma’lumotini olib bo‘lmadi: " + error.message, true);
+    }
+  });
 }
 
 function resetToEntry() {
@@ -223,7 +275,7 @@ $("owner-login-form").addEventListener("submit", async event => {
       restaurantName: result.restaurantName,
     };
     saveSession(session);
-    enterWorkspace(session);
+    await enterWorkspace(session);
   } catch (error) {
     setMsg(message, "Kirish amalga oshmadi: " + error.message, "err");
   }
@@ -1501,7 +1553,9 @@ async function aiSpeak(text) {
     const url = "/Query/SpeakOwner/speak-owner?businessId=" + encodeURIComponent(activeBusinessId) +
       "&text=" + encodeURIComponent(chunk) + selectedAiVoice(chunk);
     const doFetch = () => fetch(url, {
-      headers: ownerToken ? { "X-Owner-Token": ownerToken } : {},
+      headers: ownerToken
+        ? { "Authorization": "Bearer " + ownerToken, "X-Owner-Token": ownerToken }
+        : {},
       signal: control.signal,
     }).then(res => {
       if (!res.ok) throw new Error("tts-status-" + res.status);
@@ -1881,4 +1935,3 @@ function renderReservations(list) {
     body.appendChild(tr);
   });
 }
-

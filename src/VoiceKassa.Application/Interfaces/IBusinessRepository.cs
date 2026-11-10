@@ -16,6 +16,7 @@ public interface IBusinessRepository
     Task<UserAccount?> GetSuperAdminByTokenAsync(string token, CancellationToken ct = default);
     Task<RestaurantOwner> CreateRestaurantOwnerAsync(RestaurantOwner owner, CancellationToken ct = default);
     Task<RestaurantOwner?> GetOwnerByLoginAsync(string login, CancellationToken ct = default);
+    Task<RestaurantOwner?> GetOwnerByIdAsync(long ownerId, CancellationToken ct = default);
     Task<bool> UpdateOwnerAccessTokenAsync(long ownerId, string token, CancellationToken ct = default);
     Task<RestaurantOwner?> GetOwnerByTokenAsync(string token, CancellationToken ct = default);
     Task<RestaurantOwner?> GetOwnerByBusinessIdAsync(long businessId, CancellationToken ct = default);
@@ -25,6 +26,9 @@ public interface IBusinessRepository
 
     /// <summary>Bu login boshqa (boshqa businessId'li) egada bandidimi.</summary>
     Task<bool> IsOwnerLoginTakenAsync(string login, long excludeBusinessId, CancellationToken ct = default);
+    Task<bool> UpdateOwnerDetailsAsync(
+        long ownerId, string fullName, string? phoneNumber, decimal subscriptionAmount,
+        DateTime paymentPaidAt, int subscriptionMonths, CancellationToken ct = default);
 
     /// <summary>Eganing login va/yoki parol hash'ini yangilaydi.</summary>
     Task<bool> UpdateOwnerCredentialsAsync(long ownerId, string? newLogin, string? newPasswordHash, CancellationToken ct = default);
@@ -34,6 +38,8 @@ public interface IBusinessRepository
     Task<Business> CreateBusinessAsync(Business business, CancellationToken ct = default);
     Task<Business?> GetBusinessByIdAsync(long businessId, CancellationToken ct = default);
     Task<List<Business>> GetAllBusinessesAsync(CancellationToken ct = default);
+    Task<bool> UpdateBusinessAsync(long businessId, string name, string? address, string? phoneNumber, CancellationToken ct = default);
+    Task<bool> SetBusinessActiveAsync(long businessId, bool isActive, CancellationToken ct = default);
 
     /// <summary>
     /// Mijozlar uchun ochiq qidiruv: faol bizneslarni (restoran/market) nom

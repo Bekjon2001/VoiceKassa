@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 using VoiceKassa.Application.DTOs;
 using VoiceKassa.Application.Services;
 
@@ -11,7 +12,8 @@ namespace VoiceKassa.Api.Controllers;
 /// </summary>
 [Route("[controller]/[action]")]
 [ApiController]
-public class ReservationController : ControllerBase
+[Authorize]
+public class ReservationController : ApiControllerBase
 {
     private readonly ReservationService _reservationService;
     private readonly BusinessService _businessService;
@@ -29,6 +31,7 @@ public class ReservationController : ControllerBase
 
     /// <summary>Yangi bron yaratish (X-Owner-Token).</summary>
     [HttpPost("create")]
+    [SuperAdminReadOnly]
     public async Task<IActionResult> Create([FromBody] CreateReservationRequest request, CancellationToken ct)
     {
         var access = await _businessService.AuthorizeOwnerAsync(request.BusinessId, Request.Headers["X-Owner-Token"].FirstOrDefault(), ct);
@@ -42,6 +45,10 @@ public class ReservationController : ControllerBase
     [HttpGet("list/{businessId:long}")]
     public async Task<IActionResult> GetList(long businessId, [FromQuery] DateTime? bookingDate, CancellationToken ct)
     {
+        var accessError = EnsureBusinessReadAccess(businessId);
+        if (accessError is not null) return accessError;
+        if (IsSuperAdminRole)
+            return Ok(await _reservationService.GetListAsync(businessId, bookingDate, ct));
         var access = await _businessService.AuthorizeOwnerAsync(businessId, Request.Headers["X-Owner-Token"].FirstOrDefault(), ct);
         if (!access.Success) return Unauthorized(new { error = access.Error ?? "Ruxsat yo'q." });
 
@@ -55,6 +62,8 @@ public class ReservationController : ControllerBase
     /// keyin SESSION_TOKEN qaytariladi — u X-Table-Token sifatida ishlatiladi.
     /// </summary>
     [HttpPost("enter")]
+    [AllowAnonymous]
+    [SuperAdminReadOnly]
     public async Task<IActionResult> Enter([FromBody] EnterReservationRequest request, CancellationToken ct)
     {
         var clientKey = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
@@ -73,6 +82,7 @@ public class ReservationController : ControllerBase
 
     /// <summary>Joyida bron (walkin) — mijoz hozir stolga o'tirdi (X-Owner-Token).</summary>
     [HttpPost("walkin")]
+    [SuperAdminReadOnly]
     public async Task<IActionResult> WalkIn([FromBody] WalkInReservationRequest request, CancellationToken ct)
     {
         var access = await _businessService.AuthorizeOwnerAsync(request.BusinessId, Request.Headers["X-Owner-Token"].FirstOrDefault(), ct);
@@ -84,6 +94,7 @@ public class ReservationController : ControllerBase
 
     /// <summary>Bronni bekor qilish (X-Owner-Token). Sessiya tokeni o'chiriladi.</summary>
     [HttpPost("cancel/{reservationId:long}")]
+    [SuperAdminReadOnly]
     public async Task<IActionResult> Cancel(long reservationId, [FromQuery] long businessId, CancellationToken ct)
     {
         var access = await _businessService.AuthorizeOwnerAsync(businessId, Request.Headers["X-Owner-Token"].FirstOrDefault(), ct);
@@ -95,6 +106,7 @@ public class ReservationController : ControllerBase
 
     /// <summary>Bron kodini qayta berish (yangi yagona kod) — X-Owner-Token.</summary>
     [HttpPost("regenerate-code/{reservationId:long}")]
+    [SuperAdminReadOnly]
     public async Task<IActionResult> RegenerateCode(long reservationId, [FromQuery] long businessId, CancellationToken ct)
     {
         var access = await _businessService.AuthorizeOwnerAsync(businessId, Request.Headers["X-Owner-Token"].FirstOrDefault(), ct);
@@ -109,9 +121,12 @@ public class ReservationController : ControllerBase
     /// (Token shart emas — QR/skaner yoki menyudan stol tanlash uchun.)
     /// </summary>
     [HttpGet("available")]
+    [AllowAnonymous]
     public async Task<IActionResult> GetAvailable(
         [FromQuery] long businessId, [FromQuery] DateTime date, [FromQuery] int guests = 1, CancellationToken ct = default)
     {
+        var accessError = EnsureBusinessReadAccess(businessId);
+        if (accessError is not null) return accessError;
         var list = await _reservationService.GetAvailableTablesAsync(businessId, date, guests, ct);
         return Ok(list);
     }

@@ -16,6 +16,16 @@ public class CreateBusinessRequest
     public string? PhoneNumber { get; set; }
 }
 
+public class UpdateBusinessRequest
+{
+    [Required, StringLength(200, MinimumLength = 2)]
+    public string Name { get; set; } = string.Empty;
+    [StringLength(300)]
+    public string? Address { get; set; }
+    [StringLength(30)]
+    public string? PhoneNumber { get; set; }
+}
+
 public class CreateRestaurantWithOwnerRequest
 {
     [Required, StringLength(200, MinimumLength = 2)]
@@ -114,6 +124,19 @@ public class ResetOwnerCredentialsRequest
     public string? NewPassword { get; set; }
 }
 
+public class UpdateOwnerDetailsRequest
+{
+    [Required, StringLength(100, MinimumLength = 2)]
+    public string OwnerFullName { get; set; } = string.Empty;
+    [StringLength(30)]
+    public string? OwnerPhoneNumber { get; set; }
+    [Range(0, double.MaxValue)]
+    public decimal SubscriptionAmount { get; set; }
+    public DateTime PaymentPaidAt { get; set; }
+    [Range(1, 360)]
+    public int SubscriptionMonths { get; set; }
+}
+
 /// <summary>Restoran (egasi) akkountini passivlashtirish/faollashtirish.</summary>
 public class UpdateOwnerStatusRequest
 {
@@ -128,6 +151,7 @@ public class BusinessResponse
     public BusinessType Type { get; set; }
     public string? Address { get; set; }
     public string? PhoneNumber { get; set; }
+    public bool IsActive { get; set; }
     public DateTime CreatedAt { get; set; }
 }
 

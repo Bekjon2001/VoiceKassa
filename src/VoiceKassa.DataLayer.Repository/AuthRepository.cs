@@ -17,6 +17,9 @@ public class AuthRepository : IAuthRepository
     public Task<UserAccount?> GetUserAccountByLoginAsync(string login, CancellationToken ct = default) =>
         _db.UserAccounts.FirstOrDefaultAsync(u => u.Login == login, ct);
 
+    public Task<UserAccount?> GetUserAccountByIdAsync(long userId, CancellationToken ct = default) =>
+        _db.UserAccounts.FirstOrDefaultAsync(u => u.Id == userId, ct);
+
     public Task<UserAccount?> GetUserAccountByTokenAsync(string token, CancellationToken ct = default) =>
         _db.UserAccounts.FirstOrDefaultAsync(u => u.AccessToken == token, ct);
 
