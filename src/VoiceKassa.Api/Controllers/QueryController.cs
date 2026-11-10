@@ -28,6 +28,9 @@ public class QueryController : ControllerBase
     [HttpPost("ask")]
     public async Task<IActionResult> Ask([FromBody] AskQuestionRequest request, CancellationToken ct)
     {
+        var token = Request.Headers["X-Owner-Token"].FirstOrDefault();
+        var access = await _businessService.AuthorizeOwnerAsync(request.BusinessId, token, ct);
+        if (!access.Success) return Unauthorized(new { error = access.Error });
         var response = await _queryService.AskAsync(request, ct);
         return Ok(response);
     }

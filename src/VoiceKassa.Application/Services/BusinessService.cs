@@ -387,6 +387,11 @@ public class BusinessService
         return products.Select(ToProductResponse).ToList();
     }
 
+    public async Task<Product?> GetProductByIdAsync(long productId, CancellationToken ct = default)
+    {
+        return await _repo.GetProductByIdAsync(productId, ct);
+    }
+
     public async Task<(bool Success, string? Error)> UpdateStockAsync(
         long productId, UpdateStockRequest request, CancellationToken ct = default)
     {
@@ -415,6 +420,11 @@ public class BusinessService
     {
         var tables = await _repo.GetTablesByBusinessAsync(businessId, ct);
         return tables.Select(ToTableResponse).ToList();
+    }
+
+    public async Task<Table?> GetTableByIdAsync(long tableId, CancellationToken ct = default)
+    {
+        return await _repo.GetTableByIdAsync(tableId, ct);
     }
 
     /// <summary>

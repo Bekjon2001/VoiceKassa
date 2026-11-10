@@ -63,10 +63,11 @@ public class BusinessController : ControllerBase
         return success ? Ok(owner) : Unauthorized(new { error });
     }
 
-    /// <summary>Yangi biznes ro'yxatdan o'tkazish (restoran, do'kon, market, ombor).</summary>
+    /// <summary>Yangi biznes ro'yxatdan o'tkazish (restoran, do'kon, market, ombor). Faqat Super Admin.</summary>
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] CreateBusinessRequest request, CancellationToken ct)
     {
+        if (!await IsSuperAdmin(ct)) return Unauthorized(new { error = "Super Admin sifatida kiring." });
         var business = await _businessService.CreateBusinessAsync(request, ct);
         return Ok(business);
     }
@@ -83,7 +84,8 @@ public class BusinessController : ControllerBase
     public async Task<IActionResult> GetById(long businessId, CancellationToken ct)
     {
         var business = await _businessService.GetBusinessAsync(businessId, ct);
-        return business is null ? NotFound() : Ok(business);
+        if (business is null) return NotFound();
+        return Ok(new { business.Id, business.Name, business.Type, business.Address, business.PhoneNumber, business.CreatedAt });
     }
 
     [HttpGet("{businessId:long}/owner")]
@@ -162,6 +164,8 @@ public class BusinessController : ControllerBase
     [HttpPost("categories")]
     public async Task<IActionResult> CreateCategory([FromBody] CreateCategoryRequest request, CancellationToken ct)
     {
+        var access = await _businessService.AuthorizeOwnerAsync(request.BusinessId, Request.Headers["X-Owner-Token"].FirstOrDefault(), ct);
+        if (!access.Success) return Unauthorized(new { error = access.Error });
         var (success, error, category) = await _businessService.CreateCategoryAsync(request, ct);
         return success ? Ok(category) : BadRequest(new { error });
     }
@@ -188,7 +192,7 @@ public class BusinessController : ControllerBase
     public async Task<IActionResult> GetTables(long businessId, CancellationToken ct)
     {
         var tables = await _businessService.GetTablesAsync(businessId, ct);
-        return Ok(tables);
+        return Ok(tables.Select(t => new { t.Id, t.BusinessId, t.Name, t.Capacity, t.Status }));
     }
 
     /// <summary>
@@ -206,6 +210,10 @@ public class BusinessController : ControllerBase
     [HttpPut("tables/{tableId:long}/status")]
     public async Task<IActionResult> UpdateTableStatus(long tableId, [FromBody] UpdateTableStatusRequest request, CancellationToken ct)
     {
+        var table = await _businessService.GetTableByIdAsync(tableId, ct);
+        if (table is null) return NotFound(new { error = "Bunday stol topilmadi." });
+        var access = await _businessService.AuthorizeOwnerAsync(table.BusinessId, Request.Headers["X-Owner-Token"].FirstOrDefault(), ct);
+        if (!access.Success) return Unauthorized(new { error = access.Error });
         var (success, error) = await _businessService.UpdateTableStatusAsync(tableId, request, ct);
         if (success) return NoContent();
         // Faol buyurtma borligi sababli bloklangan bo'lsa — 409 (Conflict),

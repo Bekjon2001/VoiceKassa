@@ -33,6 +33,9 @@ public class ProductController : ControllerBase
     [HttpGet("low-stock")]
     public async Task<IActionResult> GetLowStock([FromQuery] long businessId, CancellationToken ct)
     {
+        var token = Request.Headers["X-Owner-Token"].FirstOrDefault();
+        var access = await _businessService.AuthorizeOwnerAsync(businessId, token, ct);
+        if (!access.Success) return Unauthorized(new { error = access.Error });
         var products = await _businessService.GetLowStockProductsAsync(businessId, ct);
         return Ok(products);
     }
@@ -40,6 +43,10 @@ public class ProductController : ControllerBase
     [HttpPut("{productId:long}/stock")]
     public async Task<IActionResult> UpdateStock(long productId, [FromBody] UpdateStockRequest request, CancellationToken ct)
     {
+        var product = await _businessService.GetProductByIdAsync(productId, ct);
+        if (product is null) return NotFound(new { error = "Bunday mahsulot topilmadi." });
+        var access = await _businessService.AuthorizeOwnerAsync(product.BusinessId, Request.Headers["X-Owner-Token"].FirstOrDefault(), ct);
+        if (!access.Success) return Unauthorized(new { error = access.Error });
         var (success, error) = await _businessService.UpdateStockAsync(productId, request, ct);
         return success ? NoContent() : NotFound(new { error });
     }
