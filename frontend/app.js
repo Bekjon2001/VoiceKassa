@@ -113,7 +113,7 @@ async function init() {
     return;
   }
   if (path.endsWith("/tables.html")) {
-    await initTablesPage();
+    // tables.html o'zi o'zini ishga tushiradi (vk-tables-init script).
     return;
   }
 
@@ -165,8 +165,7 @@ async function init() {
     });
   }
 
-  // Sahifa yuklanganda ro'yxat yopiq turadi — faqat foydalanuvchi qidiruv
-  // maydoniga bosganida (focus) hamma restoranlar ro'yxati ochiladi.
+  runRestaurantSearch(searchInput ? searchInput.value.trim() : "");
 }
 
 // Nom bo'yicha ochiq qidiruv: Business/SearchPublicBusinesses/public/search (token shart emas).
@@ -871,3 +870,147 @@ document.getElementById("entry-form")?.addEventListener("submit", async (event) 
     message.textContent = `Buyurtma yuborilmadi: ${error.message}`;
   }
 });
+// ============================================================
+// tables.html: bron kodi bilan stolga ulanish (yangi oqim)
+// Mijoz 6 raqamli bron kodini kiritsa — server kodni tekshirib
+// SESSION_TOKEN qaytaradi. U X-Table-Token sifatida menu.html'ga
+// yuboriladi. Agar kod bo'lmasa — bo'sh stollar ko'rsatiladi.
+// ============================================================
+
+async function initTablesPage() {
+  const params = new URLSearchParams(window.location.search);
+  const businessId = Number(params.get("businessId")) || 0;
+  const restaurantName = params.get("restaurantName") || "Restoran";
+
+  const titleEl = document.getElementById("restaurant-title");
+  if (titleEl) titleEl.textContent = restaurantName;
+
+  const businessInput = document.getElementById("business-id");
+  if (businessInput) businessInput.value = businessId;
+
+  const codeInput = document.getElementById("booking-code");
+  const showTablesBtn = document.getElementById("show-tables-btn");
+  const availableSection = document.getElementById("available-tables-section");
+  const tablesGrid = document.getElementById("available-tables-grid");
+  const emptyMsg = document.getElementById("available-tables-empty");
+  const messageEl = document.getElementById("form-message");
+  const locationNote = document.getElementById("location-note");
+  const codeSubmit = document.getElementById("code-submit");
+  const entryForm = document.getElementById("entry-form");
+
+  // ---------- Funksiya: bo'sh stollarni yuklab ko'rsatish ----------
+  async function loadAvailableTables() {
+    if (!businessId) {
+      messageEl.textContent = "Avval restoranni tanlang.";
+      return;
+    }
+    try {
+      const today = new Date().toISOString().slice(0, 10);
+      const res = await fetch(
+        `${API_BASE}/Reservation/available?businessId=${businessId}&date=${encodeURIComponent(today)}&guests=1`,
+        { headers: { "Content-Type": "application/json" } }
+      );
+      if (!res.ok) throw new Error(await res.text());
+      const tables = await res.json();
+
+      tablesGrid.innerHTML = "";
+      if (!tables || tables.length === 0) {
+        emptyMsg.hidden = false;
+        return;
+      }
+      emptyMsg.hidden = true;
+
+      tables.forEach((t) => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "table-chip";
+        btn.textContent = `${t.name} (${t.capacity} kishi)`;
+        btn.onclick = async () => {
+          messageEl.textContent = "Stol tanlanmoqda...";
+          try {
+            const selRes = await fetch(`${API_BASE}/Reservation/select-table`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                BusinessId: businessId,
+                TableId: t.Id,
+              }),
+            });
+            if (!selRes.ok) {
+              const err = await selRes.json();
+              throw new Error(err.error || "Stolni tanlab bo'lmadi.");
+            }
+            const data = await selRes.json();
+            // Sessiyani saqlab, menuga o'tamiz.
+            saveTableSession({
+              token: data.SessionToken,
+              tableId: data.TableId,
+              tableName: data.TableName,
+              businessId: data.BusinessId,
+              reservationId: data.ReservationId,
+            });
+            window.location.href = `menu.html?businessId=${businessId}&tableId=${data.TableId}&restaurantName=${encodeURIComponent(restaurantName)}`;
+          } catch (e) {
+            messageEl.textContent = `Xatolik: ${e.message}`;
+          }
+        };
+        tablesGrid.appendChild(btn);
+      });
+    } catch (e) {
+      messageEl.textContent = `Stollarni yuklab bo'lmadi: ${e.message}`;
+    }
+  }
+
+  // ---------- Tugma: bo'sh stollarni ko'rsatish ----------
+  showTablesBtn?.addEventListener("click", () => {
+    codeInput?.blur();
+    availableSection.hidden = false;
+    showTablesBtn.hidden = true;
+    loadAvailableTables();
+  });
+
+  // ---------- Form submit: bron kodi bilan kirish ----------
+  entryForm?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    messageEl.textContent = "";
+
+    const code = (codeInput?.value || "").trim();
+    if (code.length !== 6 || !/^\d{6}$/.test(code)) {
+      messageEl.textContent = "Bron kodi aynan 6 raqamdan iborat bo'lishi kerak.";
+      return;
+    }
+    if (!businessId) {
+      messageEl.textContent = "Avval restoranni tanlang.";
+      return;
+    }
+
+    messageEl.textContent = "Tekshirilmoqda...";
+    try {
+      const res = await fetch(`${API_BASE}/Reservation/Enter/enter`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ Code: code }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Noto'g'ri yoki amalgan mudrati o'tgan kod.");
+      }
+      const data = await res.json();
+      saveTableSession({
+        token: data.SessionToken,
+        tableId: data.TableId,
+        tableName: data.TableName,
+        businessId: data.BusinessId,
+        reservationId: data.ReservationId,
+      });
+      window.location.href = `menu.html?businessId=${data.BusinessId}&tableId=${data.TableId}&restaurantName=${encodeURIComponent(restaurantName)}`;
+    } catch (e) {
+      messageEl.textContent = `Xatolik: ${e.message}`;
+      codeInput?.focus();
+    }
+  });
+
+  // ---------- Sahifa ochilganda ----------
+  if (locationNote) locationNote.textContent = "Bron kodingizni kiriting yoki bo'sh stolni tanlang.";
+}
+

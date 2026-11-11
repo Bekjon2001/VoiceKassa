@@ -40,9 +40,20 @@
                    maxlength="6" placeholder="Masalan: 123456" autocomplete="off"
                    aria-label="6 raqamli bron kodi" style="letter-spacing:6px;text-align:center;font-size:22px;font-weight:700" />
           </div>
+          <button class="secondary-button" type="button" id="show-tables-btn" style="margin-top:12px;width:100%">
+            <span>Bo'sh stollarni ko'rish</span><strong>→</strong>
+          </button>
         </section>
 
-        <p class="location-note" id="location-note">Kodni kiriting va stolingizga ulaning.</p>
+        <!-- Bo'sh stollar ro'yxati (yozilganda ko'rinadi) -->
+        <section id="available-tables-section" hidden aria-labelledby="available-title">
+          <h3 id="available-title">Bo'sh stollar</h3>
+          <p class="intro-copy" style="margin:0 0 12px">Quyidagi stollar hozir bo'sh. Tanlang va buyurtma bering.</p>
+          <div id="available-tables-grid" class="table-grid" style="display:flex;flex-wrap:wrap;gap:10px;justify-content:center"></div>
+          <p id="available-tables-empty" class="form-message" style="text-align:center" hidden>Hozircha bo'sh stol yo'q.</p>
+        </section>
+
+        <p class="location-note" id="location-note">Kodni kiriting yoki bo'sh stolni tanlang.</p>
 
         <input id="business-id" name="businessId" type="hidden" />
         <p class="form-message" id="form-message" role="status"></p>
@@ -51,5 +62,135 @@
     </section>
   </main>
   <script src="app.js"></script>
+  <script id="vk-tables-init">
+(function () {
+  const API_BASE = location.protocol.startsWith("http")
+    ? `${location.protocol}//${location.host}`
+    : "http://localhost:55983";
+  const params = new URLSearchParams(window.location.search);
+  const businessId = Number(params.get("businessId")) || 0;
+  const restaurantName = params.get("restaurantName") || "Restoran";
+  const titleEl = document.getElementById("restaurant-title");
+  if (titleEl) titleEl.textContent = restaurantName;
+  const businessInput = document.getElementById("business-id");
+  if (businessInput) businessInput.value = businessId;
+  const codeInput = document.getElementById("booking-code");
+  const showTablesBtn = document.getElementById("show-tables-btn");
+  const availableSection = document.getElementById("available-tables-section");
+  const tablesGrid = document.getElementById("available-tables-grid");
+  const emptyMsg = document.getElementById("available-tables-empty");
+  const messageEl = document.getElementById("form-message");
+  const locationNote = document.getElementById("location-note");
+  const entryForm = document.getElementById("entry-form");
+  if (locationNote) locationNote.textContent = "Bron kodingizni kiriting yoki bo'sh stolni tanlang.";
+
+  async function loadAvailableTables() {
+    if (!businessId) {
+      if (messageEl) messageEl.textContent = "Avval restoranni tanlang.";
+      return;
+    }
+    if (tablesGrid) tablesGrid.innerHTML = "";
+    if (emptyMsg) emptyMsg.hidden = true;
+    try {
+      const today = new Date().toISOString().slice(0, 10);
+      const res = await fetch(`${API_BASE}/Reservation/available?businessId=${businessId}&date=${encodeURIComponent(today)}&guests=1`,
+        { headers: { "Content-Type": "application/json" } });
+      if (!res.ok) throw new Error(await res.text());
+      const tables = await res.json();
+      if (!tables || tables.length === 0) {
+        if (emptyMsg) emptyMsg.hidden = false;
+        return;
+      }
+      tables.forEach((t) => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.textContent = `${t.name} (${t.capacity} kishi)`;
+        btn.style.padding = "10px 16px";
+        btn.style.border = "1px solid var(--border, #ddd)";
+        btn.style.borderRadius = "8px";
+        btn.style.background = "#fff";
+        btn.style.cursor = "pointer";
+        btn.style.fontSize = "14px";
+        btn.onclick = async () => {
+          if (messageEl) messageEl.textContent = "Stol tanlanmoqda...";
+          try {
+            const selRes = await fetch(`${API_BASE}/Reservation/select-table`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ BusinessId: businessId, TableId: t.Id }),
+            });
+            if (!selRes.ok) {
+              const err = await selRes.json();
+              throw new Error(err.error || "Stolni tanlab bo'lmadi.");
+            }
+            const data = await selRes.json();
+            const session = {
+              token: data.SessionToken, tableId: data.TableId,
+              tableName: data.TableName, businessId: data.BusinessId,
+              reservationId: data.ReservationId,
+            };
+            try { localStorage.setItem("vk_table_session", JSON.stringify(session)); } catch { }
+            window.location.href = `menu.html?businessId=${data.BusinessId}&tableId=${data.TableId}&restaurantName=${encodeURIComponent(restaurantName)}`;
+          } catch (e) {
+            if (messageEl) messageEl.textContent = `Xatolik: ${e.message}`;
+          }
+        };
+        tablesGrid.appendChild(btn);
+      });
+    } catch (e) {
+      if (messageEl) messageEl.textContent = `Xatolik: ${e.message}`;
+      if (emptyMsg) emptyMsg.hidden = false;
+    }
+  }
+
+  if (showTablesBtn && availableSection) {
+    showTablesBtn.addEventListener("click", () => {
+      if (codeInput) codeInput.blur();
+      availableSection.hidden = false;
+      showTablesBtn.hidden = true;
+      loadAvailableTables();
+    });
+  }
+
+  if (entryForm) {
+    entryForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (messageEl) messageEl.textContent = "";
+      const code = (codeInput ? codeInput.value : "").trim();
+      if (code.length !== 6 || !/^\d{6}$/.test(code)) {
+        if (messageEl) messageEl.textContent = "Bron kodi aynan 6 raqamdan iborat bo'lishi kerak.";
+        return;
+      }
+      if (!businessId) {
+        if (messageEl) messageEl.textContent = "Avval restoranni tanlang.";
+        return;
+      }
+      if (messageEl) messageEl.textContent = "Tekshirilmoqda...";
+      try {
+        const res = await fetch(`${API_BASE}/Reservation/Enter/enter`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ Code: code }),
+        });
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.error || "Noto'g'ri yoki amalgan mudrati o'tgan kod.");
+        }
+        const data = await res.json();
+        const session = {
+          token: data.SessionToken, tableId: data.TableId,
+          tableName: data.TableName, businessId: data.BusinessId,
+          reservationId: data.ReservationId,
+        };
+        try { localStorage.setItem("vk_table_session", JSON.stringify(session)); } catch { }
+        window.location.href = `menu.html?businessId=${data.BusinessId}&tableId=${data.TableId}&restaurantName=${encodeURIComponent(restaurantName)}`;
+      } catch (e) {
+        if (messageEl) messageEl.textContent = `Xatolik: ${e.message}`;
+        if (codeInput) codeInput.focus();
+      }
+    });
+  }
+})();
+</script>
 </body>
 </html>

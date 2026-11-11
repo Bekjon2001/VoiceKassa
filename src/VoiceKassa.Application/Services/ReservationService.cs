@@ -279,6 +279,57 @@ public class ReservationService
         return result.OrderBy(t => t.Name).ToList();
     }
 
+    /// <summary>
+    /// Mijoz bo'sh stolni tanladi (anonymous, kodsiz). Stol bo'shligi tekshiriladi,
+    /// bron "Arrived" holatida yaratiladi va sessiya kaliti beriladi.
+    /// </summary>
+    public async Task<(bool Success, string? Error, EnterReservationResponse? Result)> SelectTableAsync(
+        SelectTableRequest request, CancellationToken ct = default)
+    {
+        if (request.BusinessId <= 0 || request.TableId <= 0)
+            return (false, "BusinessId/TableId noto'g'ri.", null);
+
+        var table = await _businessRepo.GetTableByIdAsync(request.TableId, ct);
+        if (table is null || table.BusinessId != request.BusinessId)
+            return (false, "Stol topilmadi yoki bu biznesga tegishli emas.", null);
+
+        var today = (DateTime.UtcNow + LocalClock.UzbekistanOffset).Date;
+        if (!await _repo.IsTableFreeAsync(table.Id, today, ct))
+            return (false, "Bu stol allaqachon band yoki bron qilingan.", null);
+
+        if (await _businessRepo.HasOpenOrderForTableAsync(table.Id, ct))
+            return (false, "Bu stolda faol buyurtma bor.", null);
+
+        var token = Guid.NewGuid().ToString("N");
+        var reservation = new Reservation
+        {
+            BusinessId = request.BusinessId,
+            TableId = table.Id,
+            BookingDate = today,
+            StartTime = null,
+            EndTime = null,
+            CustomerName = null,
+            CustomerPhone = null,
+            GuestCount = 1,
+            Code = string.Empty,
+            SessionToken = token,
+            Status = ReservationStatus.Arrived,
+            CreatedAt = DateTime.UtcNow,
+        };
+        await _repo.AddAsync(reservation, ct);
+        await _repo.SaveChangesAsync(ct);
+
+        return (true, null, new EnterReservationResponse
+        {
+            SessionToken = token,
+            ReservationId = reservation.Id,
+            BusinessId = reservation.BusinessId,
+            TableId = reservation.TableId,
+            TableName = table.Name,
+            Status = reservation.Status,
+        });
+    }
+
     // ---------- Yordamchi metodlar ----------
 
     private async Task<(bool Ok, string? Error, Table? Table, DateTime BookingDate)> ValidateTableAndDateAsync(

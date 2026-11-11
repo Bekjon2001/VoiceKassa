@@ -130,4 +130,17 @@ public class ReservationController : ApiControllerBase
         var list = await _reservationService.GetAvailableTablesAsync(businessId, date, guests, ct);
         return Ok(list);
     }
+
+    /// <summary>
+    /// Mijoz bo'sh stolni tanladi (anonymous, kodsiz). Bron "Arrived" holatida
+    /// yaratiladi va SESSION_TOKEN qaytariladi — u X-Table-Token sifatida ishlatiladi.
+    /// </summary>
+    [HttpPost("select-table")]
+    [AllowAnonymous]
+    public async Task<IActionResult> SelectTable([FromBody] SelectTableRequest request, CancellationToken ct)
+    {
+        var (success, error, result) = await _reservationService.SelectTableAsync(request, ct);
+        if (success) return Ok(result);
+        return BadRequest(new { error });
+    }
 }

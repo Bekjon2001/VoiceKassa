@@ -58,6 +58,13 @@ public class EnterReservationResponse
     public ReservationStatus Status { get; set; }
 }
 
+/// <summary>Bo'sh stolni tanlash (mijoz, anonymous) — bron kodi yo'q, stolni tanlaydi va sessiya oladi.</summary>
+public class SelectTableRequest
+{
+    public long BusinessId { get; set; }
+    public long TableId { get; set; }
+}
+
 /// <summary>Bron yozuvi (admin ro'yxati uchun).</summary>
 public class ReservationResponse
 {
