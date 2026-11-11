@@ -1,1 +1,0 @@
-﻿SELECT o."ID", o."BUSINESS_ID", b."NAME" AS restoran, o."TABLE_ID", o."STATUS", o."CREATED_AT" FROM voicekassa."ORDERS" o LEFT JOIN voicekassa."BUSINESSES" b ON b."ID"=o."BUSINESS_ID" ORDER BY o."CREATED_AT" DESC, o."ID" DESC LIMIT 15;
