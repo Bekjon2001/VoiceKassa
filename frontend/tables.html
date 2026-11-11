@@ -93,7 +93,7 @@
     if (emptyMsg) emptyMsg.hidden = true;
     try {
       const today = new Date().toISOString().slice(0, 10);
-      const res = await fetch(`${API_BASE}/Reservation/available?businessId=${businessId}&date=${encodeURIComponent(today)}&guests=1`,
+      const res = await fetch(`${API_BASE}/Reservation/GetAvailable/available?businessId=${businessId}&date=${encodeURIComponent(today)}&guests=1`,
         { headers: { "Content-Type": "application/json" } });
       if (!res.ok) throw new Error(await res.text());
       const tables = await res.json();
@@ -114,10 +114,10 @@
         btn.onclick = async () => {
           if (messageEl) messageEl.textContent = "Stol tanlanmoqda...";
           try {
-            const selRes = await fetch(`${API_BASE}/Reservation/select-table`, {
+            const selRes = await fetch(`${API_BASE}/Reservation/SelectTable/select-table`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ BusinessId: businessId, TableId: t.Id }),
+              body: JSON.stringify({ BusinessId: businessId, TableId: t.id }),
             });
             if (!selRes.ok) {
               const err = await selRes.json();
@@ -125,12 +125,12 @@
             }
             const data = await selRes.json();
             const session = {
-              token: data.SessionToken, tableId: data.TableId,
-              tableName: data.TableName, businessId: data.BusinessId,
-              reservationId: data.ReservationId,
+              token: data.sessionToken, tableId: data.tableId,
+              tableName: data.tableName, businessId: data.businessId,
+              reservationId: data.reservationId,
             };
             try { localStorage.setItem("vk_table_session", JSON.stringify(session)); } catch { }
-            window.location.href = `menu.html?businessId=${data.BusinessId}&tableId=${data.TableId}&restaurantName=${encodeURIComponent(restaurantName)}`;
+            window.location.href = `menu.html?businessId=${data.businessId}&tableId=${data.tableId}&restaurantName=${encodeURIComponent(restaurantName)}`;
           } catch (e) {
             if (messageEl) messageEl.textContent = `Xatolik: ${e.message}`;
           }
