@@ -311,7 +311,7 @@ public class ReservationService
             CustomerName = null,
             CustomerPhone = null,
             GuestCount = 1,
-            Code = string.Empty,
+            Code = await GenerateUniqueCodeAsync(ct),
             SessionToken = token,
             Status = ReservationStatus.Arrived,
             CreatedAt = DateTime.UtcNow,

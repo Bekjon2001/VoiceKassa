@@ -121,6 +121,8 @@ input:focus, textarea:focus { border-color: var(--green); box-shadow: 0 0 0 3px 
 .table-button:disabled { cursor: not-allowed; filter: grayscale(.8); }
 .table-button:disabled .table-info small { color: var(--coral); }
 .table-button:disabled { cursor: not-allowed; opacity: .5; }
+.available-table-button { padding: 10px 16px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--ink); cursor: pointer; font: inherit; font-size: 14px; }
+.available-table-button:hover, .available-table-button:focus-visible { border-color: var(--green); outline: none; box-shadow: 0 0 0 2px rgba(29,104,77,.18); }
 .menu-heading h3 { margin: 7px 0 12px; font-size: 20px; }
 /* Menyu bo'limlari (tablar): Ovqatlar / Ichimliklar / Mevalar / Shirinliklar.
    Tepada gorizontal tugmalar — bosilganda shu bo'lim ochiladi. sticky: menyu
@@ -441,4 +443,3 @@ html[data-theme='dark'] .selection-note { background: var(--panel); }
 /* Yorqin matnlar tun rejimda to'qroq yashil bilan */
 html[data-theme='dark'] .menu-item b,
 html[data-theme='dark'] .staff-state { color: var(--green); }
-
