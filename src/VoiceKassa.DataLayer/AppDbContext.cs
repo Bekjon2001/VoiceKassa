@@ -49,8 +49,10 @@ public class AppDbContext : DbContext
 
         modelBuilder.Entity<Reservation>(e =>
         {
-            // Bir stolga bir sanada faqat bitta bron (SQL fayldagi UNIQUE bilan bir xil).
-            e.HasIndex(x => new { x.BusinessId, x.TableId, x.BookingDate }).IsUnique();
+            // Faqat faol bronlar shu stol va sanada qayta bron qilishni bloklaydi.
+            e.HasIndex(x => new { x.BusinessId, x.TableId, x.BookingDate })
+                .IsUnique()
+                .HasFilter("\"STATUS\" IN (0, 1)");
             // 6 raqamli kod butun tizimda yagona — takrorlanmasligi shart.
             e.HasIndex(x => x.Code).IsUnique();
         });

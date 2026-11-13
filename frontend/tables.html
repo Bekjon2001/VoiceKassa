@@ -9,38 +9,43 @@
     // Kun/Tun (light/dark) rejimini sahifa chizilishidan OLDIN qo'llaymiz — miltillash bo'lmasligi uchun.
     try { document.documentElement.dataset.theme = localStorage.getItem("vk_theme") === "dark" ? "dark" : "light"; } catch (e) {}
   </script>
-  <link rel="stylesheet" href="styles.css?v=20261111" />
+  <link rel="stylesheet" href="styles.css?v=7" />
 </head>
 <body>
-  <header class="menu-topbar">
-    <a class="menu-back-link" href="index.html">← Restoranni almashtirish</a>
+  <header class="menu-topbar reservation-topbar">
+    <a class="menu-back-link" href="index.html">← Restoranlar</a>
+    <a class="reservation-brand" href="index.html" aria-label="VoiceKassa bosh sahifa">
+      <span class="reservation-brand-mark" aria-hidden="true">VK</span>
+      <strong>VoiceKassa</strong>
+    </a>
     <button class="theme-toggle" id="theme-toggle" type="button" title="Kun/Tun rejimini almashtirish" aria-label="Kun/Tun rejimini almashtirish">🌙</button>
   </header>
-  <main class="shell tables-page">
+  <main class="shell reservation-page">
     <section class="intro-panel">
       <div class="brand-mark" aria-label="VoiceKassa">VK</div>
-      <p class="eyebrow">VOICEKASSA / STOL</p>
-      <h1>Stolni<br /><em>tanlang.</em></h1>
-      <p class="intro-copy">Bo'sh stolni tanlab, keyin menyudan taom tanlang.</p>
+      <p class="eyebrow">RESTORAN · BUYURTMA</p>
+      <h1>Yaxshi ta'm,<br /><em>qulay</em> buyurtma.</h1>
+      <p class="intro-copy">Bron kodingiz bilan stolingizga ulaning yoki hozir bo'sh stolni tanlang.</p>
+      <div class="status-line"><span class="status-dot"></span> Xush kelibsiz</div>
     </section>
 
     <section class="entry-panel" aria-labelledby="restaurant-title">
       <div class="panel-heading">
-        <span class="step-label">02 / STOL</span>
+        <span class="step-label">2-QADAM · STOL</span>
         <h2 id="restaurant-title">Restoran</h2>
-        <p>Bron kodingizni kiriting — stolingizga ulaniladi.</p>
+        <p>Stolni tanlang va menyudan buyurtma berishni boshlang.</p>
       </div>
 
       <form id="entry-form" novalidate>
         <section class="table-section" aria-labelledby="table-title">
           <h3 id="table-title">Bron kodi</h3>
-          <p class="intro-copy" style="margin:0 0 10px">Ofitsiantdan olgan 6 raqamli bron kodingizni kiriting.</p>
+          <p class="reservation-help">Ofitsiantdan olgan 6 raqamli kodingizni kiriting.</p>
           <div class="search-row">
             <input id="booking-code" name="code" type="text" inputmode="numeric" pattern="[0-9]*"
                    maxlength="6" placeholder="Masalan: 123456" autocomplete="off"
-                   aria-label="6 raqamli bron kodi" style="letter-spacing:6px;text-align:center;font-size:22px;font-weight:700" />
+                   aria-label="6 raqamli bron kodi" />
           </div>
-          <button class="secondary-button" type="button" id="show-tables-btn" style="margin-top:12px;width:100%">
+          <button class="secondary-button" type="button" id="show-tables-btn">
             <span>Bo'sh stollarni ko'rish</span><strong>→</strong>
           </button>
         </section>
@@ -48,12 +53,12 @@
         <!-- Bo'sh stollar ro'yxati (yozilganda ko'rinadi) -->
         <section id="available-tables-section" hidden aria-labelledby="available-title">
           <h3 id="available-title">Bo'sh stollar</h3>
-          <p class="intro-copy" style="margin:0 0 12px">Quyidagi stollar hozir bo'sh. Tanlang va buyurtma bering.</p>
-          <div id="available-tables-grid" class="table-grid" style="display:flex;flex-wrap:wrap;gap:10px;justify-content:center"></div>
-          <p id="available-tables-empty" class="form-message" style="text-align:center" hidden>Hozircha bo'sh stol yo'q.</p>
+          <p class="reservation-help">Quyidagi stollardan birini tanlang.</p>
+          <div id="available-tables-grid" class="table-grid"></div>
+          <p id="available-tables-empty" class="form-message reservation-empty" hidden>Hozircha bo'sh stol yo'q.</p>
         </section>
 
-        <p class="location-note" id="location-note">Kodni kiriting yoki bo'sh stolni tanlang.</p>
+        <p class="location-note" id="location-note">Bron kodini kiriting yoki mavjud stollarni ko'ring.</p>
 
         <input id="business-id" name="businessId" type="hidden" />
         <p class="form-message" id="form-message" role="status"></p>
@@ -63,12 +68,13 @@
   </main>
   <script src="app.js"></script>
   <script id="vk-tables-init">
-(function () {
+(async function () {
   const API_BASE = location.protocol.startsWith("http")
     ? `${location.protocol}//${location.host}`
     : "http://localhost:55983";
   const params = new URLSearchParams(window.location.search);
-  const businessId = Number(params.get("businessId")) || 0;
+  const currentSession = loadTableSession();
+  const businessId = Number(params.get("businessId")) || Number(currentSession && currentSession.businessId) || 0;
   const restaurantName = params.get("restaurantName") || "Restoran";
   const titleEl = document.getElementById("restaurant-title");
   if (titleEl) titleEl.textContent = restaurantName;
@@ -83,6 +89,27 @@
   const locationNote = document.getElementById("location-note");
   const entryForm = document.getElementById("entry-form");
   if (locationNote) locationNote.textContent = "Bron kodingizni kiriting yoki bo'sh stolni tanlang.";
+
+  if (!businessId) {
+    window.location.replace("index.html");
+    return;
+  }
+
+  if (currentSession && currentSession.token) {
+    try {
+      const orderResponse = await fetch(`${API_BASE}/Order/Mine/mine`, {
+        headers: tableTokenHeaders(),
+      });
+      if (orderResponse.ok) {
+        window.location.replace("menu.html");
+        return;
+      }
+      if (orderResponse.status === 401) clearTableSession();
+      else if (orderResponse.status !== 404) throw new Error("Buyurtma holatini tekshirib bo'lmadi.");
+    } catch (error) {
+      if (messageEl) messageEl.textContent = `Buyurtma holatini tekshirib bo'lmadi: ${error.message}`;
+    }
+  }
 
   async function loadAvailableTables() {
     if (!businessId) {
@@ -101,17 +128,42 @@
         if (emptyMsg) emptyMsg.hidden = false;
         return;
       }
-      tables.forEach((t) => {
+      tables.forEach((t, index) => {
         const btn = document.createElement("button");
         btn.type = "button";
-        btn.className = "available-table-button";
-        btn.textContent = `${t.name} (${t.capacity} kishi)`;
+        btn.className = "available-table-card";
+        btn.setAttribute("aria-label", `${t.name}, ${t.capacity} kishi uchun. Stolni tanlash`);
+
+        const image = document.createElement("img");
+        image.className = "available-table-image";
+        image.src = DEFAULT_TABLES[index % DEFAULT_TABLES.length].image;
+        image.alt = "";
+        image.loading = "lazy";
+
+        const capacity = document.createElement("span");
+        capacity.className = "available-table-capacity";
+        capacity.textContent = `${t.capacity} kishi`;
+
+        const details = document.createElement("span");
+        details.className = "available-table-details";
+        const name = document.createElement("strong");
+        name.textContent = t.name;
+        const hint = document.createElement("small");
+        hint.textContent = "Stolni tanlash";
+
+        const arrow = document.createElement("span");
+        arrow.className = "available-table-arrow";
+        arrow.setAttribute("aria-hidden", "true");
+        arrow.textContent = "→";
+
+        details.append(name, hint, arrow);
+        btn.append(image, capacity, details);
         btn.onclick = async () => {
           if (messageEl) messageEl.textContent = "Stol tanlanmoqda...";
           try {
             const selRes = await fetch(`${API_BASE}/Reservation/SelectTable/select-table`, {
               method: "POST",
-              headers: { "Content-Type": "application/json" },
+              headers: Object.assign({ "Content-Type": "application/json" }, tableTokenHeaders()),
               body: JSON.stringify({ BusinessId: businessId, TableId: t.id }),
             });
             if (!selRes.ok) {
@@ -164,7 +216,7 @@
       try {
         const res = await fetch(`${API_BASE}/Reservation/Enter/enter`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: Object.assign({ "Content-Type": "application/json" }, tableTokenHeaders()),
           body: JSON.stringify({ Code: code }),
         });
         if (!res.ok) {

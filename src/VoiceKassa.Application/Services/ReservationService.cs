@@ -132,7 +132,7 @@ public class ReservationService
     /// Yopilgan/bekor qilingan bron bilan kirib bo'lmaydi.
     /// </summary>
     public async Task<(bool Success, string? Error, EnterReservationResponse? Result)> EnterByCodeAsync(
-        EnterReservationRequest request, CancellationToken ct = default)
+        EnterReservationRequest request, CancellationToken ct = default, string? sessionToken = null)
     {
         var code = (request.Code ?? string.Empty).Trim();
         if (code.Length != 6 || !code.All(char.IsDigit))
@@ -145,6 +145,19 @@ public class ReservationService
             return (false, "Bu bron bekor qilingan.", null);
         if (reservation.Status == ReservationStatus.Closed)
             return (false, "Bu bron yopilgan (hisob allaqachon yopilgan).", null);
+
+        Reservation? currentReservation = null;
+        if (!string.IsNullOrWhiteSpace(sessionToken))
+        {
+            currentReservation = await _repo.GetBySessionTokenAsync(sessionToken.Trim(), ct);
+            if (currentReservation is not null &&
+                currentReservation.Status is not (ReservationStatus.Cancelled or ReservationStatus.Closed) &&
+                currentReservation.Id != reservation.Id &&
+                await _businessRepo.HasOpenOrderForTableAsync(currentReservation.TableId, ct))
+            {
+                return (false, "Buyurtma yuborilgach, boshqa stolni tanlab bo'lmaydi. O'z stolingizdan foydalaning.", null);
+            }
+        }
 
         // Faqat bugungi sana bo'lgan bronga kirishga ruxsat (O'zbekiston vaqti, UTC+5).
         var todayLocal = (DateTime.UtcNow + LocalClock.UzbekistanOffset).Date;
@@ -161,6 +174,12 @@ public class ReservationService
         var table = await _businessRepo.GetTableByIdAsync(reservation.TableId, ct);
         if (table is null)
             return (false, "Stol topilmadi.", null);
+
+        if (currentReservation is not null && currentReservation.Id != reservation.Id)
+        {
+            currentReservation.Status = ReservationStatus.Cancelled;
+            currentReservation.SessionToken = null;
+        }
 
         // Har bir "kirish" yangi sessiya ochadi (eski token bekor qilinadi) —
         // kodni boshqa qurilmada qayta kiritsa ham ishlaydi.
@@ -284,7 +303,7 @@ public class ReservationService
     /// bron "Arrived" holatida yaratiladi va sessiya kaliti beriladi.
     /// </summary>
     public async Task<(bool Success, string? Error, EnterReservationResponse? Result)> SelectTableAsync(
-        SelectTableRequest request, CancellationToken ct = default)
+        SelectTableRequest request, CancellationToken ct = default, string? sessionToken = null)
     {
         if (request.BusinessId <= 0 || request.TableId <= 0)
             return (false, "BusinessId/TableId noto'g'ri.", null);
@@ -293,12 +312,50 @@ public class ReservationService
         if (table is null || table.BusinessId != request.BusinessId)
             return (false, "Stol topilmadi yoki bu biznesga tegishli emas.", null);
 
+        Reservation? currentReservation = null;
+        if (!string.IsNullOrWhiteSpace(sessionToken))
+        {
+            currentReservation = await _repo.GetBySessionTokenAsync(sessionToken.Trim(), ct);
+            if (currentReservation is not null &&
+                currentReservation.Status is not (ReservationStatus.Cancelled or ReservationStatus.Closed))
+            {
+                if (currentReservation.BusinessId != request.BusinessId)
+                    return (false, "Boshqa restorandagi faol stol sessiyasi mavjud.", null);
+
+                if (currentReservation.TableId == request.TableId)
+                {
+                    return (true, null, new EnterReservationResponse
+                    {
+                        SessionToken = currentReservation.SessionToken!,
+                        ReservationId = currentReservation.Id,
+                        BusinessId = currentReservation.BusinessId,
+                        TableId = currentReservation.TableId,
+                        TableName = table.Name,
+                        Status = currentReservation.Status,
+                    });
+                }
+
+                if (await _businessRepo.HasOpenOrderForTableAsync(currentReservation.TableId, ct))
+                    return (false, "Buyurtma yuborilgach, boshqa stolni tanlab bo'lmaydi. O'z stolingizdan foydalaning.", null);
+            }
+            else
+            {
+                currentReservation = null;
+            }
+        }
+
         var today = (DateTime.UtcNow + LocalClock.UzbekistanOffset).Date;
         if (!await _repo.IsTableFreeAsync(table.Id, today, ct))
             return (false, "Bu stol allaqachon band yoki bron qilingan.", null);
 
         if (await _businessRepo.HasOpenOrderForTableAsync(table.Id, ct))
             return (false, "Bu stolda faol buyurtma bor.", null);
+
+        if (currentReservation is not null)
+        {
+            currentReservation.Status = ReservationStatus.Cancelled;
+            currentReservation.SessionToken = null;
+        }
 
         var token = Guid.NewGuid().ToString("N");
         var reservation = new Reservation

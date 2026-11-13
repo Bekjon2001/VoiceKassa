@@ -9,11 +9,15 @@
     // Kun/Tun (light/dark) rejimini sahifa chizilishidan OLDIN qo'llaymiz — miltillash bo'lmasligi uchun.
     try { document.documentElement.dataset.theme = localStorage.getItem("vk_theme") === "dark" ? "dark" : "light"; } catch (e) {}
   </script>
-  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="styles.css?v=9" />
 </head>
 <body>
-  <header class="menu-topbar">
+  <header class="menu-topbar menu-page-topbar">
     <a class="menu-back-link" id="menu-back-link" href="tables.html">← Stolni almashtirish</a>
+    <div class="menu-brand" aria-label="VoiceKassa">
+      <span class="menu-brand-mark" aria-hidden="true">VK</span>
+      <strong>VoiceKassa</strong>
+    </div>
     <button class="theme-toggle" id="theme-toggle" type="button" title="Kun/Tun rejimini almashtirish" aria-label="Kun/Tun rejimini almashtirish">🌙</button>
   </header>
   <main class="shell menu-page">

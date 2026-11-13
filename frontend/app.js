@@ -296,6 +296,7 @@ async function initMenuPage() {
   const businessId = String(session.businessId || "");
   const tableId = String(session.tableId || "");
   const tableName = session.tableName || `Stol ${tableId}`;
+  const restaurantName = new URLSearchParams(window.location.search).get("restaurantName") || "Restoran";
   const locationNote = document.getElementById("location-note");
 
   document.getElementById("business-id").value = businessId;
@@ -309,6 +310,8 @@ async function initMenuPage() {
   // (updateSelectionSummary() boshqaradi).
   const backLink = document.getElementById("menu-back-link");
   if (backLink) {
+    const tableParams = new URLSearchParams({ businessId, restaurantName });
+    backLink.href = `tables.html?${tableParams.toString()}`;
     backLink.addEventListener("click", (event) => {
       // Savatda taom bor yoki buyurtma yuborilgan — almashtirishga ruxsat yo'q.
       if (orderSent || selectedMenuItems.size > 0) {

@@ -71,7 +71,8 @@ public class ReservationController : ApiControllerBase
             return StatusCode(StatusCodes.Status429TooManyRequests,
                 new { error = "Juda ko'p urinish. Birozdan keyin qayta urinib ko'ring." });
 
-        var (success, error, result) = await _reservationService.EnterByCodeAsync(request, ct);
+        var sessionToken = Request.Headers["X-Table-Token"].FirstOrDefault();
+        var (success, error, result) = await _reservationService.EnterByCodeAsync(request, ct, sessionToken);
         if (success)
         {
             _enterLimiter.Reset(clientKey);
@@ -139,7 +140,8 @@ public class ReservationController : ApiControllerBase
     [AllowAnonymous]
     public async Task<IActionResult> SelectTable([FromBody] SelectTableRequest request, CancellationToken ct)
     {
-        var (success, error, result) = await _reservationService.SelectTableAsync(request, ct);
+        var sessionToken = Request.Headers["X-Table-Token"].FirstOrDefault();
+        var (success, error, result) = await _reservationService.SelectTableAsync(request, ct, sessionToken);
         if (success) return Ok(result);
         return BadRequest(new { error });
     }
