@@ -114,6 +114,21 @@ public class BusinessController : ApiControllerBase
         return success ? Ok(owner) : Unauthorized(new { error });
     }
 
+    [HttpPost("staff/login")]
+    [AllowAnonymous]
+    public async Task<IActionResult> LoginStaff([FromBody] LoginRequest request, CancellationToken ct)
+    {
+        var ip = ClientIp;
+        if (!_authLimiter.TryEnter(ip))
+            return StatusCode(StatusCodes.Status429TooManyRequests,
+                new { error = "Juda ko'p urinish. Birozdan keyin qayta urinib ko'ring." });
+
+        var (success, error, staff) = await _businessService.LoginStaffAsync(request, ct);
+        if (success) _authLimiter.RegisterSuccess(ip);
+        else _authLimiter.RegisterFailure(ip);
+        return success ? Ok(staff) : Unauthorized(new { error });
+    }
+
     /// <summary>Yangi biznes ro'yxatdan o'tkazish (restoran, do'kon, market, ombor). Faqat Super Admin.</summary>
     [HttpPost]
     [SuperAdminReadOnly]
@@ -161,6 +176,18 @@ public class BusinessController : ApiControllerBase
         var ownerAccess = await _businessService.AuthorizeOwnerAsync(request.BusinessId, Request.Headers["X-Owner-Token"].FirstOrDefault(), ct);
         if (!ownerAccess.Success) return Unauthorized(new { error = ownerAccess.Error });
         var (success, error, staff) = await _businessService.CreateStaffAsync(request, ct);
+        return success ? Ok(staff) : BadRequest(new { error });
+    }
+
+    [HttpPut("staff/{staffId:long}/credentials")]
+    [SuperAdminReadOnly]
+    public async Task<IActionResult> UpdateStaffCredentials(
+        long staffId, [FromBody] UpdateStaffCredentialsRequest request, CancellationToken ct)
+    {
+        var access = await _businessService.AuthorizeStaffAsync(
+            staffId, Request.Headers["X-Owner-Token"].FirstOrDefault(), ct);
+        if (!access.Success) return Unauthorized(new { error = access.Error });
+        var (success, error, staff) = await _businessService.UpdateStaffCredentialsAsync(staffId, request, ct);
         return success ? Ok(staff) : BadRequest(new { error });
     }
 
@@ -248,7 +275,7 @@ public class BusinessController : ApiControllerBase
     [AllowAnonymous]
     public async Task<IActionResult> GetTables(long businessId, [FromQuery] int page = 1, [FromQuery] int pageSize = 20, CancellationToken ct = default)
     {
-        var accessError = EnsureBusinessReadAccess(businessId);
+        var accessError = EnsureBusinessReadAccess(businessId, VoiceKassa.Domain.Enums.StaffRole.Waiter);
         if (accessError is not null) return accessError;
         var tables = await _businessService.GetTablesAsync(businessId, ct);
         tables = tables.Skip((page - 1) * pageSize).Take(pageSize).ToList();
@@ -274,8 +301,16 @@ public class BusinessController : ApiControllerBase
     {
         var table = await _businessService.GetTableByIdAsync(tableId, ct);
         if (table is null) return NotFound(new { error = "Bunday stol topilmadi." });
-        var access = await _businessService.AuthorizeOwnerAsync(table.BusinessId, Request.Headers["X-Owner-Token"].FirstOrDefault(), ct);
+        var access = await _businessService.AuthorizeBusinessStaffAsync(
+            table.BusinessId,
+            Request.Headers["X-Owner-Token"].FirstOrDefault(),
+            ct,
+            VoiceKassa.Domain.Enums.StaffRole.Waiter);
         if (!access.Success) return Unauthorized(new { error = access.Error });
+        if (IsWaiterRole && (request.Status != VoiceKassa.Domain.Enums.TableStatus.Free ||
+            table.Status != VoiceKassa.Domain.Enums.TableStatus.NeedsCleaning))
+            return StatusCode(StatusCodes.Status403Forbidden,
+                new { error = "Ofitsiant faqat tozalash kerak bo'lgan stolni bo'sh deb belgilashi mumkin." });
         var (success, error) = await _businessService.UpdateTableStatusAsync(tableId, request, ct);
         if (success) return NoContent();
         // Faol buyurtma borligi sababli bloklangan bo'lsa — 409 (Conflict),

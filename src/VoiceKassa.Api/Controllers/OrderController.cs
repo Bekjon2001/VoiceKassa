@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
 using VoiceKassa.Application.DTOs;
 using VoiceKassa.Application.Services;
+using VoiceKassa.Domain.Enums;
 
 namespace VoiceKassa.Api.Controllers;
 
@@ -67,15 +68,17 @@ public class OrderController : ApiControllerBase
         var order = await _orderService.GetOrderAsync(orderId, ct);
         if (order is null) return NotFound(new { error = "Buyurtma topilmadi." });
 
-        var (allowed, authError) = await AuthorizeOrderAccessAsync(order, ct);
+        var (allowed, authError) = await AuthorizeOrderAccessAsync(order, ct, StaffRole.Cashier);
         if (!allowed) return authError!;
+        if (IsCashierRole && order.Status != VoiceKassa.Domain.Enums.OrderStatus.Ready)
+            return Conflict(new { error = "Kassir faqat tayyor buyurtmani yopishi mumkin." });
 
         var (success, error, result) = await _orderService.CloseOrderAsync(orderId, request, ct);
         return success ? Ok(result) : BadRequest(new { error });
     }
 
     /// <summary>
-    /// Oshxona uchun: biznesdagi ochiq (Open/InProgress) buyurtmalar
+    /// Oshxona uchun: biznesdagi ochiq (Open/InProgress/Ready) buyurtmalar
     /// — tarkibi va stol nomi bilan. FAQAT X-Owner-Token bilan (mijoz uchun
     /// ochiq emas — u Order/Mine'dan o'z buyurtmasini oladi).
     /// </summary>
@@ -84,12 +87,19 @@ public class OrderController : ApiControllerBase
     {
         if (IsSuperAdminRole)
             return Ok(await _orderService.GetOpenOrdersAsync(businessId, ct));
-        var accessError = EnsureBusinessReadAccess(businessId);
+        var accessError = EnsureBusinessReadAccess(
+            businessId, StaffRole.Cashier, StaffRole.Waiter, StaffRole.Cook);
         if (accessError is not null) return accessError;
-        var access = await _businessService.AuthorizeOwnerAsync(businessId, Request.Headers["X-Owner-Token"].FirstOrDefault(), ct);
+        var access = await _businessService.AuthorizeBusinessStaffAsync(
+            businessId,
+            Request.Headers["X-Owner-Token"].FirstOrDefault(),
+            ct,
+            StaffRole.Cashier, StaffRole.Waiter, StaffRole.Cook);
         if (!access.Success) return Unauthorized(new { error = access.Error ?? "Ruxsat yo'q." });
 
         var orders = await _orderService.GetOpenOrdersAsync(businessId, ct);
+        if (IsWaiterRole)
+            orders = orders.Where(o => o.Status == VoiceKassa.Domain.Enums.OrderStatus.Ready).ToList();
         return Ok(orders);
     }
 
@@ -115,7 +125,7 @@ public class OrderController : ApiControllerBase
         return order is null ? NotFound(new { error = "Sizning stolingizda ochiq buyurtma yo'q." }) : Ok(order);
     }
 
-    /// <summary>Oshxona buyurtmani oldi: Open -> InProgress (X-Owner-Token).</summary>
+    /// <summary>Oshxona buyurtmani oldi: Open -> InProgress (Manager/Cook).</summary>
     [HttpPost("{orderId:long}/start")]
     [SuperAdminReadOnly]
     public async Task<IActionResult> Start(long orderId, CancellationToken ct)
@@ -123,10 +133,24 @@ public class OrderController : ApiControllerBase
         var order = await _orderService.GetOrderAsync(orderId, ct);
         if (order is null) return NotFound(new { error = "Buyurtma topilmadi." });
 
-        var (allowed, authError) = await AuthorizeOrderAccessAsync(order, ct);
+        var (allowed, authError) = await AuthorizeOrderAccessAsync(order, ct, StaffRole.Cook);
         if (!allowed) return authError!;
 
         var (success, error, result) = await _orderService.StartOrderAsync(orderId, ct);
+        return success ? Ok(result) : BadRequest(new { error });
+    }
+
+    [HttpPost("{orderId:long}/ready")]
+    [SuperAdminReadOnly]
+    public async Task<IActionResult> Ready(long orderId, CancellationToken ct)
+    {
+        var order = await _orderService.GetOrderAsync(orderId, ct);
+        if (order is null) return NotFound(new { error = "Buyurtma topilmadi." });
+
+        var (allowed, authError) = await AuthorizeOrderAccessAsync(order, ct, StaffRole.Cook);
+        if (!allowed) return authError!;
+
+        var (success, error, result) = await _orderService.MarkOrderReadyAsync(orderId, ct);
         return success ? Ok(result) : BadRequest(new { error });
     }
 
@@ -141,7 +165,7 @@ public class OrderController : ApiControllerBase
         var order = await _orderService.GetOrderAsync(orderId, ct);
         if (order is null) return NotFound(new { error = "Buyurtma topilmadi." });
 
-        var (allowed, authError) = await AuthorizeOrderAccessAsync(order, ct);
+        var (allowed, authError) = await AuthorizeOrderAccessAsync(order, ct, StaffRole.Cook);
         if (!allowed) return authError!;
 
         var (success, error, result) = await _orderService.CancelOrderAsync(orderId, request, ct);
@@ -159,7 +183,7 @@ public class OrderController : ApiControllerBase
         var order = await _orderService.GetOrderAsync(orderId, ct);
         if (order is null) return NotFound(new { error = "Buyurtma topilmadi." });
 
-        var (allowed, authError) = await AuthorizeOrderAccessAsync(order, ct);
+        var (allowed, authError) = await AuthorizeOrderAccessAsync(order, ct, StaffRole.Cook);
         if (!allowed) return authError!;
 
         var (success, error, result) = await _orderService.RemoveOrderItemAsync(orderId, orderItemId, ct);
@@ -177,8 +201,11 @@ public class OrderController : ApiControllerBase
         var order = await _orderService.GetOrderAsync(orderId, ct);
         if (order is null) return NotFound();
 
-        var (allowed, authError) = await AuthorizeOrderAccessAsync(order, ct);
+        var (allowed, authError) = await AuthorizeOrderAccessAsync(
+            order, ct, StaffRole.Cashier, StaffRole.Waiter, StaffRole.Cook);
         if (!allowed) return authError!;
+        if (IsWaiterRole && order.Status != VoiceKassa.Domain.Enums.OrderStatus.Ready)
+            return Forbid();
 
         return Ok(order);
     }
@@ -190,9 +217,10 @@ public class OrderController : ApiControllerBase
     /// shart — mos bo'lmasa 403, yaroqsiz bo'lsa 401) YOKI X-Owner-Token
     /// (admin/oshxona paneli — o'z biznesidagi buyurtmalar).
     /// </summary>
-    private async Task<(bool Allowed, IActionResult? Error)> AuthorizeOrderAccessAsync(OrderResponse order, CancellationToken ct)
+    private async Task<(bool Allowed, IActionResult? Error)> AuthorizeOrderAccessAsync(
+        OrderResponse order, CancellationToken ct, params StaffRole[] allowedStaffRoles)
     {
-        if (IsRestaurantAdminRole && TokenRestaurantId != order.BusinessId)
+        if (!IsSuperAdminRole && TokenRestaurantId.HasValue && TokenRestaurantId != order.BusinessId)
             return (false, StatusCode(StatusCodes.Status403Forbidden, new { error = "Boshqa restoran buyurtmasiga ruxsat yo'q." }));
         if (IsSuperAdminRole)
             return (true, null);
@@ -211,10 +239,14 @@ public class OrderController : ApiControllerBase
             return (true, null);
         }
 
-        var access = await _businessService.AuthorizeOwnerAsync(order.BusinessId, Request.Headers["X-Owner-Token"].FirstOrDefault(), ct);
+        var access = await _businessService.AuthorizeBusinessStaffAsync(
+            order.BusinessId,
+            Request.Headers["X-Owner-Token"].FirstOrDefault(),
+            ct,
+            allowedStaffRoles);
         return access.Success
             ? (true, null)
-            : (false, Unauthorized(new { error = "X-Table-Token yoki X-Owner-Token kerak." }));
+            : (false, StatusCode(StatusCodes.Status403Forbidden, new { error = access.Error ?? "X-Table-Token yoki X-Owner-Token kerak." }));
     }
 
     /// <summary>Voice buyurtma uchun stolga ulanish: sessiya shu stolga tegishli bo'lishi shart.</summary>

@@ -34,7 +34,11 @@ public class ReservationController : ApiControllerBase
     [SuperAdminReadOnly]
     public async Task<IActionResult> Create([FromBody] CreateReservationRequest request, CancellationToken ct)
     {
-        var access = await _businessService.AuthorizeOwnerAsync(request.BusinessId, Request.Headers["X-Owner-Token"].FirstOrDefault(), ct);
+        var access = await _businessService.AuthorizeBusinessStaffAsync(
+            request.BusinessId,
+            Request.Headers["X-Owner-Token"].FirstOrDefault(),
+            ct,
+            VoiceKassa.Domain.Enums.StaffRole.Waiter);
         if (!access.Success) return Unauthorized(new { error = access.Error ?? "Ruxsat yo'q." });
 
         var (success, error, reservation) = await _reservationService.CreateAsync(request, ct);
@@ -45,11 +49,15 @@ public class ReservationController : ApiControllerBase
     [HttpGet("list/{businessId:long}")]
     public async Task<IActionResult> GetList(long businessId, [FromQuery] DateTime? bookingDate, CancellationToken ct)
     {
-        var accessError = EnsureBusinessReadAccess(businessId);
+        var accessError = EnsureBusinessReadAccess(businessId, VoiceKassa.Domain.Enums.StaffRole.Waiter);
         if (accessError is not null) return accessError;
         if (IsSuperAdminRole)
             return Ok(await _reservationService.GetListAsync(businessId, bookingDate, ct));
-        var access = await _businessService.AuthorizeOwnerAsync(businessId, Request.Headers["X-Owner-Token"].FirstOrDefault(), ct);
+        var access = await _businessService.AuthorizeBusinessStaffAsync(
+            businessId,
+            Request.Headers["X-Owner-Token"].FirstOrDefault(),
+            ct,
+            VoiceKassa.Domain.Enums.StaffRole.Waiter);
         if (!access.Success) return Unauthorized(new { error = access.Error ?? "Ruxsat yo'q." });
 
         var list = await _reservationService.GetListAsync(businessId, bookingDate, ct);
@@ -86,7 +94,11 @@ public class ReservationController : ApiControllerBase
     [SuperAdminReadOnly]
     public async Task<IActionResult> WalkIn([FromBody] WalkInReservationRequest request, CancellationToken ct)
     {
-        var access = await _businessService.AuthorizeOwnerAsync(request.BusinessId, Request.Headers["X-Owner-Token"].FirstOrDefault(), ct);
+        var access = await _businessService.AuthorizeBusinessStaffAsync(
+            request.BusinessId,
+            Request.Headers["X-Owner-Token"].FirstOrDefault(),
+            ct,
+            VoiceKassa.Domain.Enums.StaffRole.Waiter);
         if (!access.Success) return Unauthorized(new { error = access.Error ?? "Ruxsat yo'q." });
 
         var (success, error, result) = await _reservationService.WalkInAsync(request, ct);
@@ -126,7 +138,7 @@ public class ReservationController : ApiControllerBase
     public async Task<IActionResult> GetAvailable(
         [FromQuery] long businessId, [FromQuery] DateTime date, [FromQuery] int guests = 1, CancellationToken ct = default)
     {
-        var accessError = EnsureBusinessReadAccess(businessId);
+        var accessError = EnsureBusinessReadAccess(businessId, VoiceKassa.Domain.Enums.StaffRole.Waiter);
         if (accessError is not null) return accessError;
         var list = await _reservationService.GetAvailableTablesAsync(businessId, date, guests, ct);
         return Ok(list);

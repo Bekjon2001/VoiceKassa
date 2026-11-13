@@ -43,6 +43,18 @@ public class Staff
     [Column("ROLE")]
     public StaffRole Role { get; set; } = StaffRole.Cashier;
 
+    [Column("LOGIN")]
+    [MaxLength(100)]
+    public string? Login { get; set; }
+
+    [Column("PASSWORD_HASH")]
+    [MaxLength(500)]
+    public string? PasswordHash { get; set; }
+
+    [Column("ACCESS_TOKEN")]
+    [MaxLength(200)]
+    public string? AccessToken { get; set; }
+
     [Column("AGE")]
     public int? Age { get; set; }
 

@@ -60,6 +60,8 @@ public class AppDbContext : DbContext
         modelBuilder.Entity<Staff>(e =>
         {
             e.HasIndex(x => new { x.BusinessId, x.Role });
+            e.HasIndex(x => x.Login).IsUnique().HasFilter("\"LOGIN\" IS NOT NULL");
+            e.HasIndex(x => x.AccessToken).IsUnique().HasFilter("\"ACCESS_TOKEN\" IS NOT NULL");
             e.HasMany(x => x.SalaryHistory)
                 .WithOne(h => h!.Staff)
                 .HasForeignKey(h => h.StaffId)

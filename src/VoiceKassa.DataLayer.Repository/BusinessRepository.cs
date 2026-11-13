@@ -162,15 +162,51 @@ public class BusinessRepository : IBusinessRepository
             .ToListAsync(ct);
 
     public Task<Staff?> GetStaffByIdAsync(long staffId, CancellationToken ct = default) =>
-        _db.StaffMembers
-            .Include(s => s.SalaryHistory)
-            .FirstOrDefaultAsync(s => s.Id == staffId, ct);
+        _db.StaffMembers.FirstOrDefaultAsync(s => s.Id == staffId, ct);
+
+    public Task<Staff?> GetStaffByLoginAsync(string login, CancellationToken ct = default) =>
+        _db.StaffMembers.FirstOrDefaultAsync(s => s.Login == login, ct);
+
+    public Task<Staff?> GetStaffByTokenAsync(string token, CancellationToken ct = default) =>
+        _db.StaffMembers.FirstOrDefaultAsync(s => s.AccessToken == token, ct);
+
+    public async Task<bool> IsStaffLoginTakenAsync(
+        string login, long? excludeStaffId = null, CancellationToken ct = default)
+    {
+        var staffQuery = _db.StaffMembers.Where(s => s.Login == login);
+        if (excludeStaffId.HasValue)
+            staffQuery = staffQuery.Where(s => s.Id != excludeStaffId.Value);
+        return await staffQuery.AnyAsync(ct) ||
+               await _db.RestaurantOwners.AnyAsync(o => o.Login == login, ct);
+    }
+
+    public async Task<bool> UpdateStaffCredentialsAsync(
+        long staffId, string login, string passwordHash, CancellationToken ct = default)
+    {
+        var staff = await _db.StaffMembers.FindAsync(new object[] { staffId }, ct);
+        if (staff is null) return false;
+        staff.Login = login;
+        staff.PasswordHash = passwordHash;
+        staff.AccessToken = AccessTokens.New();
+        await _db.SaveChangesAsync(ct);
+        return true;
+    }
+
+    public async Task<bool> UpdateStaffAccessTokenAsync(long staffId, string token, CancellationToken ct = default)
+    {
+        var staff = await _db.StaffMembers.FindAsync(new object[] { staffId }, ct);
+        if (staff is null) return false;
+        staff.AccessToken = token;
+        await _db.SaveChangesAsync(ct);
+        return true;
+    }
 
     public async Task<bool> UpdateStaffStatusAsync(long staffId, bool isActive, CancellationToken ct = default)
     {
         var staff = await _db.StaffMembers.FindAsync(new object[] { staffId }, ct);
         if (staff is null) return false;
         staff.IsActive = isActive;
+        if (!isActive) staff.AccessToken = AccessTokens.New();
         await _db.SaveChangesAsync(ct);
         return true;
     }
@@ -204,6 +240,7 @@ public class BusinessRepository : IBusinessRepository
         staff.IsActive = isActive;
         // Faollashtirishda FiredAt tozalanadi, bo'shatishda hozirgi vaqt yoziladi.
         staff.FiredAt = isActive ? null : (firedAt ?? DateTime.UtcNow);
+        if (!isActive) staff.AccessToken = AccessTokens.New();
         await _db.SaveChangesAsync(ct);
         return staff;
     }
@@ -291,11 +328,11 @@ public class BusinessRepository : IBusinessRepository
     }
 
     /// <summary>
-    /// Shu stolda hozir ochiq (Open/InProgress) buyurtma bormi — holatni qo'lda
+    /// Shu stolda hozir ochiq (Open/InProgress/Ready) buyurtma bormi — holatni qo'lda
     /// o'zgartirishni bloklash uchun tekshiriladi. Yopilgan/bekor qilingan
     /// buyurtmalar hisobga olinmaydi (ular bo'lsa stolni o'zgartirish mumkin).
     /// </summary>
     public Task<bool> HasOpenOrderForTableAsync(long tableId, CancellationToken ct = default) =>
         _db.Orders.AnyAsync(o => o.TableId == tableId &&
-            (o.Status == OrderStatus.Open || o.Status == OrderStatus.InProgress), ct);
+            (o.Status == OrderStatus.Open || o.Status == OrderStatus.InProgress || o.Status == OrderStatus.Ready), ct);
 }

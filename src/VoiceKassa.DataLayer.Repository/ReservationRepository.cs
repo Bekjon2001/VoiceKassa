@@ -45,7 +45,7 @@ public class ReservationRepository : IReservationRepository
         // Ochiq buyurtma ham stolni band qiladi — walk-in'da ham tekshiriladi.
         var hasOpenOrder = await _db.Orders.AnyAsync(o =>
             o.TableId == tableId &&
-            (o.Status == OrderStatus.Open || o.Status == OrderStatus.InProgress), ct);
+            (o.Status == OrderStatus.Open || o.Status == OrderStatus.InProgress || o.Status == OrderStatus.Ready), ct);
         return !hasOpenOrder;
     }
 

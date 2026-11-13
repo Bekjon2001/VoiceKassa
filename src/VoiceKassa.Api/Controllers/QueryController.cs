@@ -177,7 +177,7 @@ public class QueryController : ApiControllerBase
         [FromQuery] DateTime? toDate,
         CancellationToken ct)
     {
-        var accessError = EnsureBusinessReadAccess(businessId);
+        var accessError = EnsureBusinessReadAccess(businessId, VoiceKassa.Domain.Enums.StaffRole.Cashier);
         if (accessError is not null) return accessError;
         // Sana berilmasa — bugungi kun O'zbekiston vaqti (UTC+5) bo'yicha olinadi,
         // shunda "bugungi savdo" mahalliy yarim tunda almashadi.

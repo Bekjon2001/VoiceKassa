@@ -51,6 +51,11 @@ public interface IBusinessRepository
     Task<Staff> CreateStaffAsync(Staff staff, CancellationToken ct = default);
     Task<List<Staff>> GetStaffByBusinessAsync(long businessId, CancellationToken ct = default);
     Task<Staff?> GetStaffByIdAsync(long staffId, CancellationToken ct = default);
+    Task<Staff?> GetStaffByLoginAsync(string login, CancellationToken ct = default);
+    Task<Staff?> GetStaffByTokenAsync(string token, CancellationToken ct = default);
+    Task<bool> IsStaffLoginTakenAsync(string login, long? excludeStaffId = null, CancellationToken ct = default);
+    Task<bool> UpdateStaffCredentialsAsync(long staffId, string login, string passwordHash, CancellationToken ct = default);
+    Task<bool> UpdateStaffAccessTokenAsync(long staffId, string token, CancellationToken ct = default);
     Task<bool> UpdateStaffStatusAsync(long staffId, bool isActive, CancellationToken ct = default);
 
     /// <summary>Oylikni yangilaydi va tarixga bitta yozuv qo'shadi (eski -> yangi).</summary>
@@ -73,7 +78,7 @@ public interface IBusinessRepository
     Task<Table?> GetTableByIdAsync(long tableId, CancellationToken ct = default);
     Task<bool> UpdateTableStatusAsync(long tableId, TableStatus status, CancellationToken ct = default);
 
-    /// <summary>Shu stolda hozir ochiq (Open/InProgress) buyurtma bormi —
+    /// <summary>Shu stolda hozir ochiq (Open/InProgress/Ready) buyurtma bormi —
     /// holatni qo'lda o'zgartirishni bloklash uchun tekshiriladi.</summary>
     Task<bool> HasOpenOrderForTableAsync(long tableId, CancellationToken ct = default);
 }

@@ -6,7 +6,7 @@ namespace VoiceKassa.Domain.Entities;
 
 /// <summary>
 /// Eski "Sale" o'rniga - universal buyurtma/chek. Restoranda TableId
-/// to'ldiriladi va Status Open -> InProgress -> Completed bosqichlaridan
+/// to'ldiriladi va Status Open -> InProgress -> Ready -> Completed bosqichlaridan
 /// o'tadi. Do'konda TableId null qoladi, odatda to'g'ridan-to'g'ri
 /// Completed holatida yaratiladi (bitta ovozli gap = tugallangan sotuv).
 /// </summary>

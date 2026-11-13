@@ -165,6 +165,8 @@ public class CreateStaffRequest
     public string? LastName { get; set; }
     public string? PhoneNumber { get; set; }
     public StaffRole Role { get; set; } = StaffRole.Cashier;
+    public string Login { get; set; } = string.Empty;
+    public string Password { get; set; } = string.Empty;
     public int? Age { get; set; }
     public decimal MonthlySalary { get; set; }
     public DateTime? HireDate { get; set; }
@@ -179,12 +181,19 @@ public class StaffResponse
     public string? LastName { get; set; }
     public string? PhoneNumber { get; set; }
     public StaffRole Role { get; set; }
+    public string? Login { get; set; }
     public bool IsActive { get; set; }
     public int? Age { get; set; }
     public decimal MonthlySalary { get; set; }
     public DateTime? HireDate { get; set; }
     public DateTime? FiredAt { get; set; }
     public List<SalaryHistoryResponse> SalaryHistory { get; set; } = new();
+}
+
+public class UpdateStaffCredentialsRequest
+{
+    public string Login { get; set; } = string.Empty;
+    public string Password { get; set; } = string.Empty;
 }
 
 /// <summary>Maosh tarixi yozuvi.</summary>

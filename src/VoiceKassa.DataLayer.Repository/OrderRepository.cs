@@ -34,7 +34,7 @@ public class OrderRepository : IOrderRepository
             .Include(o => o.Items)
             .Include(o => o.Table)
             .Where(o => o.BusinessId == businessId
-                        && (o.Status == OrderStatus.Open || o.Status == OrderStatus.InProgress))
+                           && (o.Status == OrderStatus.Open || o.Status == OrderStatus.InProgress || o.Status == OrderStatus.Ready))
             .OrderByDescending(o => o.CreatedAt)
             .ToListAsync(ct);
 
@@ -184,8 +184,8 @@ public class OrderRepository : IOrderRepository
     }
 
     /// <summary>
-    /// Faqat Open/InProgress buyurtmani yopadi (to'lov qabul qilindi) va stolni
-    /// bo'shatadi — hammasi bitta tranzaksiyada. Allaqachon yopilgan buyurtma
+    /// Faol buyurtmani yopadi (to'lov qabul qilindi) va stolni tozalash navbatiga
+    /// o'tkazadi — hammasi bitta tranzaksiyada. Allaqachon yopilgan buyurtma
     /// qayta yopilmaydi (ikki marta pul qabul qilinmasligi uchun).
     /// </summary>
     public async Task<(bool Success, string? Error, Order? Order)> CloseAtomicallyAsync(
@@ -214,7 +214,7 @@ public class OrderRepository : IOrderRepository
             order.ClosedAt = DateTime.UtcNow;
             order.PaymentType = paymentType;
 
-            await FreeTableIfNoOpenAsync(order.TableId, order.Id, ct);
+            await SetTableIfNoOpenAsync(order.TableId, order.Id, TableStatus.NeedsCleaning, ct);
 
             await _db.SaveChangesAsync(ct);
             await tx.CommitAsync(ct);
@@ -257,7 +257,7 @@ public class OrderRepository : IOrderRepository
             order.Status = OrderStatus.Cancelled;
             order.ClosedAt = DateTime.UtcNow;
 
-            await FreeTableIfNoOpenAsync(order.TableId, order.Id, ct);
+            await SetTableIfNoOpenAsync(order.TableId, order.Id, TableStatus.Free, ct);
 
             await _db.SaveChangesAsync(ct);
             await tx.CommitAsync(ct);
@@ -326,7 +326,7 @@ public class OrderRepository : IOrderRepository
             {
                 order.Status = OrderStatus.Cancelled;
                 order.ClosedAt = DateTime.UtcNow;
-                await FreeTableIfNoOpenAsync(order.TableId, order.Id, ct);
+                await SetTableIfNoOpenAsync(order.TableId, order.Id, TableStatus.Free, ct);
             }
 
             await _db.SaveChangesAsync(ct);
@@ -362,14 +362,15 @@ public class OrderRepository : IOrderRepository
         }
     }
 
-    private async Task FreeTableIfNoOpenAsync(long? tableId, long excludeOrderId, CancellationToken ct)
+    private async Task SetTableIfNoOpenAsync(
+        long? tableId, long excludeOrderId, TableStatus status, CancellationToken ct)
     {
         if (!tableId.HasValue) return;
         var hasOtherOpen = await _db.Orders.AnyAsync(o =>
             o.TableId == tableId.Value && o.Id != excludeOrderId &&
-            (o.Status == OrderStatus.Open || o.Status == OrderStatus.InProgress), ct);
+            (o.Status == OrderStatus.Open || o.Status == OrderStatus.InProgress || o.Status == OrderStatus.Ready), ct);
         if (hasOtherOpen) return;
         var table = await _db.Tables.FindAsync(new object[] { tableId.Value }, ct);
-        if (table is not null) table.Status = TableStatus.Free;
+        if (table is not null) table.Status = status;
     }
 }

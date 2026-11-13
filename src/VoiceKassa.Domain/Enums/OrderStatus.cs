@@ -1,9 +1,8 @@
 namespace VoiceKassa.Domain.Enums;
 
 /// <summary>
-/// Restoranda: Open (stol band, buyurtma yig'ilyapti) -> InProgress (oshxonaga
-/// yuborilgan) -> Completed (to'langan, yopilgan). Do'konda odatda to'g'ridan-to'g'ri
-/// Open -> Completed (bitta ovozli gap bilan).
+/// Restoranda: Open (stol band) -> InProgress (oshxonada) -> Ready (tayyor)
+/// -> Completed (to'langan, yopilgan). Do'konda odatda Open -> Completed.
 /// </summary>
 public enum OrderStatus
 {
@@ -11,4 +10,5 @@ public enum OrderStatus
     InProgress = 1,
     Completed = 2,
     Cancelled = 3,
+    Ready = 4,
 }

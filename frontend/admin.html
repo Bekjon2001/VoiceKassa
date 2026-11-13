@@ -31,10 +31,17 @@
       <div class="auth-main">
         <span class="step-label">Admin panel</span>
         <h2>Boshqaruvga kirish</h2>
-        <p class="lead">Super Admin bergan login va parol bilan kiring.</p>
+        <p class="lead">Restoran egasi yoki xodim login-paroli bilan kiring.</p>
         <p class="muted">Super Admin бўлсангиз, <a href="super-admin.html">Super Admin orqali kiring</a>.</p>
 
         <form id="owner-login-form" novalidate>
+          <div class="field" style="margin-bottom:12px">
+            <label for="login-kind">Kirish turi</label>
+            <select class="ctl" id="login-kind">
+              <option value="owner">Restoran egasi</option>
+              <option value="staff">Xodim</option>
+            </select>
+          </div>
           <div class="field" style="margin-bottom:12px">
             <label for="login-value">Login</label>
             <input class="ctl" id="login-value" autocomplete="username" placeholder="Login" required />
@@ -102,13 +109,13 @@
           <button class="btn btn-ghost btn-sm" id="theme-toggle" type="button" title="Kun/Tun rejimlarini almashtirish">☀️</button>
         </header>
 
-        <section class="stats-row" data-owner-panel="tables meals meals-food meals-drink meals-fruit meals-dessert table-detail">
+        <section class="stats-row" data-owner-panel="tables kitchen meals meals-food meals-drink meals-fruit meals-dessert table-detail">
           <div class="stat stat--g"><small>Bugungi savdo</small><strong class="stat-value" id="sales-today">—</strong><span class="stat-note" id="orders-today-note">buyurtmalar: —</span></div>
           <div class="stat stat--c"><small>Stollar</small><strong class="stat-value" id="table-count">0</strong><span class="stat-note">jami stollar</span></div>
-                    <div class="stat stat--a"><small>Ovqatlar</small><strong class="stat-value" id="food-count">0</strong><span class="stat-note">menyuda</span></div>
-          <div class="stat stat--v"><small>Ichimliklar</small><strong class="stat-value" id="drink-count">0</strong><span class="stat-note">menyuda</span></div>
-          <div class="stat stat--g"><small>Mevalar</small><strong class="stat-value" id="fruit-count">0</strong><span class="stat-note">menyuda</span></div>
-          <div class="stat stat--y"><small>Shirinliklar</small><strong class="stat-value" id="dessert-count">0</strong><span class="stat-note">menyuda</span></div>
+          <div class="stat stat--a" data-manager-stat><small>Ovqatlar</small><strong class="stat-value" id="food-count">0</strong><span class="stat-note">menyuda</span></div>
+          <div class="stat stat--v" data-manager-stat><small>Ichimliklar</small><strong class="stat-value" id="drink-count">0</strong><span class="stat-note">menyuda</span></div>
+          <div class="stat stat--g" data-manager-stat><small>Mevalar</small><strong class="stat-value" id="fruit-count">0</strong><span class="stat-note">menyuda</span></div>
+          <div class="stat stat--y" data-manager-stat><small>Shirinliklar</small><strong class="stat-value" id="dessert-count">0</strong><span class="stat-note">menyuda</span></div>
         </section>
 
 
@@ -133,7 +140,8 @@
               <div><span class="step-label">STOLLAR RO‘YXATI</span><h3>Stollar</h3><p class="sub">Stolni tanlang — alohida sahifada ko‘rsatiladi.</p></div>
               <div style="display:flex;gap:8px;align-items:center">
                 <span class="count-badge" id="table-count-badge" title="Jami stollar soni">0</span>
-                <button class="btn btn-primary btn-sm" id="table-add-toggle" type="button">＋ Stol qo‘shish</button>
+                <button class="btn btn-ghost btn-sm" id="table-refresh" type="button">↻ Yangilash</button>
+                <button class="btn btn-primary btn-sm" id="table-add-toggle" type="button" data-manager-only>＋ Stol qo‘shish</button>
               </div>
             </div>
             <p class="empty" id="tables-empty">Hali stol qo‘shilmagan.</p>
@@ -201,7 +209,8 @@
                 <select class="ctl ctl--sm" id="table-status-select" style="min-width:150px">
                   <option value="0">Bo‘sh</option>
                   <option value="1">Band</option>
-                  <option value="2">Tozalanmoqda</option>
+                  <option value="2">Bron qilingan</option>
+                  <option value="3">Tozalash kerak</option>
                 </select>
                 <button class="btn btn-primary btn-sm" id="table-status-save" type="button">Saqlash</button>
               </div>
@@ -339,7 +348,7 @@
 
             <div class="table-wrap" style="margin-top:6px">
               <table class="data-table">
-                <thead><tr><th>Xodim</th><th>Telefon</th><th>Lavozim</th><th>Yosh</th><th>Oylik</th><th>Staj</th><th>Holati</th><th></th></tr></thead>
+                <thead><tr><th>Xodim</th><th>Login</th><th>Telefon</th><th>Lavozim</th><th>Yosh</th><th>Oylik</th><th>Staj</th><th>Holati</th><th></th></tr></thead>
                 <tbody id="staff-list">
                   <tr><td colspan="8" style="text-align:center;color:var(--muted)">Yuklanmoqda...</td></tr>
                 </tbody>
@@ -366,6 +375,8 @@
                 <div class="field"><label for="staff-role">Lavozim</label>
                   <select class="ctl" id="staff-role"><option value="1">Menejer</option><option value="2">Kassir</option><option value="3">Ofitsiant</option><option value="4">Oshpaz</option></select>
                 </div>
+                <div class="field"><label for="staff-login">Xodim logini</label><input class="ctl" id="staff-login" autocomplete="off" minlength="3" maxlength="100" required /></div>
+                <div class="field"><label for="staff-password">Boshlang‘ich parol</label><input class="ctl" id="staff-password" type="password" autocomplete="new-password" minlength="8" required /></div>
               </div>
               <div style="display:flex;gap:10px;margin-top:12px">
                 <button class="btn btn-primary btn-sm" type="submit">Saqlash</button>
@@ -389,11 +400,24 @@
                 <div><span class="step-label">XODIM PROFILI</span><h3 id="staff-detail-name">Xodim</h3><p class="sub" id="staff-detail-role"></p></div>
               </div>
               <div style="display:flex;gap:8px;flex-wrap:wrap">
+                <button class="btn btn-ghost btn-sm" id="staff-credentials-btn" type="button" data-manager-only>🔐 Login/parol</button>
                 <button class="btn btn-ghost btn-sm" id="staff-salary-btn" type="button">💵 Maosh o‘zgartirish</button>
                 <button class="btn btn-ghost btn-sm" id="staff-fire-btn" type="button">Ishdan bo‘shatish</button>
               </div>
             </div>
             <div class="detail-grid" id="staff-detail-grid"></div>
+
+            <form id="staff-credentials-form" hidden novalidate style="margin-top:6px">
+              <div class="form-grid">
+                <div class="field"><label for="staff-credentials-login">Xodim logini</label><input class="ctl" id="staff-credentials-login" autocomplete="off" minlength="3" maxlength="100" required /></div>
+                <div class="field"><label for="staff-credentials-password">Yangi parol</label><input class="ctl" id="staff-credentials-password" type="password" autocomplete="new-password" minlength="8" required /></div>
+              </div>
+              <div style="display:flex;gap:10px;margin-top:12px">
+                <button class="btn btn-primary btn-sm" type="submit">Login/parolni saqlash</button>
+                <button class="btn btn-ghost btn-sm" type="button" id="staff-credentials-cancel">Bekor qilish</button>
+              </div>
+              <p class="form-message" id="staff-credentials-message"></p>
+            </form>
 
             <form id="staff-salary-form" hidden novalidate style="margin-top:6px">
               <div class="form-grid">
@@ -427,7 +451,7 @@
           <article class="card card--wide">
             <div class="card-head"><div>
               <span class="step-label">BRONLAR</span><h3>Stol bronlarini boshqaring</h3>
-              <p class="sub">Admin sifatida stolni bron qiling: sana, mehmonlar soni, mijoz ismi va telefoni majburiy. Bo'sh stollar ro'yxatidan tanlanadi.</p>
+              <p class="sub">Stolni bron qiling: sana, mehmonlar soni, mijoz ismi va telefoni majburiy. Bo'sh stollar ro'yxatidan tanlanadi.</p>
             </div></div>
             <div class="table-wrap">
               <form id="reservation-form" novalidate>
@@ -491,6 +515,6 @@
   <span class="jarvis-toggle__knob" aria-hidden="true"></span>
   <span class="jarvis-toggle__label"><strong>Jarvis</strong><small>AI buyruqlar</small></span>
 </label>
-<script src="admin.js?v=20261113-1"></script>
+<script src="admin.js?v=20261114-1"></script>
 </body>
 </html>

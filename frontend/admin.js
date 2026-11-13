@@ -62,6 +62,11 @@ const RESTAURANT_VIEWS = [...STAFF_VIEWS, "staff-detail", "table-detail", "staff
   "meals-food", "meals-drink", "meals-fruit", "meals-dessert", "meals-add", "reservations"];
 // Menyu kategoriyalari — "Ovqatlar" flyout bo'limlari
 const MEALS_VIEWS = ["meals-food", "meals-drink", "meals-fruit", "meals-dessert", "meals-add"];
+const STAFF_ROLE_VIEWS = {
+  cashier: ["kitchen"],
+  waiter: ["tables", "kitchen", "reservations", "table-detail"],
+  cook: ["kitchen"],
+};
 
 // ---------- Holat ----------
 let ownerToken = "";
@@ -172,14 +177,46 @@ function clearSession() {
   try { sessionStorage.removeItem(SESSION_KEY); } catch { /* ignore */ }
 }
 
+function isFullAccessRole() {
+  return ["restaurant-admin", "manager", "super-admin"].includes(activeRole);
+}
+
+function allowedRoleViews() {
+  return isFullAccessRole()
+    ? [...RESTAURANT_VIEWS, "supermarket", "shop", "organization", "ai"]
+    : (STAFF_ROLE_VIEWS[activeRole] || []);
+}
+
+function configureRoleNavigation() {
+  const allowed = allowedRoleViews();
+  const canManage = ["restaurant-admin", "manager"].includes(activeRole);
+  const canViewAll = isFullAccessRole();
+  document.querySelectorAll(".nav-item[data-owner-view]").forEach(item => {
+    item.hidden = !allowed.includes(item.dataset.ownerView);
+  });
+  document.querySelectorAll("[data-manager-only]").forEach(item => {
+    item.hidden = !canManage;
+  });
+  document.querySelectorAll("[data-manager-stat]").forEach(item => {
+    item.hidden = !canViewAll;
+  });
+  const mealGroup = document.querySelector("[data-owner-group=\"meals\"]");
+  if (mealGroup) mealGroup.hidden = !isFullAccessRole();
+  document.querySelectorAll(".sidebar nav > .nav-item").forEach(item => {
+    if (item.dataset.ownerView && !allowed.includes(item.dataset.ownerView)) item.hidden = true;
+  });
+}
+
 async function enterWorkspace(session) {
   activeRole = session.role || "restaurant-admin";
   ownerToken = session.token || "";
-  activeBusinessId = activeRole === "restaurant-admin" ? String(session.businessId || "") : "";
+  activeBusinessId = activeRole === "super-admin" ? "" : String(session.businessId || "");
   document.body.classList.toggle("super-admin-readonly", activeRole === "super-admin");
+  document.body.dataset.role = activeRole;
   $("super-admin-picker-wrap").hidden = activeRole !== "super-admin";
   $("entry-stage").hidden = true;
   $("owner-area").hidden = false;
+  configureRoleNavigation();
   try { sessionStorage.setItem("vk_role", activeRole); } catch { /* ignore */ }
 
   if (activeRole === "super-admin") {
@@ -189,7 +226,10 @@ async function enterWorkspace(session) {
 
   $("owner-restaurant-name").textContent = session.restaurantName || "Restoran";
   await loadWorkspaceData();
-  setOwnerView(restoreOwnerView());
+  const firstView = activeRole === "cashier" || activeRole === "cook"
+    ? "kitchen"
+    : activeRole === "waiter" ? "tables" : restoreOwnerView();
+  setOwnerView(firstView);
   const jarvisToggle = $("jarvis-toggle");
   if (jarvisToggle) {
     let wasOn = false;
@@ -255,13 +295,16 @@ function resetToEntry() {
   location.reload();
 }
 
-// ---------- Auth: restoran egasi kirishi ----------
+// ---------- Auth: restoran egasi yoki xodim kirishi ----------
 $("owner-login-form").addEventListener("submit", async event => {
   event.preventDefault();
   const message = $("login-message");
   setMsg(message, "Kirilmoqda...");
   try {
-    const result = await api("/Business/LoginOwner/owner/login", {
+    const loginAsStaff = $("login-kind").value === "staff";
+    const result = await api(loginAsStaff
+      ? "/Business/LoginStaff/staff/login"
+      : "/Business/LoginOwner/owner/login", {
       method: "POST",
       body: JSON.stringify({
         login: $("login-value").value.trim(),
@@ -273,6 +316,7 @@ $("owner-login-form").addEventListener("submit", async event => {
       token: result.accessToken,
       businessId: result.businessId,
       restaurantName: result.restaurantName,
+      fullName: result.fullName || result.ownerFullName || "",
     };
     saveSession(session);
     await enterWorkspace(session);
@@ -291,11 +335,18 @@ async function loadWorkspaceData() {
   renderTables();
   renderProducts();
   renderStaff();
-  await Promise.allSettled([loadTablesFromApi(), loadProductsFromApi(), loadStaffFromApi()]);
-  loadTodayStats();
+  if (isFullAccessRole()) {
+    await Promise.allSettled([loadTablesFromApi(), loadProductsFromApi(), loadStaffFromApi()]);
+    loadTodayStats();
+  } else if (activeRole === "waiter") {
+    await loadTablesFromApi();
+  } else if (activeRole === "cashier") {
+    loadTodayStats();
+  }
 }
 
 async function loadTablesFromApi() {
+  tables.length = 0;
   try {
     const list = await api(`/Business/GetTables/${encodeURIComponent(activeBusinessId)}/tables`);
     (Array.isArray(list) ? list : []).forEach(table => {
@@ -306,6 +357,8 @@ async function loadTablesFromApi() {
   }
   renderTables();
 }
+
+$("table-refresh")?.addEventListener("click", loadTablesFromApi);
 
 async function loadProductsFromApi() {
   try {
@@ -342,7 +395,7 @@ async function loadStaffFromApi() {
     (Array.isArray(list) ? list : []).forEach(s => staff.push(s));
   } catch (error) {
     $("staff-list").innerHTML =
-      `<tr><td colspan="8" style="text-align:center;color:var(--red)">${esc(error.message)}</td></tr>`;
+      `<tr><td colspan="9" style="text-align:center;color:var(--red)">${esc(error.message)}</td></tr>`;
     return;
   }
   renderStaff();
@@ -376,6 +429,7 @@ let kitchenOrders = [];
 function kitchenPill(status) {
   if (Number(status) === 0) return ["Keldi", "pill--warn"];
   if (Number(status) === 1) return ["Tayyorlanmoqda", "pill--ok"];
+  if (Number(status) === 4) return ["Tayyor", "pill--ok"];
   return ["—", "pill--off"];
 }
 
@@ -410,16 +464,25 @@ function renderKitchenOrders() {
   const countEl = $("kitchen-count");
   if (!listEl) return;
   if (countEl) countEl.textContent = String(kitchenOrders.length);
-  if (emptyEl) emptyEl.hidden = kitchenOrders.length > 0;
+  if (emptyEl) {
+    emptyEl.hidden = kitchenOrders.length > 0;
+    emptyEl.textContent = activeRole === "waiter"
+      ? "Hozircha tayyor buyurtma yo‘q."
+      : "Hozircha ochiq buyurtma yo‘q.";
+  }
   if (kitchenOrders.length === 0) { listEl.innerHTML = ""; return; }
 
+  const canManageKitchen = ["restaurant-admin", "manager", "cook"].includes(activeRole);
+  const canTakePayment = ["restaurant-admin", "manager", "cashier"].includes(activeRole);
   listEl.innerHTML = kitchenOrders.map(order => {
     const [label, cls] = kitchenPill(order.status);
     const table = order.tableName || (order.tableId ? `Stol ${order.tableId}` : "—");
     const itemRows = (order.items || []).map(i =>
-      `<tr><td class="cell-name">${esc(i.productNameSpoken)}</td><td class="cell-qty">${i.quantity}</td><td class="cell-sum">${fmtSum(i.lineTotal)} so'm</td><td class="cell-act"><button class="btn btn-ghost btn-sm" type="button" data-kitchen-remove-item="${i.id}" data-kitchen-order="${order.id}" title="Bu taomni buyurtmadan o'chirish">✕</button></td></tr>`
+      `<tr><td class="cell-name">${esc(i.productNameSpoken)}</td><td class="cell-qty">${i.quantity}</td><td class="cell-sum">${fmtSum(i.lineTotal)} so'm</td><td class="cell-act">${canManageKitchen ? `<button class="btn btn-ghost btn-sm" type="button" data-kitchen-remove-item="${i.id}" data-kitchen-order="${order.id}" title="Bu taomni buyurtmadan o'chirish">✕</button>` : ""}</td></tr>`
     ).join("");
-    const canStart = Number(order.status) === 0;
+    const canStart = canManageKitchen && Number(order.status) === 0;
+    const canReady = canManageKitchen && Number(order.status) === 1;
+    const canClose = canTakePayment && Number(order.status) === 4;
     return `<div class="item kitchen-order">
       <div class="item-body">
         <strong>${esc(table)} — buyurtma №${order.id}</strong>
@@ -432,7 +495,11 @@ function renderKitchenOrders() {
       </div>
       <span class="item-end">
         ${canStart ? `<button class="btn btn-primary btn-sm" type="button" data-kitchen-start="${order.id}">Qabul qildim</button>` : ""}
-        <button class="btn btn-danger btn-sm" type="button" data-kitchen-cancel="${order.id}">Bekor qilish</button>
+        ${canReady ? `<button class="btn btn-primary btn-sm" type="button" data-kitchen-ready="${order.id}">Tayyor</button>` : ""}
+        ${canManageKitchen ? `<button class="btn btn-danger btn-sm" type="button" data-kitchen-cancel="${order.id}">Bekor qilish</button>` : ""}
+        ${canClose ? `<select class="ctl ctl--sm" data-kitchen-payment="${order.id}" aria-label="To‘lov turi">
+          <option value="0">Naqd</option><option value="1">Karta</option><option value="2">Onlayn</option>
+        </select><button class="btn btn-primary btn-sm" type="button" data-kitchen-close="${order.id}">To‘lovni yopish</button>` : ""}
       </span>
     </div>`;
   }).join("");
@@ -448,6 +515,41 @@ function renderKitchenOrders() {
         await loadKitchenOrders();
       } catch (error) {
         flash("Buyurtmani boshlab bo‘lmadi: " + error.message, true);
+        btn.disabled = false;
+      }
+    });
+  });
+
+  listEl.querySelectorAll("[data-kitchen-ready]").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      btn.disabled = true;
+      try {
+        await api(`/Order/Ready/${btn.dataset.kitchenReady}/ready`, { method: "POST" });
+        flash("Buyurtma tayyor deb belgilandi.");
+        await loadKitchenOrders();
+      } catch (error) {
+        flash("Tayyor holatiga o‘tkazib bo‘lmadi: " + error.message, true);
+        btn.disabled = false;
+      }
+    });
+  });
+
+  listEl.querySelectorAll("[data-kitchen-close]").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const orderId = btn.dataset.kitchenClose;
+      const paymentEl = listEl.querySelector(`[data-kitchen-payment="${orderId}"]`);
+      const paymentType = Number(paymentEl.value);
+      if (!confirm(`Buyurtma №${orderId} uchun to‘lov olindi va stolni tozalashga beramizmi?`)) return;
+      btn.disabled = true;
+      try {
+        await api(`/Order/Close/${orderId}/close`, {
+          method: "POST",
+          body: JSON.stringify({ paymentType }),
+        });
+        flash(`Buyurtma №${orderId} yopildi. Stol tozalash navbatiga qo‘shildi.`);
+        await loadKitchenOrders();
+      } catch (error) {
+        flash("To‘lovni yopib bo‘lmadi: " + error.message, true);
         btn.disabled = false;
       }
     });
@@ -515,6 +617,12 @@ function stopKitchenPolling() {
 $("kitchen-refresh")?.addEventListener("click", loadKitchenOrders);
 // ---------- Ish maydoni navigatsiyasi ----------
 function setOwnerView(view) {
+  const allowedViews = allowedRoleViews();
+  if (!allowedViews.includes(view)) {
+    view = activeRole === "cashier" || activeRole === "cook"
+      ? "kitchen"
+      : activeRole === "waiter" ? "tables" : "tables";
+  }
   const isRestaurantView = RESTAURANT_VIEWS.includes(view);
   const restaurantGroup = document.querySelector(".nav-group[data-owner-group=\"restaurant\"]");
   const toggleBtn = restaurantGroup ? restaurantGroup.querySelector("[data-owner-toggle]") : null;
@@ -542,6 +650,16 @@ function setOwnerView(view) {
   const pair = VIEW_TITLES[view] || (STAFF_VIEWS.includes(view) ? ["Restoran", ""] : [view, ""]);
   $("owner-view-title").textContent = pair[0];
   $("owner-view-subtitle").textContent = pair[1];
+  if (view === "kitchen" && activeRole === "cashier") {
+    $("owner-view-title").textContent = "Kassa";
+    $("owner-view-subtitle").textContent = "Tayyor buyurtmalarni tekshiring, to‘lovni qabul qilib buyurtmani yoping.";
+  } else if (view === "kitchen" && activeRole === "waiter") {
+    $("owner-view-title").textContent = "Tayyor buyurtmalar";
+    $("owner-view-subtitle").textContent = "Ofitsiantga chiqarilgan tayyor buyurtmalar.";
+  } else if (view === "kitchen" && activeRole === "cook") {
+    $("owner-view-title").textContent = "Oshxona";
+    $("owner-view-subtitle").textContent = "Buyurtmalarni qabul qiling va tayyor bo‘lganda belgilang.";
+  }
 
   // Oshxona bo'limi ochilganda — avto-yangilanish, yopilganda to'xtaydi.
   if (view === "kitchen") startKitchenPolling();
@@ -632,7 +750,8 @@ previewFile("product-image", "product-preview");
 function tablePill(status) {
   if (status === 0) return ["Bo‘sh", "pill--ok"];
   if (status === 1) return ["Band", "pill--warn"];
-  if (status === 2) return ["Tozalanmoqda", "pill--off"];
+  if (status === 2) return ["Bron qilingan", "pill--warn"];
+  if (status === 3) return ["Tozalash kerak", "pill--off"];
   return ["—", "pill--off"];
 }
 
@@ -680,6 +799,16 @@ function selectTable(table) {
   $("table-detail-name").textContent = table.name || "Stol";
   $("table-detail-capacity").textContent = `${table.capacity || 0} kishilik`;
   $("table-status-select").value = String(Number(table.status ?? 0));
+  if (activeRole === "waiter") {
+    [...$("table-status-select").options].forEach(option => {
+      option.hidden = !["0", "3"].includes(option.value);
+    });
+    $("table-status-select").value = table.status === 3 ? "3" : "0";
+    $("table-status-save").hidden = table.status !== 3;
+  } else {
+    [...$("table-status-select").options].forEach(option => { option.hidden = false; });
+    $("table-status-save").hidden = false;
+  }
 
   const [label, cls] = tablePill(table.status);
   $("table-detail-grid").innerHTML = [
@@ -713,6 +842,13 @@ async function updateTableStatusLock(table) {
   noteEl.classList.remove("err");
   if (selectEl) selectEl.disabled = false;
   if (saveBtn) saveBtn.disabled = false;
+
+  if (activeRole === "waiter" && Number(table.status) !== 3) {
+    if (selectEl) selectEl.disabled = true;
+    if (saveBtn) saveBtn.hidden = true;
+    noteEl.textContent = "Bu stol tozalash navbatida emas.";
+    return;
+  }
 
   // Holat hali tanlanmagan bo'lsa ham — profil ochilishi bilan tekshiramiz.
   let hasActive = Number(table.status) === 1;
@@ -823,7 +959,7 @@ function getFilteredStaff() {
     if (staffStatusFilter === "fired" && s.isActive !== false) return false;
     if (staffRoleFilter !== "all" && String(s.role) !== staffRoleFilter) return false;
     if (!query) return true;
-    return [s.fullName, s.firstName, s.lastName, s.phoneNumber, ROLE_NAMES[s.role]]
+    return [s.fullName, s.firstName, s.lastName, s.login, s.phoneNumber, ROLE_NAMES[s.role]]
       .filter(Boolean).join(" ").toLowerCase().includes(query);
   });
 
@@ -858,7 +994,7 @@ function renderStaff() {
   if (badge) badge.textContent = String(list.length) + " / " + String(staff.length);
 
   if (!list.length) {
-    tbody.innerHTML = '<tr><td colspan="8">' + emptyStaffHtml() + "</td></tr>";
+    tbody.innerHTML = '<tr><td colspan="9">' + emptyStaffHtml() + "</td></tr>";
     return;
   }
 
@@ -875,6 +1011,7 @@ function renderStaff() {
         <span class="avatar ${esc(meta.avatar || "")}">${esc(initialsOf(person))}</span>
         <span class="staff-name"><strong>${esc(person.fullName || "—")}</strong><small>Ishga kirgan: ${fmtDate(person.hireDate)}</small></span>
       </div></td>`
+      + `<td>${esc(person.login || "—")}</td>`
       + `<td>${esc(person.phoneNumber || "-")}</td>`
       + `<td><span class="role-badge ${esc(meta.badge || "")}">${ROLE_NAMES[person.role] || "Xodim"}</span></td>`
       + `<td>${person.age ? esc(person.age) : "—"}</td>`
@@ -913,6 +1050,7 @@ function selectStaff(person) {
     ["Yosh", person.age ? `${person.age} yosh` : "—"],
     ["Telefon", esc(person.phoneNumber || "—")],
     ["Lavozim", ROLE_NAMES[person.role] || "—"],
+    ["Login", esc(person.login || "Sozlanmagan")],
     ["Ishga kirgan", fmtDate(person.hireDate)],
     ["Hozirgi oylik", fmtSum(person.monthlySalary) + " so‘m"],
     ["Holati", `<span class="pill ${cls}">${label}</span>` + (person.firedAt ? `<small>Bo‘shatilgan: ${fmtDate(person.firedAt)}</small>` : "")],
@@ -922,6 +1060,10 @@ function selectStaff(person) {
   $("sal-reason").value = "";
   $("salary-message").textContent = "";
   $("staff-salary-form").hidden = true;
+  $("staff-credentials-login").value = person.login || "";
+  $("staff-credentials-password").value = "";
+  $("staff-credentials-message").textContent = "";
+  $("staff-credentials-form").hidden = true;
 
   renderSalaryHistory(person);
 
@@ -952,7 +1094,7 @@ function findStaffById(id) {
 
 function requireOwner() {
   if (ownerToken && activeBusinessId) return true;
-  flash("Avval restoran egasi sifatida tizimga kiring.", true);
+  flash("Avval restoran egasi yoki xodim sifatida tizimga kiring.", true);
   return false;
 }
 // ---------- CRUD: Stol ----------
@@ -1160,12 +1302,16 @@ $("staff-create-form").addEventListener("submit", async event => {
   const phone = $("staff-phone2").value.trim();
   const ageRaw = $("staff-age").value;
   const hireRaw = $("staff-hired").value;
+  const login = $("staff-login").value.trim();
+  const password = $("staff-password").value;
   if (!first) { setMsg(message, "Ism majburiy maydon.", "err"); return; }
   if (!phone) { setMsg(message, "Telefon raqami majburiy maydon.", "err"); return; }
   const age = Number(ageRaw);
   if (!ageRaw || !Number.isFinite(age) || age < 14 || age > 100) { setMsg(message, "Yosh majburiy (14–100 oralig‘ida).", "err"); return; }
   if (!hireRaw) { setMsg(message, "Ishga kirgan sana majburiy maydon.", "err"); return; }
   if (hireRaw < HIRE_MIN_DATE) { setMsg(message, "Ishga kirgan sana bugungidan kichik bo‘lishi mumkin emas.", "err"); return; }
+  if (login.length < 3) { setMsg(message, "Login kamida 3 ta belgidan iborat bo‘lishi kerak.", "err"); return; }
+  if (password.length < 8) { setMsg(message, "Parol kamida 8 ta belgidan iborat bo‘lishi kerak.", "err"); return; }
   setMsg(message, "Saqlanmoqda...");
   try {
     const saved = await api("/Business/CreateStaff/staff", {
@@ -1177,6 +1323,8 @@ $("staff-create-form").addEventListener("submit", async event => {
         lastName: $("staff-last").value.trim(),
         phoneNumber: phone,
         age: age,
+        login,
+        password,
         monthlySalary: moneyValue($("staff-salary")),
         hireDate: hireRaw ? new Date(hireRaw + "T00:00:00").toISOString() : null,
         role: Number($("staff-role").value),
@@ -1184,6 +1332,7 @@ $("staff-create-form").addEventListener("submit", async event => {
     });
     staff.push(savedToRow(saved));
     event.target.reset();
+    $("staff-salary").value = "0";
     renderStaff();
     setMsg(message, "Xodim qo‘shildi.", "ok");
     setOwnerView("staff"); // saqlangach ro'yxatga (getList) qaytish
@@ -1202,6 +1351,7 @@ function savedToRow(saved) {
     lastName: saved.lastName,
     phoneNumber: saved.phoneNumber,
     role: saved.role,
+    login: saved.login,
     isActive: saved.isActive !== false,
     age: saved.age,
     monthlySalary: saved.monthlySalary,
@@ -1210,6 +1360,43 @@ function savedToRow(saved) {
     salaryHistory: saved.salaryHistory || [],
   };
 }
+
+// Mavjud xodim uchun login yaratish yoki parolni yangilash.
+$("staff-credentials-btn").addEventListener("click", () => {
+  const form = $("staff-credentials-form");
+  form.hidden = !form.hidden;
+  $("staff-credentials-message").textContent = "";
+});
+$("staff-credentials-cancel").addEventListener("click", () => {
+  $("staff-credentials-form").hidden = true;
+  $("staff-credentials-password").value = "";
+  $("staff-credentials-message").textContent = "";
+});
+$("staff-credentials-form").addEventListener("submit", async event => {
+  event.preventDefault();
+  const person = findStaffById(selectedStaffId);
+  const message = $("staff-credentials-message");
+  if (!person || !requireOwner()) return;
+  const login = $("staff-credentials-login").value.trim();
+  const password = $("staff-credentials-password").value;
+  if (login.length < 3) { setMsg(message, "Login kamida 3 ta belgidan iborat bo‘lishi kerak.", "err"); return; }
+  if (password.length < 8) { setMsg(message, "Yangi parol kamida 8 ta belgidan iborat bo‘lishi kerak.", "err"); return; }
+
+  setMsg(message, "Saqlanmoqda...");
+  try {
+    const saved = await api(`/Business/UpdateStaffCredentials/staff/${person.id}/credentials`, {
+      method: "PUT",
+      headers: { "X-Owner-Token": ownerToken },
+      body: JSON.stringify({ login, password }),
+    });
+    Object.assign(person, savedToRow(saved));
+    renderStaff();
+    selectStaff(person);
+    flash("Xodim login-paroli yangilandi. Xodim qayta kirishi kerak.");
+  } catch (error) {
+    setMsg(message, error.message, "err");
+  }
+});
 
 // Maosh o'zgartirish
 $("staff-salary-btn").addEventListener("click", () => {

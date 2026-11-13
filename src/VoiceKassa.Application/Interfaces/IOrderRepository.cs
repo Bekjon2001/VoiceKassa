@@ -12,7 +12,7 @@ public interface IOrderRepository
     /// <summary>Restoran oqimi: shu stolda hozir ochiq (yopilmagan) buyurtma bormi.</summary>
     Task<Order?> GetOpenOrderByTableAsync(long tableId, CancellationToken ct = default);
 
-    /// <summary>Oshxona uchun: biznesdagi ochiq (Open/InProgress) buyurtmalar
+    /// <summary>Oshxona uchun: biznesdagi ochiq (Open/InProgress/Ready) buyurtmalar
     /// — tarkibi va stol nomi bilan.</summary>
     Task<List<Order>> GetOpenByBusinessAsync(long businessId, CancellationToken ct = default);
 
@@ -41,7 +41,7 @@ public interface IOrderRepository
         long? occupyTableId,
         CancellationToken ct = default);
 
-    /// <summary>Faqat Open/InProgress buyurtmani yopadi; ombor va stol bitta tranzaksiyada.</summary>
+    /// <summary>Faol buyurtmani yopadi; ombor va stol holati bitta tranzaksiyada yangilanadi.</summary>
     Task<(bool Success, string? Error, Order? Order)> CloseAtomicallyAsync(
         long orderId, PaymentType paymentType, CancellationToken ct = default);
 

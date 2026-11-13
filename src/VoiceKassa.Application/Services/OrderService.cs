@@ -107,6 +107,8 @@ public class OrderService
                         ReservationId = reservationId,
                         Status = OrderStatus.Open,
                     };
+            if (order.Status == OrderStatus.Ready)
+                order.Status = OrderStatus.Open;
         }
         else
         {
@@ -182,7 +184,7 @@ public class OrderService
         return (true, null, ToOrderResponse(saved));
     }
 
-    /// <summary>Mijoz/to'lov: buyurtmani yopadi. Bron yopiladi, token esa o'z chekini ko'rish uchun saqlanadi.</summary>
+    /// <summary>Mijoz/kassir: buyurtmani yopadi. Bron yopiladi, token esa o'z chekini ko'rish uchun saqlanadi.</summary>
     public async Task<(bool Success, string? Error, OrderResponse? Order)> CloseOrderAsync(
         long orderId, CloseOrderRequest request, CancellationToken ct = default)
     {
@@ -248,7 +250,7 @@ public class OrderService
         return ToOrderResponse(order);
     }
 
-    /// <summary>Oshxona uchun: biznesdagi ochiq (Open/InProgress) buyurtmalar
+    /// <summary>Oshxona uchun: biznesdagi ochiq (Open/InProgress/Ready) buyurtmalar
     /// tarkibi va stol nomi bilan.</summary>
     public async Task<List<OrderResponse>> GetOpenOrdersAsync(long businessId, CancellationToken ct = default)
     {
@@ -266,11 +268,28 @@ public class OrderService
             return (false, "Buyurtma topilmadi.", null);
         if (order.Status is OrderStatus.Completed or OrderStatus.Cancelled)
             return (false, "Bu buyurtma yopilgan.", null);
-        if (order.Status == OrderStatus.InProgress)
+        if (order.Status is OrderStatus.InProgress or OrderStatus.Ready)
             return (true, null, ToOrderResponse(order)); // allaqachon oshxonada
 
         await _orderRepo.UpdateOrderStatusAsync(orderId, OrderStatus.InProgress, null, null, ct);
         order.Status = OrderStatus.InProgress;
+        return (true, null, ToOrderResponse(order));
+    }
+
+    public async Task<(bool Success, string? Error, OrderResponse? Order)> MarkOrderReadyAsync(
+        long orderId, CancellationToken ct = default)
+    {
+        var order = await _orderRepo.GetByIdAsync(orderId, ct);
+        if (order is null)
+            return (false, "Buyurtma topilmadi.", null);
+        if (order.Status == OrderStatus.Ready)
+            return (true, null, ToOrderResponse(order));
+        if (order.Status != OrderStatus.InProgress)
+            return (false, "Avval buyurtmani oshxonaga qabul qiling.", null);
+
+        if (!await _orderRepo.UpdateOrderStatusAsync(orderId, OrderStatus.Ready, null, null, ct))
+            return (false, "Buyurtma holatini saqlab bo'lmadi.", null);
+        order.Status = OrderStatus.Ready;
         return (true, null, ToOrderResponse(order));
     }
 

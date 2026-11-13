@@ -62,6 +62,32 @@ public sealed class JwtLegacyTokenMiddleware
 
                 context.Request.Headers["X-Owner-Token"] = owner.AccessToken;
             }
+            else if (role is "manager" or "cashier" or "waiter" or "cook")
+            {
+                var staff = await businessRepository.GetStaffByIdAsync(userId, context.RequestAborted);
+                var business = staff is null
+                    ? null
+                    : await businessRepository.GetBusinessByIdAsync(staff.BusinessId, context.RequestAborted);
+                var owner = staff is null
+                    ? null
+                    : await businessRepository.GetOwnerByBusinessIdAsync(staff.BusinessId, context.RequestAborted);
+                if (staff is null ||
+                    !staff.IsActive ||
+                    staff.Role.ToString().ToLowerInvariant() != role ||
+                    business is null ||
+                    !business.IsActive ||
+                    owner is null ||
+                    owner.SubscriptionEndsAt <= DateTime.UtcNow ||
+                    !string.Equals(staff.AccessToken, sessionId, StringComparison.Ordinal) ||
+                    !long.TryParse(restaurantIdValue, out var restaurantId) ||
+                    restaurantId != staff.BusinessId)
+                {
+                    context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                    return;
+                }
+
+                context.Request.Headers["X-Owner-Token"] = staff.AccessToken;
+            }
             else
             {
                 context.Response.StatusCode = StatusCodes.Status401Unauthorized;

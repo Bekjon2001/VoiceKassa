@@ -27,6 +27,9 @@ public sealed class JwtTokenService : IAccessTokenIssuer
     public string CreateRestaurantAdminToken(long userId, long restaurantId, string sessionId) =>
         CreateToken(userId, "restaurant-admin", restaurantId, sessionId);
 
+    public string CreateStaffToken(long staffId, string role, long restaurantId, string sessionId) =>
+        CreateToken(staffId, role, restaurantId, sessionId);
+
     private string CreateToken(long userId, string role, long restaurantId, string sessionId)
     {
         var claims = new[]

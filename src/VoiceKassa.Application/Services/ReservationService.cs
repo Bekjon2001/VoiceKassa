@@ -283,6 +283,7 @@ public class ReservationService
         var result = new List<TableResponse>();
         foreach (var table in tables)
         {
+            if (table.Status == TableStatus.NeedsCleaning) continue;
             if (table.Capacity < minGuests) continue;
             if (!await _repo.IsTableFreeAsync(table.Id, date, ct)) continue;
             result.Add(new TableResponse
@@ -310,6 +311,8 @@ public class ReservationService
         var table = await _businessRepo.GetTableByIdAsync(request.TableId, ct);
         if (table is null || table.BusinessId != request.BusinessId)
             return (false, "Stol topilmadi yoki bu biznesga tegishli emas.", null);
+        if (table.Status == TableStatus.NeedsCleaning)
+            return (false, "Stol tozalanmaguncha band qilinmaydi.", null);
 
         Reservation? currentReservation = null;
         if (!string.IsNullOrWhiteSpace(sessionToken))
@@ -397,6 +400,8 @@ public class ReservationService
         var table = await _businessRepo.GetTableByIdAsync(tableId, ct);
         if (table is null || table.BusinessId != businessId)
             return (false, "Stol shu biznesga tegishli emas.", null, default);
+        if (table.Status == TableStatus.NeedsCleaning)
+            return (false, "Stol tozalanmaguncha band qilinmaydi.", null, default);
 
         var normalizedDate = bookingDate.Date;
         var todayUtc = (DateTime.UtcNow + LocalClock.UzbekistanOffset).Date;

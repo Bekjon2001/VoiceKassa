@@ -140,6 +140,42 @@ public class BusinessService
         return (true, null, response);
     }
 
+    public async Task<(bool Success, string? Error, StaffLoginResponse? Staff)> LoginStaffAsync(
+        LoginRequest request, CancellationToken ct = default)
+    {
+        var login = (request.Login ?? string.Empty).Trim().ToLowerInvariant();
+        var staff = await _repo.GetStaffByLoginAsync(login, ct);
+        if (staff is null || !staff.IsActive || string.IsNullOrEmpty(request.Password) ||
+            string.IsNullOrEmpty(staff.PasswordHash) ||
+            !VerifyPassword(request.Password, staff.PasswordHash))
+            return (false, "Login yoki parol noto'g'ri.", null);
+
+        var business = await _repo.GetBusinessByIdAsync(staff.BusinessId, ct);
+        if (business is null || !business.IsActive)
+            return (false, "Restoran faol emas.", null);
+        var owner = await _repo.GetOwnerByBusinessIdAsync(staff.BusinessId, ct);
+        if (owner is null || owner.SubscriptionEndsAt <= DateTime.UtcNow)
+            return (false, "Restoran obunasi faol emas.", null);
+
+        if (staff.Role is not (StaffRole.Manager or StaffRole.Cashier or StaffRole.Waiter or StaffRole.Cook))
+            return (false, "Bu xodim uchun tizimga kirish yoqilmagan.", null);
+
+        var sessionId = AccessTokens.New();
+        var role = staff.Role.ToString().ToLowerInvariant();
+        var token = _accessTokenIssuer.CreateStaffToken(staff.Id, role, staff.BusinessId, sessionId);
+        if (!await _repo.UpdateStaffAccessTokenAsync(staff.Id, sessionId, ct))
+            return (false, "Xodim sessiyasini saqlab bo'lmadi.", null);
+
+        return (true, null, new StaffLoginResponse
+        {
+            AccessToken = token,
+            BusinessId = business.Id,
+            RestaurantName = business.Name,
+            FullName = staff.FullName ?? string.Empty,
+            Role = role,
+        });
+    }
+
     public async Task<OwnerAdminResponse?> GetOwnerAdminAsync(long businessId, CancellationToken ct = default)
     {
         // Passiv egani ham ko'rsatamiz — Super Admin "Faollashtirish" qila oladi.
@@ -161,9 +197,39 @@ public class BusinessService
     {
         if (string.IsNullOrWhiteSpace(token)) return (false, "Owner token kerak.", null);
         var owner = await _repo.GetOwnerByTokenAsync(token, ct);
-        if (owner is null || owner.BusinessId != businessId) return (false, "Owner huquqi tasdiqlanmadi.", null);
-        if (owner.SubscriptionEndsAt <= DateTime.UtcNow) return (false, "Obuna muddati tugagan.", null);
-        return (true, null, owner);
+        if (owner is not null && owner.BusinessId == businessId)
+        {
+            if (owner.SubscriptionEndsAt <= DateTime.UtcNow) return (false, "Obuna muddati tugagan.", null);
+            return (true, null, owner);
+        }
+
+        var staff = await _repo.GetStaffByTokenAsync(token, ct);
+        if (staff is null || !staff.IsActive || staff.BusinessId != businessId || staff.Role != StaffRole.Manager)
+            return (false, "Owner yoki menejer huquqi tasdiqlanmadi.", null);
+        var business = await _repo.GetBusinessByIdAsync(businessId, ct);
+        if (business is null || !business.IsActive) return (false, "Restoran faol emas.", null);
+        var staffOwner = await _repo.GetOwnerByBusinessIdAsync(businessId, ct);
+        if (staffOwner is null || staffOwner.SubscriptionEndsAt <= DateTime.UtcNow)
+            return (false, "Restoran obunasi faol emas.", null);
+        return (true, null, null);
+    }
+
+    public async Task<(bool Success, string? Error)> AuthorizeBusinessStaffAsync(
+        long businessId, string? token, CancellationToken ct = default, params StaffRole[] allowedRoles)
+    {
+        var managerAccess = await AuthorizeOwnerAsync(businessId, token, ct);
+        if (managerAccess.Success) return (true, null);
+        if (string.IsNullOrWhiteSpace(token)) return (false, managerAccess.Error);
+
+        var staff = await _repo.GetStaffByTokenAsync(token, ct);
+        if (staff is null || !staff.IsActive || staff.BusinessId != businessId || !allowedRoles.Contains(staff.Role))
+            return (false, "Bu amal uchun xodim huquqi yetarli emas.");
+        var business = await _repo.GetBusinessByIdAsync(businessId, ct);
+        if (business is null || !business.IsActive) return (false, "Restoran faol emas.");
+        var owner = await _repo.GetOwnerByBusinessIdAsync(businessId, ct);
+        return owner is not null && owner.SubscriptionEndsAt > DateTime.UtcNow
+            ? (true, null)
+            : (false, "Restoran obunasi faol emas.");
     }
 
     /// <summary>
@@ -311,6 +377,18 @@ public class BusinessService
             return (false, "Xodim ismi bo'sh bo'lishi mumkin emas.", null);
         if (request.MonthlySalary < 0)
             return (false, "Oylik manfiy bo'lishi mumkin emas.", null);
+        if (request.Role is not (StaffRole.Manager or StaffRole.Cashier or StaffRole.Waiter or StaffRole.Cook))
+            return (false, "Xodim lavozimi noto'g'ri.", null);
+
+        var login = request.Login.Trim().ToLowerInvariant();
+        if (login.Length < 3 || login.Length > 100)
+            return (false, "Login 3 dan 100 tagacha belgidan iborat bo'lishi kerak.", null);
+        if (login.Any(ch => !char.IsLetterOrDigit(ch) && ch is not '.' and not '_' and not '-'))
+            return (false, "Login faqat harf, raqam, nuqta, pastki chiziq va tire ishlatishi mumkin.", null);
+        if (string.IsNullOrEmpty(request.Password) || request.Password.Length < 8)
+            return (false, "Parol kamida 8 ta belgidan iborat bo'lishi kerak.", null);
+        if (await _repo.IsStaffLoginTakenAsync(login, null, ct))
+            return (false, "Bu login band.", null);
 
         var staff = new Staff
         {
@@ -320,6 +398,8 @@ public class BusinessService
             LastName = string.IsNullOrWhiteSpace(lastName) ? null : lastName,
             PhoneNumber = request.PhoneNumber,
             Role = request.Role,
+            Login = login,
+            PasswordHash = HashPassword(request.Password),
             Age = request.Age,
             MonthlySalary = request.MonthlySalary,
             HireDate = request.HireDate,
@@ -327,6 +407,33 @@ public class BusinessService
         };
         var saved = await _repo.CreateStaffAsync(staff, ct);
         return (true, null, ToStaffResponse(saved));
+    }
+
+    public async Task<(bool Success, string? Error, StaffResponse? Staff)> UpdateStaffCredentialsAsync(
+        long staffId, UpdateStaffCredentialsRequest request, CancellationToken ct = default)
+    {
+        var staff = await _repo.GetStaffByIdAsync(staffId, ct);
+        if (staff is null) return (false, "Xodim topilmadi.", null);
+        if (staff.Role is not (StaffRole.Manager or StaffRole.Cashier or StaffRole.Waiter or StaffRole.Cook))
+            return (false, "Bu xodim uchun tizimga kirish yoqilmagan.", null);
+
+        var login = (request.Login ?? string.Empty).Trim().ToLowerInvariant();
+        if (login.Length < 3 || login.Length > 100)
+            return (false, "Login 3 dan 100 tagacha belgidan iborat bo'lishi kerak.", null);
+        if (login.Any(ch => !char.IsLetterOrDigit(ch) && ch is not '.' and not '_' and not '-'))
+            return (false, "Login faqat harf, raqam, nuqta, pastki chiziq va tire ishlatishi mumkin.", null);
+        if (string.IsNullOrEmpty(request.Password) || request.Password.Length < 8)
+            return (false, "Parol kamida 8 ta belgidan iborat bo'lishi kerak.", null);
+        if (await _repo.IsStaffLoginTakenAsync(login, staffId, ct))
+            return (false, "Bu login band.", null);
+
+        var passwordHash = HashPassword(request.Password);
+        if (!await _repo.UpdateStaffCredentialsAsync(staffId, login, passwordHash, ct))
+            return (false, "Xodim akkauntini yangilab bo'lmadi.", null);
+
+        staff.Login = login;
+        staff.PasswordHash = passwordHash;
+        return (true, null, ToStaffResponse(staff));
     }
 
     public async Task<List<StaffResponse>> GetStaffAsync(long businessId, CancellationToken ct = default)
@@ -483,13 +590,15 @@ public class BusinessService
     public async Task<(bool Success, string? Error)> UpdateTableStatusAsync(
         long tableId, UpdateTableStatusRequest request, CancellationToken ct = default)
     {
+        if (!Enum.IsDefined(typeof(TableStatus), request.Status))
+            return (false, "Stol holati noto'g'ri.");
         var table = await _repo.GetTableByIdAsync(tableId, ct);
         if (table is null) return (false, "Bunday stol topilmadi.");
 
         // Bir xil holatga qayta saqlash — hech narsani tekshirmaymiz.
         if (table.Status == request.Status) return (true, null);
 
-        // Muhim qoida: stolda faol (Open/InProgress) buyurtma bo'lsa — holatni
+        // Muhim qoida: stolda faol (Open/InProgress/Ready) buyurtma bo'lsa — holatni
         // qo'lda o'zgartirib bo'lmaydi. Avval buyurtma yopilishi (to'lov) yoki
         // bekor qilinishi kerak — shunda OrderRepository stolni o'zi bo'shatadi.
         // Yopilgan/bekor qilingan buyurtma bo'lsa — o'zgartirishga ruxsat.
@@ -510,7 +619,7 @@ public class BusinessService
     {
         Id = s.Id, BusinessId = s.BusinessId, FullName = s.FullName ?? "",
         FirstName = s.FirstName, LastName = s.LastName,
-        PhoneNumber = s.PhoneNumber, Role = s.Role, IsActive = s.IsActive,
+        PhoneNumber = s.PhoneNumber, Role = s.Role, Login = s.Login, IsActive = s.IsActive,
         Age = s.Age, MonthlySalary = s.MonthlySalary,
         HireDate = s.HireDate, FiredAt = s.FiredAt,
         SalaryHistory = (s.SalaryHistory ?? new List<SalaryHistory>())
