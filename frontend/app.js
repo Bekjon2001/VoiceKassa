@@ -288,9 +288,17 @@ async function initMenuPage() {
   // Sessiya localStorage'dan o'qiladi (kod kirish sahifasida saqlangan).
   const session = loadTableSession();
   if (!session || !session.token) {
-    const locationNote = document.getElementById("location-note");
-    if (locationNote) locationNote.textContent = "Avval bron kodingiz bilan kiring.";
-    window.location.replace("tables.html");
+    const params = new URLSearchParams(window.location.search);
+    const businessId = params.get("businessId");
+    if (businessId) {
+      const tableParams = new URLSearchParams({
+        businessId,
+        restaurantName: params.get("restaurantName") || "Restoran",
+      });
+      window.location.replace(`tables.html?${tableParams.toString()}`);
+    } else {
+      window.location.replace("index.html");
+    }
     return;
   }
   const businessId = String(session.businessId || "");
@@ -331,7 +339,7 @@ async function initMenuPage() {
 
   // Sahifa yangilanganda (refresh) yuborilgan buyurtma cheki yo'qolmasligi
   // uchun — stolning hozirgi faol buyurtmasini serverdan qayta tiklaymiz.
-  await restoreActiveOrder(businessId, tableId);
+  await restoreActiveOrder(businessId);
 }
 
 async function loadMenu(businessId, isDemo = false) {
@@ -537,6 +545,14 @@ async function pollCustomerOrder() {
     const res = await fetch(`${API_BASE}/Order/GetById/${customerOrderId}`, {
       headers: tableTokenHeaders(),
     });
+    if (res.status === 401 || res.status === 403) {
+      stopCustomerPolling();
+      clearActiveOrderId();
+      clearTableSession();
+      const backLink = document.getElementById("menu-back-link");
+      if (backLink) window.location.replace(backLink.href);
+      return;
+    }
     if (!res.ok) return; // buyurtma hali ko'rinmasa — jim kutamiz
     const order = await res.json();
     const status = Number(order.status);
@@ -546,6 +562,9 @@ async function pollCustomerOrder() {
     if (status === 3) {
       stopCustomerPolling();
       hidePayActions(); // bekor qilingan buyurtma to'lab bo'lmaydi
+      clearActiveOrderId();
+      orderSent = false;
+      updateSelectionSummary();
       // Bekor qilingan buyurtmaning taomlar ro'yxati o'chiriladi —
       // faqat ogohlantirish xabari qoladi (customercancel bilan bir xil).
       const receipt = message.querySelector(".receipt");
@@ -555,6 +574,21 @@ async function pollCustomerOrder() {
         statusBox.className = "order-status order-status--cancelled";
         statusBox.innerHTML = `⚠️ <strong>Buyurtmangiz oshxona tomonidan bekor qilindi.</strong>`
           + `<br/>Sabab: taom tugagan yoki oshxona qabul qila olmagan bo'lishi mumkin. Iltimos, ofitsiant bilan gaplashing yoki qayta buyurtma bering.`;
+      }
+      return;
+    }
+
+    if (status === 2) {
+      stopCustomerPolling();
+      clearActiveOrderId();
+      clearTableSession();
+      hidePayActions();
+      orderSent = false;
+      updateSelectionSummary();
+      if (statusBox) {
+        statusBox.hidden = false;
+        statusBox.className = "order-status order-status--paid";
+        statusBox.textContent = "Buyurtma yopildi. Stolni qayta tanlashingiz mumkin.";
       }
       return;
     }
@@ -718,7 +752,7 @@ async function cancelOwnOrder() {
     if (statusBox) {
       statusBox.hidden = false;
       statusBox.className = "order-status order-status--cancelled";
-      statusBox.innerHTML = `ℹ️ <strong>Buyurtmangiz bekor qilindi.</strong> Stol bo'shatildi — yangi buyurtma bera olasiz.`;
+      statusBox.innerHTML = `ℹ️ <strong>Buyurtmangiz bekor qilindi.</strong> Stol sessiyangiz saqlanadi — qayta buyurtma berishingiz mumkin.`;
     }
   } catch (error) {
     if (statusBox) {
@@ -767,19 +801,21 @@ function showCustomerReceipt(order) {
 }
 
 // Sahifa yuklanganda stolning faol buyurtmasini topadi va chekni qayta chizadi.
-async function restoreActiveOrder(businessId, tableId) {
-  // 1) Serverdagi ochiq (Open/InProgress) buyurtmalar orqali shu stolni topamiz —
-  //    bu asosiy yo'l: refresh yoki yangi tab ochilsa ham ishlaydi.
+async function restoreActiveOrder(businessId) {
+  // Mijoz faqat X-Table-Token bilan o'zining ochiq buyurtmasini oladi.
   let active = null;
   try {
-    const res = await fetch(`${API_BASE}/Order/GetOpen/open/${encodeURIComponent(businessId)}`, {
+    const res = await fetch(`${API_BASE}/Order/Mine/mine`, {
       headers: tableTokenHeaders(),
     });
-    if (res.ok) {
-      const orders = await res.json();
-      active = (Array.isArray(orders) ? orders : [])
-        .find(o => String(o.tableId) === String(tableId)) || null;
+    if (res.status === 401) {
+      clearTableSession();
+      clearActiveOrderId();
+      const backLink = document.getElementById("menu-back-link");
+      if (backLink) window.location.replace(backLink.href);
+      return;
     }
+    if (res.ok) active = await res.json();
   } catch { /* tarmoq xatosi — 2-bosqichga o'tamiz */ }
 
   if (active) {
@@ -838,6 +874,12 @@ document.getElementById("entry-form")?.addEventListener("submit", async (event) 
   // Menyudan tanlanganlar strukturali (id bilan), qo'lda yozilgan qism — matn.
   const items = composeSelectionItems();
   const message = document.getElementById("form-message");
+
+  const tableSession = loadTableSession();
+  if (!tableSession || !tableSession.token) {
+    message.textContent = "Stol sessiyasi tugagan. Iltimos, stolni qayta tanlang.";
+    return;
+  }
 
   if (!businessId || !tableId) {
     message.textContent = "Avval QR orqali kirib, stolni tanlang.";

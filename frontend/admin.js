@@ -391,7 +391,9 @@ async function loadKitchenOrders() {
   if (!listEl) return;
   if (!activeBusinessId) return;
   try {
-    const orders = await api(`/Order/GetOpen/open/${encodeURIComponent(activeBusinessId)}`);
+    const orders = await api(`/Order/GetOpen/open/${encodeURIComponent(activeBusinessId)}`, {
+      headers: { "X-Owner-Token": ownerToken },
+    });
     kitchenOrders = Array.isArray(orders) ? orders : [];
   } catch (error) {
     listEl.innerHTML = `<p class="empty">${esc(error.message)}</p>`;
@@ -715,7 +717,9 @@ async function updateTableStatusLock(table) {
   // Holat hali tanlanmagan bo'lsa ham — profil ochilishi bilan tekshiramiz.
   let hasActive = Number(table.status) === 1;
   try {
-    const orders = await api(`/Order/GetOpen/open/${encodeURIComponent(activeBusinessId)}`);
+    const orders = await api(`/Order/GetOpen/open/${encodeURIComponent(activeBusinessId)}`, {
+      headers: { "X-Owner-Token": ownerToken },
+    });
     hasActive = (Array.isArray(orders) ? orders : [])
       .some(o => Number(o.tableId) === Number(table.id));
   } catch { /* API xatosida — tables.status dagi holatni ishlatamiz */ }

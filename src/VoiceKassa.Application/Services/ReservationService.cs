@@ -240,7 +240,7 @@ public class ReservationService
 
     /// <summary>
     /// Hisob yopilganda yoki buyurtma bekor qilinganda chaqiriladi: bron
-    /// "Yopilgan" bo'ladi va sessiya kaliti o'chiriladi (kod endi ishlamaydi).
+    /// "Yopilgan" bo'ladi. Sessiya kaliti chekni o'qish uchun saqlanadi.
     /// </summary>
     public async Task CloseReservationAsync(long reservationId, CancellationToken ct = default)
     {
@@ -249,7 +249,6 @@ public class ReservationService
         if (reservation.Status is ReservationStatus.Closed or ReservationStatus.Cancelled) return;
 
         reservation.Status = ReservationStatus.Closed;
-        reservation.SessionToken = null;
         await _repo.SaveChangesAsync(ct);
     }
 

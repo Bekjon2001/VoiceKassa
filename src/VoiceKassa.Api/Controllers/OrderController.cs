@@ -106,6 +106,10 @@ public class OrderController : ApiControllerBase
         if (string.IsNullOrWhiteSpace(token))
             return Unauthorized(new { error = "X-Table-Token kerak (bron kodi bilan kiring)." });
 
+        var reservation = await _reservationService.GetBySessionTokenAsync(token.Trim(), ct);
+        if (reservation is null)
+            return Unauthorized(new { error = "Sessiya yaroqsiz — bron kodi bilan qayta kiring." });
+
         var order = await _orderService.GetMineAsync(token, ct);
         // Ochiq buyurtma yo'q — 404: mijoz menyuni ochib yangi buyurtma beradi.
         return order is null ? NotFound(new { error = "Sizning stolingizda ochiq buyurtma yo'q." }) : Ok(order);
@@ -199,9 +203,11 @@ public class OrderController : ApiControllerBase
             var reservation = await _reservationService.GetBySessionTokenAsync(tableToken.Trim(), ct);
             if (reservation is null)
                 return (false, Unauthorized(new { error = "Sessiya yaroqsiz — bron kodi bilan qayta kiring." }));
-            if (order.TableId is null || reservation.TableId != order.TableId.Value)
+            if (order.TableId is null ||
+                reservation.TableId != order.TableId.Value ||
+                order.ReservationId != reservation.Id)
                 return (false, StatusCode(StatusCodes.Status403Forbidden,
-                    new { error = "Bu buyurtma boshqa stolga tegishli — o'z stolingizning buyurtmasini ko'ring." }));
+                    new { error = "Bu buyurtma boshqa sessiyaga tegishli — o'z buyurtmangizni ko'ring." }));
             return (true, null);
         }
 

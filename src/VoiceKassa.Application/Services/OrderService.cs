@@ -182,25 +182,22 @@ public class OrderService
         return (true, null, ToOrderResponse(saved));
     }
 
-    /// <summary>Mijoz/to'lov: buyurtmani yopadi. Bron bog'langan bo'lsa — bron "Yopilgan"ga o'tadi, token o'chadi.</summary>
+    /// <summary>Mijoz/to'lov: buyurtmani yopadi. Bron yopiladi, token esa o'z chekini ko'rish uchun saqlanadi.</summary>
     public async Task<(bool Success, string? Error, OrderResponse? Order)> CloseOrderAsync(
         long orderId, CloseOrderRequest request, CancellationToken ct = default)
     {
         var (success, error, order) = await _orderRepo.CloseAtomicallyAsync(orderId, request.PaymentType, ct);
-        // Hisob yopildi — bron ham yopiladi va sessiya kaliti o'chiriladi
-        // (kod endi ishlamaydi, stol bo'sh bo'ladi).
+        // Hisob yopiladi; sessiya kaliti faqat shu bronning chekini o'qish uchun saqlanadi.
         if (success && order?.ReservationId is long reservationId)
             await CloseReservationQuietlyAsync(reservationId, ct);
         return (success, error, order is null ? null : ToOrderResponse(order));
     }
 
-    /// <summary>Oshxona yoki mijoz: butun ochiq buyurtmani bekor qiladi. Bron ham yopiladi.</summary>
+    /// <summary>Oshxona yoki mijoz: buyurtmani bekor qiladi, faol stol sessiyasi qayta buyurtma uchun saqlanadi.</summary>
     public async Task<(bool Success, string? Error, OrderResponse? Order)> CancelOrderAsync(
         long orderId, CancelOrderRequest? request, CancellationToken ct = default)
     {
         var (success, error, order) = await _orderRepo.CancelAtomicallyAsync(orderId, request?.Reason, ct);
-        if (success && order?.ReservationId is long reservationId)
-            await CloseReservationQuietlyAsync(reservationId, ct);
         return (success, error, order is null ? null : ToOrderResponse(order));
     }
 
@@ -213,7 +210,6 @@ public class OrderService
             if (reservation is null) return;
             if (reservation.Status is Domain.Enums.ReservationStatus.Closed or Domain.Enums.ReservationStatus.Cancelled) return;
             reservation.Status = Domain.Enums.ReservationStatus.Closed;
-            reservation.SessionToken = null;
             await _reservationRepo.SaveChangesAsync(ct);
         }
         catch
